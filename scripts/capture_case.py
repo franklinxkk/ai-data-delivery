@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""capture_case.py — 闭环段：bad case 一键取证（ai-data-delivery v0.0.2）
+
+对活引擎复现 bad case，一次拿齐三件套再下结论：
+  POST /api/ask       → 答案/SQL/推理链/拒绝判定
+  GET  /api/search?q= → 检索打分（看命中了谁、被谁吸走）
+  GET  /api/model     → 运行时模型版本与计数（防对着旧模型归因）
+
+用法：
+  python capture_case.py --endpoint http://localhost:7100 \
+      --question "上个月华东的重大隐患有多少条" [--id bc-001] [--note "用户投诉数值偏小"] \
+      --out badcases/
+
+输出 badcases/<id>.yaml：bad case 登记卡（证据已填，symptom/layer/fix 留待归因）。
+"""
+import argparse
+import datetime
+import json
+import os
+import re
+import sys
+import urllib.parse
+import urllib.request
+
+import yaml
+
+
+def call(method, url, payload=None, timeout=30):
+    try:
+        data = json.dumps(payload).encode("utf-8") if payload is not None else None
+        req = urllib.request.Request(url, data=data,
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.load(r), None
+    except Exception as e:
+        return None, str(e)
+
+
+def main():
+    ap = argparse.ArgumentParser(description="bad case 一键取证")
+    ap.add_argument("--endpoint", required=True)
+    ap.add_argument("--question", required=True)
+    ap.add_argument("--id", default=None)
+    ap.add_argument("--note", default="")
+    ap.add_argument("--out", required=True)
+    args = ap.parse_args()
+
+    base = args.endpoint.rstrip("/")
+    case_id = args.id or "bc-" + datetime.date.today().strftime("%Y%m%d") + "-001"
+
+    ask, e1 = call("POST", base + "/api/ask", {"question": args.question})
+    search, e2 = call("GET", base + "/api/search?q=" + urllib.parse.quote(args.question))
+    prog, e3 = call("GET", base + "/api/metrics/progress")
+    if prog is None:
+        prog, e3b = call("GET", base + "/api/model")
+        if prog:
+            prog = {"modelVersion": prog.get("version"), "total": len(prog.get("metrics", []))}
+    if e1:
+        print(f"错误：/api/ask 不可达：{e1}", file=sys.stderr)
+        return 2
+
+    card = {
+        "id": case_id,
+        "captured_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "question": args.question,
+        "note": args.note,
+        "evidence": {
+            "model_snapshot": prog or {"error": e3},
+            "retrieval": search or {"error": e2},
+            "answer": {k: ask.get(k) for k in
+                       ("value", "rows", "rejected", "reason", "sql", "reasoning")
+                       if k in ask},
+        },
+        # 以下由归因填写（模板与 diagnosis-playbook 对齐）
+        "symptom": None, "layer": None, "fix": None, "verify": None,
+        "expect": {"type": None, "value": None, "rows": None},
+        "regression_before": None, "regression_after": None,
+    }
+    os.makedirs(args.out, exist_ok=True)
+    path = os.path.join(args.out, f"{case_id}.yaml")
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(card, f, allow_unicode=True, sort_keys=False, width=120)
+    ans = card["evidence"]["answer"]
+    print(f"取证完成 → {path}")
+    print(f"  模型版本: {(prog or {}).get('modelVersion')}  指标数: {(prog or {}).get('total')}")
+    print(f"  检索命中: {[h.get('name') for h in (search or {}).get('hits', [])][:3]}")
+    print(f"  应答: rejected={ans.get('rejected')} value={ans.get('value')} "
+          f"rows={len(ans.get('rows') or [])}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

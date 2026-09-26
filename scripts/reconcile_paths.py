@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""reconcile_paths.py — 闭环段：指标路径 vs 宽表路径双路对账（ai-data-delivery v0.0.2）
+
+RULE-METRIC-01：同一问题两条路径结果必须一致，不一致即存在双口径（两个正确答案 = 零信任）。
+
+两种用法：
+  # 模式 A · 主动对账（推荐）：从 semantic.yaml 编译结构化指标的 SQL，直连物理库算"指标口径值"，
+  #   再打活引擎拿"问数路径值"，逐指标比对
+  python reconcile_paths.py --model semantic.yaml --db physical.db --endpoint http://localhost:7100 \
+      [--metric inspect_count ...] [--out reconcile.json]
+
+  # 模式 B · 离线比对两份结果（json: {id: {"value": n} 或 {"rows": [[...]]}}）
+  python reconcile_paths.py --metric-path a.json --wide-path b.json
+
+口径编译规则（与引擎不变式一致）：expr/分子分母 + extra_where + 数据集 source 表；
+dataset./表名前缀自动剥离；仅对 single-dataset 的 count/sum/avg/ratio 编译，其余跳过并声明。
+"""
+import argparse
+import json
+import re
+import sqlite3
+import sys
+import urllib.request
+
+import yaml
+
+
+def strip_prefixes(sql, names):
+    for n in sorted((x for x in names if x), key=len, reverse=True):
+        sql = re.sub(rf"\b{re.escape(n)}\.", "", sql)
+    return sql
+
+
+def compile_metric_sql(mt, ds, names):
+    """结构化指标 → 可执行 SQL。返回 (sql, 不可编译原因)。"""
+    if ds is None:
+        return None, "无数据集挂载"
+    table = ds.get("source")
+    if not table:
+        return None, "数据集无 source 物理表"
+    if mt.get("expr"):
+        select = mt["expr"]
+    elif mt.get("numerator") and mt.get("denominator"):
+        select = f"({mt['numerator']['expr']}) * 1.0 / ({mt['denominator']['expr']})"
+    else:
+        return None, "缺 expr 且缺分子分母"
+    select = strip_prefixes(select, names)
+    sql = f"SELECT {select} AS v FROM {table}"
+    if mt.get("extra_where"):
+        sql += f" WHERE {strip_prefixes(mt['extra_where'], names)}"
+    return sql, None
+
+
+def ask(endpoint, q, timeout=30):
+    req = urllib.request.Request(endpoint.rstrip("/") + "/api/ask",
+                                 data=json.dumps({"question": q}).encode("utf-8"),
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.load(r)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def norm(x):
+    try:
+        return round(float(x), 4)
+    except (TypeError, ValueError):
+        return x
+
+
+def run_active(args):
+    m = yaml.safe_load(open(args.model, encoding="utf-8"))
+    ds_index = {d["name"]: d for d in m.get("datasets", [])}
+    names = set(ds_index) | {d.get("source") for d in m.get("datasets", [])}
+    conn = sqlite3.connect(args.db)
+
+    only = set(args.metric or [])
+    rows, n_mismatch = [], 0
+    for mt in m.get("metrics", []):
+        if not mt.get("structured"):
+            continue
+        if only and mt["id"] not in only:
+            continue
+        sql, why = compile_metric_sql(mt, ds_index.get(mt.get("dataset")), names)
+        rec = {"metric": mt["id"], "name": mt.get("name")}
+        if not sql:
+            rec["status"] = "skip"; rec["why"] = why
+        else:
+            try:
+                expected = conn.execute(sql).fetchone()[0]
+                rec["metric_path"] = norm(expected)
+                rec["compiled_sql"] = sql
+                if args.endpoint:
+                    resp = ask(args.endpoint, f"查一下{mt.get('name')}")
+                    actual = resp.get("value")
+                    if actual is None and resp.get("rows"):
+                        actual = resp["rows"][0][0]
+                    rec["query_path"] = norm(actual) if actual is not None else None
+                    ok = actual is not None and norm(actual) == norm(expected)
+                    rec["status"] = "一致" if ok else "不一致"
+                    if not ok:
+                        n_mismatch += 1
+                        rec["why"] = f"指标路径={norm(expected)} 问数路径={norm(actual)}"
+                        if resp.get("rejected"):
+                            rec["why"] += "（引擎拒答/追问）"
+                        if resp.get("error"):
+                            rec["why"] += f"（请求失败：{resp['error']}）"
+                else:
+                    rec["status"] = "computed_only"
+            except Exception as e:
+                rec["status"] = "error"; rec["why"] = str(e)
+        rows.append(rec)
+
+    conn.close()
+    for r in rows:
+        print(f"[{r['status']:>10s}] {r['metric']:24s} {r.get('metric_path', '')} "
+              f"{('vs ' + str(r.get('query_path', ''))) if 'query_path' in r else ''} {r.get('why', '')}")
+    print(f"\n对账完成：{len(rows)} 个结构化指标，不一致 {n_mismatch} 个")
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(rows, f, ensure_ascii=False, indent=1)
+    return 1 if n_mismatch else 0
+
+
+def run_offline(args):
+    a = json.load(open(args.metric_path, encoding="utf-8"))
+    b = json.load(open(args.wide_path, encoding="utf-8"))
+
+    def pick(d, k):
+        v = d.get(k)
+        if isinstance(v, dict):
+            return v.get("value", v.get("rows"))
+        return v  # 兼容扁平 {id: 数值} 写法
+
+    mismatch = 0
+    for k in sorted(set(a) | set(b)):
+        va, vb = pick(a, k), pick(b, k)
+        ok = va is not None and vb is not None and norm(va) == norm(vb)
+        mismatch += 0 if ok else 1
+        print(f"[{'一致' if ok else '不一致'}] {k}: 指标路径={va} 宽表路径={vb}")
+    print(f"\n离线对账：不一致 {mismatch} 条")
+    return 1 if mismatch else 0
+
+
+def main():
+    ap = argparse.ArgumentParser(description="双路径口径对账")
+    ap.add_argument("--model", help="semantic.yaml（模式 A）")
+    ap.add_argument("--db", help="物理库（模式 A）")
+    ap.add_argument("--endpoint", help="活引擎（模式 A 可选；不给则只编译计算指标路径）")
+    ap.add_argument("--metric", action="append", default=[])
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--metric-path", dest="metric_path", help="指标路径结果 json（模式 B）")
+    ap.add_argument("--wide-path", dest="wide_path", help="宽表路径结果 json（模式 B）")
+    args = ap.parse_args()
+
+    if args.model and args.db:
+        return run_active(args)
+    if args.metric_path and args.wide_path:
+        return run_offline(args)
+    print("错误：模式 A 需 --model + --db（可再加 --endpoint）；模式 B 需 --metric-path + --wide-path",
+          file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

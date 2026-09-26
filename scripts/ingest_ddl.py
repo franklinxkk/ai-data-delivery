@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""ingest_ddl.py — 盘点段：DDL → 源表清单（ai-data-delivery v0.0.2）
+
+把"所有业务系统的 SQL 结构"变成可计算的盘点资产。
+
+用法：
+  python ingest_ddl.py --ddl path/to/ddl.sql [--ddl more.sql] --out inventory/
+  python ingest_ddl.py --ddl-dir path/to/sql_dir --out inventory/
+
+输出（inventory/ 下）：
+  tables.yaml   每表：字段数、主键猜测、时间列、命名前缀、来源文件
+  columns.yaml  每表每字段：名/类型/是否主键/是否疑似时间列
+
+支持 MySQL/SQLite 方言的 CREATE TABLE；注释（-- 与 # 行尾、COMMENT 'x'）尽量保留。
+"""
+import argparse
+import os
+import re
+import sys
+from collections import Counter
+
+import yaml
+
+TIME_HINT = re.compile(r"date|time|month|year|day|rq|sj", re.I)
+COL_RE = re.compile(
+    r"^\s*`?(\w+)`?\s+([A-Za-z]+(?:\s*\([^)]*\))?(?:\s+UNSIGNED)?)(.*)$", re.I)
+PK_INLINE = re.compile(r"PRIMARY\s+KEY", re.I)
+COMMENT_RE = re.compile(r"COMMENT\s+'([^']*)'", re.I)
+
+
+def parse_sql(text, source_file):
+    tables = []
+    # 去掉 -- 与 # 行注释，但保留 COMMENT 'x' 内联注释
+    for m in re.finditer(
+            r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"]?(\w+)[`\"]?\s*\((.*?)\)\s*(?:ENGINE|COMMENT|;|$)",
+            text, re.I | re.S):
+        name, body = m.group(1), m.group(2)
+        cols, pks = [], []
+        for raw in body.split("\n"):
+            line = raw.strip().rstrip(",")
+            if not line:
+                continue
+            cm = COL_RE.match(line)
+            if not cm:
+                tk = re.match(r"(?:PRIMARY\s+KEY|UNIQUE|KEY|INDEX|CONSTRAINT)", line, re.I)
+                if tk and "PRIMARY" in line.upper():
+                    pks += re.findall(r"`(\w+)`", line)
+                continue
+            cname, ctype, rest = cm.group(1), cm.group(2).upper(), cm.group(3)
+            is_pk = bool(PK_INLINE.search(rest))
+            if is_pk:
+                pks.append(cname)
+            comment = ""
+            cmm = COMMENT_RE.search(rest)
+            if cmm:
+                comment = cmm.group(1)
+            cols.append({"name": cname, "type": ctype, "pk": is_pk,
+                         "is_time": bool(TIME_HINT.search(cname) or TIME_HINT.search(ctype)),
+                         "comment": comment})
+        tables.append({"name": name, "source_file": source_file,
+                       "column_count": len(cols), "pk_guess": pks,
+                       "time_cols": [c["name"] for c in cols if c["is_time"]],
+                       "columns": cols})
+    return tables
+
+
+def main():
+    ap = argparse.ArgumentParser(description="DDL → 源表盘点清单")
+    ap.add_argument("--ddl", action="append", default=[])
+    ap.add_argument("--ddl-dir", default=None)
+    ap.add_argument("--out", required=True, help="输出目录（inventory/）")
+    args = ap.parse_args()
+
+    files = list(args.ddl)
+    if args.ddl_dir:
+        for root, _, fs in os.walk(args.ddl_dir):
+            files += [os.path.join(root, f) for f in fs if f.lower().endswith(".sql")]
+    if not files:
+        print("错误：需要 --ddl 或 --ddl-dir", file=sys.stderr)
+        return 2
+
+    all_tables = []
+    for fp in sorted(files):
+        with open(fp, encoding="utf-8", errors="replace") as f:
+            all_tables += parse_sql(f.read(), os.path.basename(fp))
+
+    if not all_tables:
+        print("错误：未解析到任何 CREATE TABLE", file=sys.stderr)
+        return 2
+
+    prefix_counter = Counter(re.match(r"[a-zA-Z]+_", t["name"]).group(0)
+                             if re.match(r"[a-zA-Z]+_", t["name"]) else "(无前缀)"
+                             for t in all_tables)
+    os.makedirs(args.out, exist_ok=True)
+    tables_yaml = [{"name": t["name"], "source_file": t["source_file"],
+                    "column_count": t["column_count"], "pk_guess": t["pk_guess"],
+                    "time_cols": t["time_cols"],
+                    "prefix": re.match(r"[a-zA-Z]+_", t["name"]).group(0)
+                    if re.match(r"[a-zA-Z]+_", t["name"]) else "(无前缀)"}
+                   for t in all_tables]
+    columns_yaml = [{"table": t["name"], **{k: c[k] for k in ("name", "type", "pk", "is_time", "comment")}}
+                    for t in all_tables for c in t["columns"]]
+
+    with open(os.path.join(args.out, "tables.yaml"), "w", encoding="utf-8") as f:
+        yaml.safe_dump({"table_count": len(all_tables),
+                        "prefix_clusters": dict(prefix_counter.most_common()),
+                        "tables": tables_yaml}, f, allow_unicode=True, sort_keys=False)
+    with open(os.path.join(args.out, "columns.yaml"), "w", encoding="utf-8") as f:
+        yaml.safe_dump(columns_yaml, f, allow_unicode=True, sort_keys=False)
+
+    print(f"解析 {len(files)} 个文件 → {len(all_tables)} 张表 / {len(columns_yaml)} 个字段")
+    print("命名前缀聚类：", dict(prefix_counter.most_common()))
+    print(f"输出：{args.out}/tables.yaml, columns.yaml")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
