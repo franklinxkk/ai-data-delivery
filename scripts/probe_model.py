@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""probe_model.py — 运行时模型快照核对（ai-data-delivery v0.0.2）
+"""probe_model.py — 运行时模型快照核对（ai-data-delivery v0.0.3）
 
 防"改了没生效"：服务加载旧模型/旧 jar、端口被旧实例占用时，
 readiness 通过不代表是新实例。本工具直接核对运行时模型与本地权威源是否一致。

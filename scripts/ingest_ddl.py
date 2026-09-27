@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ingest_ddl.py — 盘点段：DDL → 源表清单（ai-data-delivery v0.0.2）
+"""ingest_ddl.py — 盘点段：DDL → 源表清单（ai-data-delivery v0.0.3）
 
 把"所有业务系统的 SQL 结构"变成可计算的盘点资产。
 
@@ -21,7 +21,14 @@ from collections import Counter
 
 import yaml
 
-TIME_HINT = re.compile(r"date|time|month|year|day|rq|sj", re.I)
+TIME_NAME_HINT = re.compile(r"_date$|_time$|_at$|deadline$|_year$|_month$|_day$|^rq$|^sj$", re.I)
+TIME_TYPE_HINT = re.compile(r"DATE|TIME", re.I)
+
+
+def is_time_col(cname, ctype):
+    """时间列双重判定：严格后缀名 或 类型含 DATE/TIME。
+    （子串 day/date 会误伤 overdue_days 这类时长度量，漏判 deadline 这类裸名。）"""
+    return bool(TIME_NAME_HINT.search(cname) or TIME_TYPE_HINT.search(ctype))
 COL_RE = re.compile(
     r"^\s*`?(\w+)`?\s+([A-Za-z]+(?:\s*\([^)]*\))?(?:\s+UNSIGNED)?)(.*)$", re.I)
 PK_INLINE = re.compile(r"PRIMARY\s+KEY", re.I)
@@ -55,7 +62,7 @@ def parse_sql(text, source_file):
             if cmm:
                 comment = cmm.group(1)
             cols.append({"name": cname, "type": ctype, "pk": is_pk,
-                         "is_time": bool(TIME_HINT.search(cname) or TIME_HINT.search(ctype)),
+                         "is_time": is_time_col(cname, ctype),
                          "comment": comment})
         tables.append({"name": name, "source_file": source_file,
                        "column_count": len(cols), "pk_guess": pks,

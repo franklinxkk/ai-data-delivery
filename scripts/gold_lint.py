@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gold_lint.py — 评测集自身质量检查（ai-data-delivery v0.0.2）
+"""gold_lint.py — 评测集自身质量检查（ai-data-delivery v0.0.3）
 
 gold 集是验收基准，但它自己也会生病。本工具检查评测集内部一致性——
 典型事故：同一物理查询两份 gold 互相矛盾（Q10 vs A03，同一 SQL 金标准 320 vs 267），
@@ -14,12 +14,18 @@ gold 集是验收基准，但它自己也会生病。本工具检查评测集内
   E2 问句为空
   E3 同一问句（归一化后）两份期望不一致（一问一答原则）
   E4 同一 gold_sql（归一化后）期望行不一致 —— Q10/A03 类冲突的检测器
+  E5 期望结果自相矛盾：status=OK 但 rows 为空且 row_count>0 / row_count 与 rows 实际行数不符
   W1 同一问句重复出现且期望一致（冗余，可合并）
   W2 全集合无 refusal 用例（验收门槛要求 refusal 全过，没有该拒的用例=没有验收依据）
   W3 expect_table 不在模型的物理表清单中（需 --model）
   W4 gold_sql 含 SELECT * 或无时间过滤（护栏一致性提示）
+  W5 status=OK 但空结果（gold 为空等于没校验口径，需确认是真实空还是漏采数）
+  W6 results 中存在用例集没有的孤儿 id
+  W7 数值合理性启发式：单值结果为负（计数类口径不应为负）
 
 期望行来源（按序）：用例内 gold_rows / expect.value|rows；--results 文件（{id: {rows}}）。
+能力边界：本工具查"评测集内部一致性与自洽性"；数值与物理库是否相符归 reconcile_paths.py /
+run_eval.py 管——lint 全过 ≠ gold 数值正确。
 退出码：0 = 无 ERROR；1 = 有 ERROR；2 = 用法错误。
 """
 import argparse
@@ -71,6 +77,9 @@ def expected_of(case, results):
             return "scalar", repr(norm_num(e.get("value")))
         return "rows", repr(sorted(map(repr, e.get("rows") or [])))
     if case.get("expect_reject"):
+        return "refusal", None
+    et = str(case.get("expect_table") or "")
+    if "拒绝" in et or "追问" in et:  # 拒绝标记位
         return "refusal", None
     rows = case.get("gold_rows")
     if rows is None and results:
@@ -176,6 +185,31 @@ def main():
                 if t and t not in model_tables:
                     warnings.append(f"[WARN  W3] {c.get('id')} expect_table "
                                     f"{t!r} 不在模型物理表清单中")
+
+    # E5 / W5 / W6 / W7：results 记录自洽性与合理性
+    if results:
+        case_ids = {c.get("id") for _, c in cases}
+        for rid, rec in results.items():
+            if not isinstance(rec, dict):
+                continue
+            rows = rec.get("rows")
+            rc = rec.get("row_count")
+            ok_status = str(rec.get("status", "OK")).upper() in ("OK", "SUCCESS")
+            if rid not in case_ids:
+                warnings.append(f"[WARN  W6] results 中 {rid} 在用例集中不存在（孤儿期望）")
+            if ok_status and (rows is None or rows == []) and (rc or 0) > 0:
+                errors.append(f"[ERROR E5] {rid} status=OK 且 row_count={rc} 但 rows 为空——"
+                              "期望结果自相矛盾（采集失败残留？）")
+            elif ok_status and (rows is None or rows == []):
+                warnings.append(f"[WARN  W5] {rid} status=OK 但空结果——空 gold 无法校验口径，"
+                                "确认是真实空还是漏采数")
+            if rows and rc is not None and rc != len(rows):
+                errors.append(f"[ERROR E5] {rid} row_count={rc} 与 rows 实际 {len(rows)} 行不符")
+            if rows and len(rows) == 1 and len(rows[0]) == 1:
+                v = norm_num(rows[0][0])
+                if isinstance(v, float) and v < 0:
+                    warnings.append(f"[WARN  W7] {rid} 单值期望为负数（{v}）——"
+                                    "计数/比率类口径不应为负")
 
     for line in errors + warnings:
         print(line)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gold_seed.py — 评测资产段：gold 集 v0 骨架生成（ai-data-delivery v0.0.2）
+"""gold_seed.py — 评测资产段：gold 集 v0 骨架生成（ai-data-delivery v0.0.3）
 
 RULE-EVAL-01 的冷启动：立项第一天往往只有"客户想要的问句清单"。把清单变成 gold 骨架，
 强制质疑"有没有拒绝类用例"，从指标名/同义词反挖候选问句，避免评测集先天偏科。
@@ -10,6 +10,7 @@ RULE-EVAL-01 的冷启动：立项第一天往往只有"客户想要的问句清
 问句清单：一行一句；以"!"开头的行强制标记为拒绝类。
 产出：cases_merged 兼容格式（gold_rows 留 null，待跑库补录）。
 """
+import os
 import argparse
 import json
 import re
@@ -63,6 +64,7 @@ def main():
                     mined += 1
 
     n_reject = sum(1 for c in cases if c["expect_reject"])
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(cases, f, ensure_ascii=False, indent=1)
     print(f"gold v0 骨架 {len(cases)} 条（其中指标反挖 {mined} 条）→ {args.out}")

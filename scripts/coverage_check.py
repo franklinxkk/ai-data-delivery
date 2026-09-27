@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""coverage_check.py — 建模段门禁：覆盖率校验（ai-data-delivery v0.0.2）
+"""coverage_check.py — 建模段门禁：覆盖率校验（ai-data-delivery v0.0.3）
 
 指标 ↔ 模型 ↔ gold 三方覆盖矩阵。门禁规则：存在"未进模型且未登记缺口"的孤儿指标 → 失败。
 
@@ -14,6 +14,7 @@
   4. 数据集使用度：未被任何指标使用的数据集（INFO）
 退出码：0=无 ERROR；1=有 ERROR。
 """
+import os
 import argparse
 import json
 import re
@@ -114,6 +115,7 @@ def main():
     print(f"\n覆盖率校验：{len(errors)} ERROR / {len(warns)} WARN / {len(infos)} INFO")
 
     if args.out:
+        os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as f:
             f.write("# 覆盖率校验报告\n\n" + "\n".join(lines)
                     + "\n## 明细\n\n"

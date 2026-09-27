@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gen_metadata.py — 建模段：宽表 DDL + 实测画像 → meta/*.yaml 草稿（ai-data-delivery v0.0.2）
+"""gen_metadata.py — 建模段：宽表 DDL + 实测画像 → meta/*.yaml 草稿（ai-data-delivery v0.0.3）
 
 生成表级 15 项 / 字段级 12 项的元数据骨架：枚举值从 profile 自动填实测值，
 敏感字段按命名模式预标记（sensitive + allow_llm: false），维度/度量/时间角色自动推断。
@@ -24,16 +24,22 @@ MEASURE_HINT = re.compile(r"_cnt$|_count$|_days$|_rate$|_sec$|_hours$|_minutes$|
                           r"_amount$|_total$|_num$|_years$|mileage|duration", re.I)
 ATTR_HINT = re.compile(r"_no$|_code$|_desc$|_name$|编号|代码|描述", re.I)
 SENSITIVE_PAT = re.compile(r"身份证|手机号|电话|资格证号|证件号|id_card|phone|mobile", re.I)
+FLAG_HINT = re.compile(r"^is_|^has_|^flag_|_flag$|_yn$", re.I)   # 0/1 标志位 → 维度
+TIME_NAME = re.compile(r"_date$|_time$|_at$|deadline$|_year$|_month$", re.I)
 
 
-def guess_role(c, is_pk):
+def guess_role(c, is_pk, enum_values=None):
     if is_pk:
         return "pk"
     name, ctype = c["name"], (c.get("type") or "").upper()
     if c["name"].endswith("_id"):
         return "fk"
-    if c.get("is_time"):
-        return "time"
+    if FLAG_HINT.search(name):
+        return "dim"  # is_overdue 这类标志位是维度，不是度量
+    if enum_values and {str(v) for v in enum_values} <= {"0", "1"}:
+        return "dim"  # 实测取值只有 0/1 → 布尔维度
+    if TIME_NAME.search(name):
+        return "time"  # 严格后缀命名即时间列（ingest 侧 is_time 只做参考，不再双重门槛）
     numeric = any(k in ctype for k in ("INT", "REAL", "NUMERIC", "DECIMAL", "DOUBLE", "FLOAT"))
     if numeric and MEASURE_HINT.search(c["name"]):
         return "measure"
@@ -68,10 +74,10 @@ def main():
         name = t["name"]
         cols, dims, measures, times = [], [], [], []
         for c in by_table.get(name, []):
-            role = guess_role(c, c.get("pk"))
+            pc = profile.get(name, {}).get(c["name"])
+            role = guess_role(c, c.get("pk"), (pc or {}).get("enum_values"))
             rec = {"name": c["name"], "cn": "【待填中文名】", "role": role,
                    "type": (c.get("type") or "").lower()}
-            pc = profile.get(name, {}).get(c["name"])
             if pc:
                 if pc.get("enum_values") and role == "dim":
                     rec["enum"] = {v: f"【待确认含义：{v}】" for v in pc["enum_values"]}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""plan_stability.py — 验收段：查询计划稳定性抽查（ai-data-delivery v0.0.2）
+"""plan_stability.py — 验收段：查询计划稳定性抽查（ai-data-delivery v0.0.3）
 
 引擎不变式 1：同一语义输入产出稳定唯一的查询计划。
 同义词命中顺序、字典序、并发都不得影响计划。验收门槛：同句连跑 N 次 SQL 哈希一致。

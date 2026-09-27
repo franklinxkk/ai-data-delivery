@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""propose_dws.py — 建模段：宽表设计草案生成（ai-data-delivery v0.0.2）
+"""propose_dws.py — 建模段：宽表设计草案生成（ai-data-delivery v0.0.3）
 
 按"问答主题域"把源表盘点聚成宽表草案。AI 提案、人审拍板——
 草案里的粒度/主题域必须人工确认后才准进入 gen_metadata。
@@ -70,6 +70,7 @@ def main():
                        "note": "dm_ 集市层优先复用，不重复建设" if prefix == "dm_" else ""})
 
     over = "" if len(drafts) <= args.max_tables else f" ⚠ 超上限，需再聚合"
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         yaml.safe_dump({"draft_count": len(drafts), "max_tables": args.max_tables,
                         "discipline": "宽表按问答主题域建，先粒度后字段；人审后才准进入 gen_metadata",

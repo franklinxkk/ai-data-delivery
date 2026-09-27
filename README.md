@@ -33,12 +33,22 @@ scripts/                      # 27 个幂等脚本（全部支持 --help）
 
 ## 安装
 
-- **Kimi Work**：把本仓库作为技能安装（Skills 管理 → 从 GitHub 安装），或下载 Release 中的 `ai-data-delivery_v0.0.2.skill` 包导入。
+- **Kimi Work**：把本仓库作为技能安装（Skills 管理 → 从 GitHub 安装），或下载 Release 中的 `ai-data-delivery_v0.0.3.skill` 包导入。
 - **手工**：clone 后将本目录放入你的 skills 目录即可，`SKILL.md` 为入口。
 
 ## 实测自证
 
 全部脚本已在真实工程资产上回归自证：94 指标 / 15 宽表 / 4395 行物理库 / 62+12 条评测用例；发版门禁、双路径口径对账、计划稳定性检测均有正反两面的退出码验证。
+
+## 实测修复（v0.0.3）
+
+v0.0.3 由真实项目实测证据驱动，修复 10 项问题（P0×3 / P1×3 / P2×4），全部逐条对账并通过回归：
+
+- `run_eval`：拒绝/追问类期望不再误判 FAIL（`expect_table` 拒绝标记 + 行内 `gold_results`），summary 增加 unknown 计数告警——实测 74/74 通过，修复前 8 条误报清零。
+- `patch_model`：`--verify-with-db` 现在编译修订后**完整口径**（filters + extra_where 全量）验算，新增 `--expect/--tol` 数值对拍，不一致拒写（exit=2）——实测 180→107、45→15 两起失真拦截成功。
+- `reconcile_paths`：对账 SQL 并入指标 filters，×100 百分比量纲差异单列不压门禁——实测全量 43 指标 0 不一致。
+- `gold_lint` 新增 E5/W5/W6/W7 检出规则；`capture_case`/`suggest_card` 兼容真实引擎 list 响应；`harvest_metrics` 支持 `--from-meta` 映射，假"无来源"94→9；`gen_metadata`/`ingest_ddl` 角色推断修复（is_overdue→dim、deadline→time）。
+- 另含跨平台建目录审计、promote_gold 自动初始化等健壮性修复；27 脚本 --help 冒烟与 release_gate 集成回归全过。
 
 ## License
 

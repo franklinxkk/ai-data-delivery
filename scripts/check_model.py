@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check_model.py — semantic.yaml 铁律 lint（ai-data-delivery v0.0.2）
+"""check_model.py — semantic.yaml 铁律 lint（ai-data-delivery v0.0.3）
 
 把五条铁律与评测暴露的元数据缺陷落成机器检查。发布门禁：零 ERROR。
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""run_eval.py — 回归比对器（ai-data-delivery v0.0.2，双模式）
+"""run_eval.py — 回归比对器（ai-data-delivery v0.0.3，双模式）
 
 模式 A · 活引擎（FDE 日常：改完一键回归）
   python run_eval.py --endpoint http://localhost:7100 --cases cases.json \
@@ -20,6 +20,7 @@ actual 文件（模式 B）：jsonl/yaml/json，每条形如
 
 退出码：0 = 全部通过；1 = 有失败项；2 = 用法/数据错误。
 """
+import os
 import argparse
 import json
 import math
@@ -120,8 +121,16 @@ def unify_expect(case, gold_results):
                 "rows": e.get("rows"), "tolerance": float(e.get("tolerance", 1e-6))}
     if case.get("expect_reject"):  # fmt2 refusal
         return {"kind": "refusal"}
+    et = str(case.get("expect_table") or "")
+    if "拒绝" in et or "追问" in et:  # 拒绝标记位（如 expect_table: 应拒绝/追问）
+        return {"kind": "refusal"}
     if case.get("gold_rows") is not None:  # fmt2
         rows = case["gold_rows"]
+        if len(rows) == 1 and len(rows[0]) == 1:
+            return {"kind": "scalar", "value": rows[0][0]}
+        return {"kind": "rows", "rows": rows}
+    if isinstance(case.get("gold_results"), list) and case["gold_results"]:  # 用例行内结果（多跳集）
+        rows = case["gold_results"]
         if len(rows) == 1 and len(rows[0]) == 1:
             return {"kind": "scalar", "value": rows[0][0]}
         return {"kind": "rows", "rows": rows}
@@ -156,6 +165,9 @@ def judge_live(resp, expect):
         return False, f"http_error: {resp['error']}"
     refused = bool(resp.get("rejected") or resp.get("refused"))
     kind = expect["kind"]
+    if kind == "none":
+        # 期望不明绝不臆断：无论引擎应答还是拒答，都只能 skip 并汇总告警
+        return None, "无期望定义（跳过判定）——请补 expect/expect_reject/gold_rows/gold_sql 之一"
     if kind == "refusal":
         return (True, "") if refused else (False, "期望拒绝，但引擎给出了答案")
     if refused:
@@ -197,6 +209,7 @@ def run_live(args):
                   + ("" if ok else f"  << {why}"))
 
     judged = [r for r in records if r["pass"] is not None]
+    unknown = [r for r in records if r["pass"] is None]
     passed = sum(1 for r in judged if r["pass"])
     by_type = {}
     for r in judged:
@@ -205,11 +218,18 @@ def run_live(args):
         t[0] += bool(r["pass"])
     summary = {"total": len(judged), "passed": passed,
                "acc": round(passed / len(judged), 4) if judged else 0,
+               "unknown": len(unknown),
                "by_type": {k: {"pass": v[0], "total": v[1], "acc": round(v[0] / v[1], 4)}
                            for k, v in sorted(by_type.items())},
                "failures": [r for r in judged if not r["pass"]]}
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump({"summary": summary, "records": records}, f, ensure_ascii=False, indent=1)
+    if unknown:
+        print(f"\n⚠ {len(unknown)} 条用例期望不明（未计入 acc）："
+              f"{[r['id'] for r in unknown]}")
+        print("  这些用例既无 expect/expect_reject/gold_rows/gold_sql，也未标拒绝标记——"
+              "请补齐期望后重跑，否则等于没测。")
     print("\n==== SUMMARY ====")
     print(json.dumps(summary, ensure_ascii=False, indent=1, default=str)[:2000])
     return 0 if passed == len(judged) else 1
@@ -219,9 +239,11 @@ def run_live(args):
 
 def judge_file(case, actual):
     expect = unify_expect(case, None)
+    kind = expect["kind"]
+    if kind == "none":
+        return None, "无期望定义（跳过判定）"
     if actual is None:
         return False, "无实际输出（引擎未返回该用例）"
-    kind = expect["kind"]
     refused = bool(actual.get("refused") or actual.get("rejected"))
     if kind == "refusal":
         return (True, "") if refused else (False, "期望拒绝，但引擎给出了答案")
@@ -237,22 +259,27 @@ def judge_file(case, actual):
 def run_offline(args):
     cases = load_cases(args.gold)
     actuals = load_actual_map(args.actual)
-    results, passed = [], 0
+    results, passed, unknown = [], 0, 0
     for case in cases:
         ok, detail = judge_file(case, actuals.get(case["id"]))
+        if ok is None:
+            unknown += 1
         passed += bool(ok)
+        mark = "SKIP" if ok is None else ("PASS" if ok else "FAIL")
         results.append({"id": case["id"], "pass": ok, "detail": detail})
-        print(f"[{'PASS' if ok else 'FAIL'}] {case['id']}" + (f" —— {detail}" if detail else ""))
-    print(f"\n回归结果：{passed}/{len(cases)} 通过")
+        print(f"[{mark}] {case['id']}" + (f" —— {detail}" if detail else ""))
+    print(f"\n回归结果：{passed}/{len(cases) - unknown} 通过"
+          + (f"（另 {unknown} 条期望不明跳过）" if unknown else ""))
     if args.report:
+        os.makedirs(os.path.dirname(args.report) or ".", exist_ok=True)
         with open(args.report, "w", encoding="utf-8") as f:
-            json.dump({"passed": passed, "total": len(cases), "cases": results},
-                      f, ensure_ascii=False, indent=2)
-    return 0 if passed == len(cases) else 1
+            json.dump({"passed": passed, "total": len(cases), "unknown": unknown,
+                       "cases": results}, f, ensure_ascii=False, indent=2)
+    return 0 if passed == len(cases) - unknown else 1
 
 
 def main():
-    ap = argparse.ArgumentParser(description="回归比对器 v0.0.2（活引擎 / 离线双模式）")
+    ap = argparse.ArgumentParser(description="回归比对器 v0.0.3（活引擎 / 离线双模式）")
     ap.add_argument("--endpoint", help="活引擎地址（模式 A）")
     ap.add_argument("--cases", help="用例集 json/yaml（模式 A）")
     ap.add_argument("--gold-results", dest="gold_results", default=None,

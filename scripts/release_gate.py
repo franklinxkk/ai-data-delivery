@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""release_gate.py — 运营段：模型发版门禁（ai-data-delivery v0.0.2）
+"""release_gate.py — 运营段：模型发版门禁（ai-data-delivery v0.0.3）
 
 RULE-STATE-01 的收口：模型版本从"草案"到"已发布"必须过门禁，且留下发版日志。
 聚合四类闸门，任一不过则拒绝发版：
@@ -90,6 +90,7 @@ def main():
         "decision": decision,
         "gates": gates,
     })
+    os.makedirs(os.path.dirname(args.log) or ".", exist_ok=True)
     with open(args.log, "w", encoding="utf-8") as f:
         yaml.safe_dump(log, f, allow_unicode=True, sort_keys=False)
     print(f"发版日志 → {args.log}（累计 {len(log)} 条）")

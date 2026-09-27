@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gen_eval_cases.py — 评测资产段：从语义模型生成评测用例草稿（ai-data-delivery v0.0.2）
+"""gen_eval_cases.py — 评测资产段：从语义模型生成评测用例草稿（ai-data-delivery v0.0.3）
 
 RULE-EVAL-01：评测集要覆盖九组问法。手工写 62 条要几天，从模型按模板生成草稿只要几秒，
 人只做审核与 gold 补录。每组模板对应一类能力：
@@ -10,6 +10,7 @@ RULE-EVAL-01：评测集要覆盖九组问法。手工写 62 条要几天，从�
 产出：草稿用例（expect_tbd: true），人工补 gold 后由 gold_lint.py 体检入库。
 退出码：0 成功；2 用法错误。
 """
+import os
 import argparse
 import sys
 
@@ -103,6 +104,7 @@ def main():
                 f"{f_ds.get('display_name', r['from'])}关联{t_ds.get('display_name', r['to'])}"
                 f"的情况怎么查？（草稿：请按业务改写成具体问句）")
 
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         yaml.safe_dump(cases, f, allow_unicode=True, sort_keys=False)
     groups = {}

@@ -3,7 +3,7 @@ name: ai-data-delivery
 description: AI+数据落地工具包，服务 FDE（驻场/交付工程师）、产品经理与信息中心人员，覆盖企业级 AI 问数/数据分析系统从立项、试点到生产的全周期。包含三个模块：语义资产建设（源表盘点→同构检测→指标收割→宽表草案→meta 草稿→指标绑定→覆盖检查→模型幂等维护，对齐真实 semantic.yaml 合同 Schema，写口径前物理库验算）、bad case 诊断修复闭环（取证→三层归因→补丁→双路对账→活引擎回归→回流 gold 集）、评估与验收纪律（gold 集建设/回归比对/模型 lint/评测集体检/发版门禁/口径字典/交换导出/结构漂移巡检/影响面分析）。当用户遇到以下场景时使用：智能问数答错、口径不一致、实体不识别、该拒未拒等 bad case 排查；本体模型 YAML（semantic.yaml 类：datasets/concepts/relationships/metrics）的修改与合规检查；评测集（gold 集）的建设与冲突排查；AI+数据项目的落地规划、试点验收、上线评审与生产运营；为 FDE/PM/信息中心准备交付物或操作规程。不用于通用模型微调、与数据无关的 AI 应用开发。
 ---
 
-# AI Data Delivery v0.0.2
+# AI Data Delivery v0.0.3
 
 ## Overview
 
@@ -45,27 +45,35 @@ description: AI+数据落地工具包，服务 FDE（驻场/交付工程师）�
 ### 立项盘点：先有台账，再谈建模
 
 ```bash
-# DDL → 表/字段台账（inventory/tables.yaml + columns.yaml）
-python3 scripts/ingest_ddl.py --ddl ddl/ --out inventory/
-# 库画像 → 枚举候选列、取值分布、空值率（敏感列自动不取样）
+# DDL 目录 → 表/字段台账（inventory/tables.yaml + columns.yaml）
+python3 scripts/ingest_ddl.py --ddl-dir ddl/ --out inventory/
+# 库画像 → 枚举候选列、取值分布、空值率（敏感列自动不取样；--out 自动建目录）
 python3 scripts/profile_db.py --db physical.db --out inventory/profile.yaml
 # 同构表检测（smart_check_item1..30 这类序号家族）→ 合并候选族
-python3 scripts/detect_isomorphic.py --inventory inventory/tables.yaml --out inventory/isomorphic.yaml
+python3 scripts/detect_isomorphic.py --tables inventory/tables.yaml \
+    --columns inventory/columns.yaml --out inventory/isomorphic.yaml
 # 历史指标公式三分：可执行候选 / 需改写 / 无来源 → metrics_raw.yaml + gaps.yaml
-python3 scripts/harvest_metrics.py --metrics 指标导出.json --inventory inventory/tables.yaml --out inventory/
+# 存量场景：无 table 字段也不怕（自动解析 FROM）；--from-meta 用宽表 meta 的 sources 派生映射；
+# 模型已建成时可直接 --model semantic.yaml 收割 legacy_formula
+python3 scripts/harvest_metrics.py --metrics 指标导出.json --from-meta meta/ --out inventory/
+python3 scripts/harvest_metrics.py --model semantic.yaml --out inventory/
 ```
 
 ### PoC 建模：一族一宽表，指标全绑定
 
 ```bash
 # 同构族 + 前缀聚类 → 宽表合并草案（覆盖多少指标直接写在草案上）
-python3 scripts/propose_dws.py --isomorphic inventory/isomorphic.yaml --metrics inventory/metrics_raw.yaml --out proposals_dws.yaml
-# DDL + 库画像 → 宽表 meta 草稿（role 推断、枚举填实测值、敏感预标记、【】占位项）
-python3 scripts/gen_metadata.py --ddl dws.sql --profile inventory/profile.yaml --out meta/
+python3 scripts/propose_dws.py --inventory inventory/tables.yaml \
+    --metrics-raw inventory/metrics_raw.yaml --out proposals_dws.yaml
+# 台账 + 库画像 → 宽表 meta 草稿（0/1 标志位归 dim、时长归 measure、枚举填实测值、敏感预标记、【】占位项）
+python3 scripts/gen_metadata.py --tables inventory/tables.yaml \
+    --columns inventory/columns.yaml --profile inventory/profile.yaml --out meta/
 # 指标 × 宽表绑定（范围写法展开、剔除表名标识符）→ 可绑定/部分绑定/缺口
-python3 scripts/bind_metrics.py --metrics inventory/metrics_raw.yaml --meta meta/ --out bindings.yaml
+python3 scripts/bind_metrics.py --metrics-raw inventory/metrics_raw.yaml \
+    --meta meta/ --model semantic.yaml --out bindings.yaml
 # 指标 × 模型 × gold 三方覆盖检查（0 ERROR 才允许进试点）
-python3 scripts/coverage_check.py --model semantic.yaml --metrics inventory/metrics_raw.yaml --cases cases.json
+python3 scripts/coverage_check.py --model semantic.yaml \
+    --metrics-raw inventory/metrics_raw.yaml --cases cases.json --out coverage.md
 ```
 
 ### 模型维护：semantic.yaml 是唯一事实源
@@ -78,11 +86,13 @@ python3 scripts/patch_model.py -f semantic.yaml syn inspect_count 检查单数�
 python3 scripts/patch_model.py -f semantic.yaml syn --dataset enterprise 运输户 业户
 python3 scripts/patch_model.py -f semantic.yaml syn --concept 重点营运车辆 重点车
 
-# 结构化指标（自含全口径），--db 自动对物理库验算候选口径
+# 结构化指标（自含全口径），--db 自动对物理库验算"patched 后完整口径"（filters+extra_where 全量）；
+# 有金标准值时加 --expect 对拍（如 --expect 15），对拍失败拒绝写入
 python3 scripts/patch_model.py -f semantic.yaml struct hazard_major \
-    --expr "COUNT(*)" --extra-where "level = '重大' AND rectify_status = '待整改'" \
+    --expr "COUNT(*)" --extra-where "rectify_status = '待整改'" \
     --time-field stat_date --caliber-note "待整改重大隐患" --caliber-basis "金标准 Q11" \
-    --db /path/to/physical.db
+    --db /path/to/physical.db --expect 15
+# 验算边界：只保证口径可执行且有量/对拍一致，口径语义正确性仍须 run_eval 金标准回归把关
 # ratio 型必须分子分母（禁行级平均）：--numerator "SUM(a)" --denominator "SUM(b)"
 # 新建指标必须显式 --create 并给 --name/--type/--dataset（默认要求已存在，防笔误造重复）
 
@@ -204,9 +214,10 @@ python3 scripts/impact_analysis.py --model semantic.yaml --target ent_id --cases
 | 版本 | 主题 | 变更 |
 | --- | --- | --- |
 | v0.0.1 | 调优闭环泛化版 | 三模块框架、五铁律、delivery/diagnosis playbook、patch/rebuild/run_eval（文件比对）三脚本 |
-| v0.0.2 | 全周期完整版 | 在真实 semantic.yaml 合同上纠偏（指标按 id 寻址、分子分母、caliber 文号、--db 物理库验算）；run_eval 恢复活引擎模式；并按"立项盘点→PoC 建模→试点闭环→生产运营"补齐全周期 27 个脚本：盘点（ingest_ddl/profile_db/detect_isomorphic/harvest_metrics）、建模（propose_dws/gen_metadata/bind_metrics/coverage_check）、闭环（capture_case/promote_gold/reconcile_paths/plan_stability/ingest_feedback/suggest_card）、运营（check_consistency/gen_dictionary/release_gate/export_exchange/impact_analysis）、评测资产（gen_eval_cases/gold_seed）、门禁（probe_model/check_model/gold_lint）。全部经真实资产（94 指标/15 宽表/4395 行 mock 库/62+12 用例）回归自证 |
+| v0.0.2 | 全周期完整版 | 在真实 semantic.yaml 合同上纠偏（指标按 id 寻址、分子分母、caliber 文号、--db 物理库验算）；run_eval 恢复活引擎模式；并按"立项盘点→PoC 建模→试点闭环→生产运营"补齐全周期 27 个脚本 |
+| v0.0.3 | 真实项目实测修复版 | 经真实项目（15 宽表/94 指标/74 用例，Spring Boot 引擎 + SQLite）实测反馈修复 10 项：① run_eval 拒绝类用例静默误判（识别 expect_table 拒绝标记、期望不明显式 skip 并汇总告警、支持用例行内 gold_results）；② patch_model 验算改为 patched 后完整口径（filters+extra_where 全量）+ --expect 金标准对拍 + 验算边界声明；③ gold_lint 新增结果自洽性检查（OK 但空结果、row_count 与 rows 不符、孤儿期望、负值启发式）；④ reconcile_paths 直算并入 filters、百分比量纲差异单列不压门禁；⑤ capture_case/suggest_card 检索响应 list/dict 双兼容、reasoning list 兼容、layer 缺失时证据驱动推断候选不阻断；⑥ harvest_metrics 支持 FROM 子句解析 + --mapping/--from-meta 源表映射 + --model 存量收割（94 假"无来源"→ 9 真缺口）；⑦ 文档参数漂移修正 6 处；⑧ 全部 --out 自动建目录；⑨ promote_gold 自动初始化新 gold 文件；⑩ gen_metadata/ingest_ddl 角色与时间列推断修正（0/1 标志位归 dim、时长归 measure、deadline 归 time） |
 
-版本纪律：小步演进（0.0.1→0.0.2→…），每版只加一类能力，每版必须用真实项目资产回归自证后发布。
+版本纪律：小步演进（0.0.1→0.0.2→0.0.3→…），每版只加一类能力，每版必须用真实项目资产回归自证后发布。
 
 ## Resources
 
@@ -216,23 +227,23 @@ python3 scripts/impact_analysis.py --model semantic.yaml --target ent_id --cases
 - `ingest_ddl.py` — DDL 目录 → inventory/tables.yaml + columns.yaml 台账。
 - `profile_db.py` — 物理库画像：枚举候选列、取值分布、空值率；敏感列不取样。
 - `detect_isomorphic.py` — 序号归一检测同构表家族（item1..item30 式），输出合并候选族。
-- `harvest_metrics.py` — 历史指标公式三分：可执行候选/需改写/无来源 → metrics_raw + gaps。
+- `harvest_metrics.py` — 历史指标公式三分：可执行候选/需改写/无来源；无 table 字段自动解析 FROM 子句；--mapping/--from-meta 源表名映射（范围写法展开）；--model 直接收割存量模型的 legacy_formula。
 - `gold_seed.py` — 问句清单 → gold v0 骨架（cases_merged 兼容），支持从指标名/同义词反挖，缺拒绝类自动告警。
 
 **PoC 建模**
 - `propose_dws.py` — 同构族 + 前缀聚类 → 宽表合并草案（一族一宽表，标注覆盖指标数）。
-- `gen_metadata.py` — DDL+库画像 → 宽表 meta 草稿：role 推断、枚举填实测值、敏感预标记、【】占位。
+- `gen_metadata.py` — 台账+库画像 → 宽表 meta 草稿：角色推断（0/1 标志位归 dim、时长归 measure、严格时间后缀）、枚举填实测值、敏感预标记、【】占位。
 - `bind_metrics.py` — 指标 × meta 绑定：范围写法展开、表名标识符剔除，输出可绑定/部分绑定/缺口。
 - `coverage_check.py` — 指标 × 模型 × gold 三方覆盖检查，0 ERROR 才进试点。
 - `gen_eval_cases.py` — 按九组问法模板从模型生成评测用例草稿（expect_tbd 待补 gold）。
 
 **试点闭环**
-- `capture_case.py` — bad case 一键取证：应答+检索命中+模型快照三件套 → 登记卡。
+- `capture_case.py` — bad case 一键取证：应答+检索命中+模型快照三件套 → 登记卡（检索响应 list/dict 双兼容）。
 - `ingest_feedback.py` — 用户口头反馈入 bad case 池，同问句自动累计次数。
-- `suggest_card.py` — 登记卡归因层 → 修订建议卡（证据/建议动作/影响面/回归占位）。
-- `patch_model.py` — semantic.yaml 幂等补丁：`syn`（指标/数据集/概念三类同义词）/ `struct`（结构化指标，ratio 分子分母，--db 验算）/ `set`（指标键或全局点路径）。
-- `promote_gold.py` — 登记卡 → gold 集（expect 未填拒绝入库；同 id 覆盖幂等）。
-- `reconcile_paths.py` — 双路径口径对账：编译结构化指标直算物理库 vs 活引擎问数路径；也支持两份 json 离线比对。
+- `suggest_card.py` — 登记卡归因层 → 修订建议卡（证据/建议动作/影响面/回归占位）；layer 缺失时依据证据推断候选并标注"待确认"，不阻断流水线。
+- `patch_model.py` — semantic.yaml 幂等补丁：`syn`（指标/数据集/概念三类同义词）/ `struct`（结构化指标，ratio 分子分母，--db 对 patched 后完整口径验算，--expect 金标准对拍）/ `set`（指标键或全局点路径）。
+- `promote_gold.py` — 登记卡 → gold 集（expect 未填拒绝入库；同 id 覆盖幂等；gold 文件不存在自动初始化）。
+- `reconcile_paths.py` — 双路径口径对账：完整口径（filters+extra_where）编译直算物理库 vs 活引擎问数路径；百分比量纲差异单列不压门禁；也支持两份 json 离线比对。
 - `rebuild.py` — 停服→构建→起服→就绪校验，内置防旧包。
 - `run_eval.py` — 回归比对器双模式：活引擎（打 /api/ask，留痕 SQL+推理链）/ 离线文件比对；退出码 0=全过。
 
@@ -247,7 +258,7 @@ python3 scripts/impact_analysis.py --model semantic.yaml --target ent_id --cases
 **门禁与体检（横切）**
 - `probe_model.py` — 运行时模型快照核对：/api/model 与本地权威源比对，防"改了没生效"。
 - `check_model.py` — 铁律 lint：粒度/枚举/敏感标记/ratio 禁行级平均/口径自含/概念可展开/关系完整性。
-- `gold_lint.py` — 评测集体检：id 重复、同问句异答案、同 SQL 异 gold、refusal 覆盖、expect_table 存在性。
+- `gold_lint.py` — 评测集体检：id 重复、同问句异答案、同 SQL 异 gold、refusal 覆盖、expect_table 存在性、结果自洽性（OK 但空结果/row_count 与 rows 不符/孤儿期望/负值启发式）。
 
 ### references/
 

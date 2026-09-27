@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""promote_gold.py — 闭环段：修过的 bad case 沉淀进 gold 集（ai-data-delivery v0.0.2）
+"""promote_gold.py — 闭环段：修过的 bad case 沉淀进 gold 集（ai-data-delivery v0.0.3）
 
 铁律：gold 集单调增长，修 A 坏 B 的防线。从 bad case 登记卡生成 gold 用例并落盘。
 
@@ -10,6 +10,7 @@
 幂等：同 id 已存在则更新期望（口径修正），不重复追加。
 登记卡要求已填 expect（type: scalar/rows/refusal + value/rows）——没定期望不许进 gold。
 """
+import os
 import argparse
 import json
 import sys
@@ -18,6 +19,10 @@ import yaml
 
 
 def load_cases(path):
+    if not os.path.exists(path):
+        # 自动初始化空 gold 集（merged 为 list；expect 格式亦为 list）
+        print(f"提示：{path} 不存在，自动初始化为空 gold 集")
+        return [], None, []
     with open(path, encoding="utf-8") as f:
         data = json.load(f) if path.endswith(".json") else yaml.safe_load(f)
     wrapper = None
@@ -34,6 +39,7 @@ def load_cases(path):
 
 
 def save(path, data):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         if path.endswith(".json"):
             json.dump(data, f, ensure_ascii=False, indent=1)
@@ -75,7 +81,8 @@ def main():
     try:
         case = to_case(card, args.fmt)
     except ValueError as e:
-        print(f"错误：{e}", file=sys.stderr)
+        print(f"错误：{e}\n  去这里补：{args.card} 的 expect 段"
+              f"（type: scalar/rows/refusal + value/rows）", file=sys.stderr)
         return 2
 
     data, wrapper, lst = load_cases(args.gold)

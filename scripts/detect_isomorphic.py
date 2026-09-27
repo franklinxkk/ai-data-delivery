@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""detect_isomorphic.py — 盘点段：同构表族检测（ai-data-delivery v0.0.2）
+"""detect_isomorphic.py — 盘点段：同构表族检测（ai-data-delivery v0.0.3）
 
 发现 smart_check_record_item1~30 这类"同一结构、按序号拆表"的表族——
 不合并则跨项聚合问题永久无解（本项目实测最关键的一刀）。
@@ -12,6 +12,7 @@
   python detect_isomorphic.py --tables inventory/tables.yaml --columns inventory/columns.yaml \
       --out inventory/isomorphic.yaml
 """
+import os
 import argparse
 import re
 import sys
@@ -69,6 +70,7 @@ def main():
                              "suggestion": "结构指纹一致，评估合并"})
             seen.update(rest)
 
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         yaml.safe_dump({"family_count": len(families), "families": families},
                        f, allow_unicode=True, sort_keys=False)

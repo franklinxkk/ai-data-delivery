@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""reconcile_paths.py — 闭环段：指标路径 vs 宽表路径双路对账（ai-data-delivery v0.0.2）
+"""reconcile_paths.py — 闭环段：指标路径 vs 宽表路径双路对账（ai-data-delivery v0.0.3）
 
 RULE-METRIC-01：同一问题两条路径结果必须一致，不一致即存在双口径（两个正确答案 = 零信任）。
 
@@ -15,6 +15,7 @@ RULE-METRIC-01：同一问题两条路径结果必须一致，不一致即存在
 口径编译规则（与引擎不变式一致）：expr/分子分母 + extra_where + 数据集 source 表；
 dataset./表名前缀自动剥离；仅对 single-dataset 的 count/sum/avg/ratio 编译，其余跳过并声明。
 """
+import os
 import argparse
 import json
 import re
@@ -31,8 +32,20 @@ def strip_prefixes(sql, names):
     return sql
 
 
+def filters_to_sql(filters, names):
+    """filters: [{field, values}] → SQL 条件串（剥离前缀）。"""
+    parts = []
+    for f in filters or []:
+        vals = ", ".join("'" + str(v).replace("'", "''") + "'"
+                         for v in (f.get("values") or []))
+        if vals:
+            parts.append(f"{strip_prefixes(str(f['field']), names)} IN ({vals})")
+    return " AND ".join(parts)
+
+
 def compile_metric_sql(mt, ds, names):
-    """结构化指标 → 可执行 SQL。返回 (sql, 不可编译原因)。"""
+    """结构化指标 → 可执行 SQL（expr/分子分母 + filters + extra_where 全量口径）。
+    返回 (sql, 不可编译原因)。"""
     if ds is None:
         return None, "无数据集挂载"
     table = ds.get("source")
@@ -46,9 +59,24 @@ def compile_metric_sql(mt, ds, names):
         return None, "缺 expr 且缺分子分母"
     select = strip_prefixes(select, names)
     sql = f"SELECT {select} AS v FROM {table}"
-    if mt.get("extra_where"):
-        sql += f" WHERE {strip_prefixes(mt['extra_where'], names)}"
+    wheres = [w for w in (filters_to_sql(mt.get("filters"), names),
+                          strip_prefixes(mt["extra_where"], names)
+                          if mt.get("extra_where") else None) if w]
+    if wheres:
+        sql += " WHERE " + " AND ".join(f"({w})" for w in wheres)
     return sql, None
+
+
+def classify_diff(expected, actual, mt, tol=1e-4):
+    """不一致分类：量纲差异（×100 百分比）/ 数值不一致。"""
+    try:
+        e, a = float(expected), float(actual)
+    except (TypeError, ValueError):
+        return "不一致"
+    if abs(e - a) <= tol or (e and abs(a / e - 100) <= 0.01) or (a and abs(e / a - 100) <= 0.01):
+        if abs(e - a) > tol:
+            return "量纲差异"  # 0.6667 vs 66.67：语义一致，展示口径不同
+    return "不一致"
 
 
 def ask(endpoint, q, timeout=30):
@@ -76,7 +104,7 @@ def run_active(args):
     conn = sqlite3.connect(args.db)
 
     only = set(args.metric or [])
-    rows, n_mismatch = [], 0
+    rows, n_mismatch, n_scale = [], 0, 0
     for mt in m.get("metrics", []):
         if not mt.get("structured"):
             continue
@@ -98,14 +126,22 @@ def run_active(args):
                         actual = resp["rows"][0][0]
                     rec["query_path"] = norm(actual) if actual is not None else None
                     ok = actual is not None and norm(actual) == norm(expected)
-                    rec["status"] = "一致" if ok else "不一致"
-                    if not ok:
-                        n_mismatch += 1
-                        rec["why"] = f"指标路径={norm(expected)} 问数路径={norm(actual)}"
-                        if resp.get("rejected"):
-                            rec["why"] += "（引擎拒答/追问）"
-                        if resp.get("error"):
-                            rec["why"] += f"（请求失败：{resp['error']}）"
+                    if not ok and actual is not None and \
+                            classify_diff(expected, actual, mt) == "量纲差异":
+                        rec["status"] = "量纲差异"
+                        n_scale += 1
+                        rec["why"] = (f"指标路径={norm(expected)} 问数路径={norm(actual)}"
+                                      f"（×100 百分比量纲，语义一致；建议输出归一到模型单位 "
+                                      f"{mt.get('unit') or '?'}）")
+                    else:
+                        rec["status"] = "一致" if ok else "不一致"
+                        if not ok:
+                            n_mismatch += 1
+                            rec["why"] = f"指标路径={norm(expected)} 问数路径={norm(actual)}"
+                            if resp.get("rejected"):
+                                rec["why"] += "（引擎拒答/追问）"
+                            if resp.get("error"):
+                                rec["why"] += f"（请求失败：{resp['error']}）"
                 else:
                     rec["status"] = "computed_only"
             except Exception as e:
@@ -116,8 +152,11 @@ def run_active(args):
     for r in rows:
         print(f"[{r['status']:>10s}] {r['metric']:24s} {r.get('metric_path', '')} "
               f"{('vs ' + str(r.get('query_path', ''))) if 'query_path' in r else ''} {r.get('why', '')}")
-    print(f"\n对账完成：{len(rows)} 个结构化指标，不一致 {n_mismatch} 个")
+    print(f"\n对账完成：{len(rows)} 个结构化指标，不一致 {n_mismatch} 个，量纲差异 {n_scale} 个")
+    if n_scale:
+        print("提示：量纲差异不计入不一致，但建议引擎输出单位与模型 unit 归一，消除双展示口径。")
     if args.out:
+        os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump(rows, f, ensure_ascii=False, indent=1)
     return 1 if n_mismatch else 0

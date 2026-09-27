@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""bind_metrics.py — 建模段：指标 → 宽表字段绑定建议（ai-data-delivery v0.0.2）
+"""bind_metrics.py — 建模段：指标 → 宽表字段绑定建议（ai-data-delivery v0.0.3）
 
 把 metrics_raw 的每条指标绑到宽表数据集：来源表 → meta sources 反查宽表；
 口径式标识符 ∩ 数据集字段 → 字段级绑定证据。绑不上的进缺口台账。
@@ -113,6 +113,7 @@ def main():
                          "fields_hit": [], "fields_missing": [], "status": status, "note": note})
         dist[status] = dist.get(status, 0) + 1
 
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         yaml.safe_dump({"total": len(bindings), "status_dist": dist, "bindings": bindings},
                        f, allow_unicode=True, sort_keys=False)

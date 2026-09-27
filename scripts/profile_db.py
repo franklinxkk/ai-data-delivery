@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""profile_db.py — 盘点段：连库出实测画像（ai-data-delivery v0.0.2）
+"""profile_db.py — 盘点段：连库出实测画像（ai-data-delivery v0.0.3）
 
 对源库逐表实测：行数、枚举实测值（低基数列）、空值率、近似粒度（唯一键基数）。
 敏感列（身份证/手机号等）只出计数与空值率，不取样值。
@@ -10,6 +10,7 @@
 输出 profile.yaml：
   tables[]: name / row_count / columns[]{name,type,distinct,null_rate,enum_values?,note}
 """
+import os
 import argparse
 import re
 import sqlite3
@@ -59,6 +60,7 @@ def main():
     profile = [profile_table(conn, t, args.enum_max) for t in sorted(tables)]
     conn.close()
 
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         yaml.safe_dump({"db": args.db, "table_count": len(profile), "tables": profile},
                        f, allow_unicode=True, sort_keys=False)

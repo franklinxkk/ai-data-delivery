@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""export_exchange.py — 运营段：语义资产交换导出（ai-data-delivery v0.0.2）
+"""export_exchange.py — 运营段：语义资产交换导出（ai-data-delivery v0.0.3）
 
 RULE-CONSUME-01 的交付面：发给甲方/其他系统时，模型、字典、gold 集要作为"一个版本化
 整体"导出，带 sha256 清单——对方可验完整性，后续可对账版本漂移。

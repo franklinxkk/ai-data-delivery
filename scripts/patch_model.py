@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""patch_model.py — semantic.yaml 幂等补丁器（ai-data-delivery v0.0.2）
+"""patch_model.py — semantic.yaml 幂等补丁器（ai-data-delivery v0.0.3）
 
 权威源 Schema（semantic.yaml，唯一事实源）：
   datasets[]:       name / display_name / source(物理表) / grain / primary_key
@@ -103,26 +103,69 @@ def strip_dataset_prefixes(sql, model):
     return sql
 
 
-def verify_with_db(db_path, model, dataset_name, extra_where):
-    """对物理库验算候选口径：有量且可执行才允许写入。返回 (ok, detail)。"""
-    import sqlite3
-    ds = find_one(model.get("datasets"), "name", dataset_name)
+def filters_to_sql(filters):
+    """filters: [{field, values}] → SQL 条件串。"""
+    parts = []
+    for f in filters or []:
+        vals = ", ".join("'" + str(v).replace("'", "''") + "'"
+                         for v in (f.get("values") or []))
+        if vals:
+            parts.append(f"{f['field']} IN ({vals})")
+    return " AND ".join(parts)
+
+
+def compile_full_sql(model, mt):
+    """指标完整口径（expr/分子分母 + filters + extra_where）→ 可执行 SQL。返回 (sql, err)。"""
+    ds = find_one(model.get("datasets"), "name", mt.get("dataset"))
     if ds is None:
-        return False, f"数据集 {dataset_name!r} 不存在，无法定位物理表"
+        return None, f"数据集 {mt.get('dataset')!r} 不存在，无法定位物理表"
     table = ds.get("source")
     if not table:
-        return False, f"数据集 {dataset_name!r} 无 source 物理表声明"
-    where = strip_dataset_prefixes(extra_where.strip(), model)
-    sql = f"SELECT COUNT(*) AS c FROM {table} WHERE {where}"
+        return None, f"数据集 {mt.get('dataset')!r} 无 source 物理表声明"
+    if mt.get("expr"):
+        sel = mt["expr"]
+    elif mt.get("numerator") and mt.get("denominator"):
+        sel = f"({mt['numerator']['expr']}) * 1.0 / ({mt['denominator']['expr']})"
+    else:
+        return None, "缺 expr 且缺分子分母，无口径可验算"
+    wheres = [w for w in (filters_to_sql(mt.get("filters")), mt.get("extra_where")) if w]
+    sql = f"SELECT {strip_dataset_prefixes(sel, model)} AS v FROM {table}"
+    if wheres:
+        sql += " WHERE " + " AND ".join(f"({strip_dataset_prefixes(w, model)})" for w in wheres)
+    return sql, None
+
+
+def verify_with_db(db_path, model, mt, expect=None, tol=1e-6):
+    """对物理库验算 patched 后的完整口径。返回 (ok, detail)。
+    给了 --expect 就对拍数值；没给只保证可执行且有量（非 None/非 0）。"""
+    sql, err_ = compile_full_sql(model, mt)
+    if err_:
+        return False, err_
+    import sqlite3
     try:
         conn = sqlite3.connect(db_path)
-        cnt = conn.execute(sql).fetchone()[0]
+        row = conn.execute(sql).fetchone()
         conn.close()
     except Exception as e:
         return False, f"验算 SQL 执行失败：{e}\n  SQL: {sql}"
-    if cnt == 0:
-        return False, f"验算结果为 0 行（口径可能过严或枚举值写错）\n  SQL: {sql}"
-    return True, f"验算通过：{cnt} 行命中\n  SQL: {sql}"
+    v = row[0] if row else None
+    if v is None:
+        return False, f"验算结果为 NULL（口径可能过严或枚举值写错）\n  SQL: {sql}"
+    if expect is not None:
+        try:
+            ok = abs(float(v) - float(expect)) <= tol
+        except (TypeError, ValueError):
+            return False, f"验算结果 {v!r} 非数值，无法与 --expect {expect} 对拍\n  SQL: {sql}"
+        if not ok:
+            return False, (f"验算对拍失败：实算 {v} ≠ 期望 {expect}（容差 {tol}）\n  SQL: {sql}\n"
+                           "  口径改错了还是金标准变了？先确认再 --force")
+        return True, f"验算对拍通过：{v} ≈ {expect}\n  SQL: {sql}"
+    try:
+        if float(v) == 0:
+            return False, f"验算结果为 0（口径可能过严或枚举值写错）\n  SQL: {sql}"
+    except (TypeError, ValueError):
+        pass
+    return True, f"验算通过：命中值 {v}\n  SQL: {sql}"
 
 
 # ---------- 子命令 ----------
@@ -180,22 +223,7 @@ def cmd_struct(args):
         metrics.append(m)
         print(f"新建指标 {args.target!r}（status=草案，验收后改 已发布）")
 
-    # 验算（铁律：写口径前必须验算）
-    extra_where = args.extra_where if args.extra_where is not None else m.get("extra_where")
-    if args.db:
-        if not extra_where:
-            print("提醒：--db 已提供但无 extra_where，仅校验数据集物理表存在性")
-        ok, detail = verify_with_db(args.db, data, m.get("dataset"), extra_where or "1=1")
-        print(detail)
-        if not ok and not args.force:
-            print("验算未通过，拒绝写入（确认无误后加 --force 强制写入）", file=sys.stderr)
-            return 2
-        if not ok:
-            print("warning：--force 生效，验算未通过仍写入（必须在交付说明中声明）", file=sys.stderr)
-    else:
-        print("提醒：未提供 --db，本次口径写入未经物理库验算——交付前必须补验算并留痕", file=sys.stderr)
-
-    # 幂等写入
+    # 幂等写入（先改内存副本，验算不过不落盘）
     m["structured"] = True
     if args.expr:
         m["expr"] = args.expr
@@ -234,6 +262,20 @@ def cmd_struct(args):
                               (m.get("denominator") or {}).get("expr", "")])
         if re.search(r"\bAVG\s*\(", expr_text, re.I):
             return err("ratio 指标禁止行级平均（DEC-METRIC-01）：请用 SUM/SUM 分子分母")
+
+    # 验算（铁律：写口径前必须验算；验算对象是 patched 后的完整口径——filters + extra_where 全量）
+    if args.db:
+        ok, detail = verify_with_db(args.db, data, m, expect=args.expect, tol=args.tol)
+        print(detail)
+        if not ok and not args.force:
+            print("验算未通过，拒绝写入（确认无误后加 --force 强制写入）", file=sys.stderr)
+            return 2
+        if not ok:
+            print("warning：--force 生效，验算未通过仍写入（必须在交付说明中声明）", file=sys.stderr)
+    else:
+        print("提醒：未提供 --db，本次口径写入未经物理库验算——交付前必须补验算并留痕", file=sys.stderr)
+    print("边界声明：验算只保证口径可执行且有量（或与 --expect 对拍一致）；"
+          "口径语义正确性仍须金标准用例 run_eval 定向回归把关。")
 
     dump_if_changed(args.file, before, data)
     n = sum(1 for t in metrics if t.get("structured"))
@@ -274,7 +316,7 @@ def cmd_set(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="semantic.yaml 幂等补丁器（v0.0.2）")
+    ap = argparse.ArgumentParser(description="semantic.yaml 幂等补丁器（v0.0.3）")
     ap.add_argument("-f", "--file", required=True, help="semantic.yaml 路径")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -302,7 +344,10 @@ def main():
     p.add_argument("--name", default=None)
     p.add_argument("--type", default=None)
     p.add_argument("--dataset", default=None)
-    p.add_argument("--db", default=None, help="物理库（sqlite）路径：写入前自动验算口径")
+    p.add_argument("--db", default=None, help="物理库（sqlite）路径：写入前自动验算完整口径")
+    p.add_argument("--expect", default=None,
+                   help="期望值对拍：验算结果与之一致才允许写入（如金标准值 15）")
+    p.add_argument("--tol", type=float, default=1e-6, help="--expect 对拍容差")
     p.add_argument("--force", action="store_true", help="验算未通过仍强制写入（须声明）")
     p.set_defaults(fn=cmd_struct)
 
