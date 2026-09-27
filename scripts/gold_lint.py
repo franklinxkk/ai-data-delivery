@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gold_lint.py — 评测集自身质量检查（ai-data-delivery v0.0.3）
+"""gold_lint.py — 评测集自身质量检查（ai-data-delivery v0.0.4）
 
 gold 集是验收基准，但它自己也会生病。本工具检查评测集内部一致性——
 典型事故：同一物理查询两份 gold 互相矛盾（Q10 vs A03，同一 SQL 金标准 320 vs 267），

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""detect_isomorphic.py — 盘点段：同构表族检测（ai-data-delivery v0.0.3）
+"""detect_isomorphic.py — 盘点段：同构表族检测（ai-data-delivery v0.0.4）
 
 发现 smart_check_record_item1~30 这类"同一结构、按序号拆表"的表族——
 不合并则跨项聚合问题永久无解（本项目实测最关键的一刀）。

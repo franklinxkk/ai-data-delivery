@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""impact_analysis.py — 运营段：变更影响面分析（ai-data-delivery v0.0.3）
+"""impact_analysis.py — 运营段：变更影响面分析（ai-data-delivery v0.0.4）
 
 RULE-CHANGE-01：改一个字段/数据集/指标前，先回答"谁会受影响"——概念展开、指标口径、
 关系与多跳路径、gold 用例。先评估再动手，改完跑 release_gate.py 收口。

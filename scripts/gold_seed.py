@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gold_seed.py — 评测资产段：gold 集 v0 骨架生成（ai-data-delivery v0.0.3）
+"""gold_seed.py — 评测资产段：gold 集 v0 骨架生成（ai-data-delivery v0.0.4）
 
 RULE-EVAL-01 的冷启动：立项第一天往往只有"客户想要的问句清单"。把清单变成 gold 骨架，
 强制质疑"有没有拒绝类用例"，从指标名/同义词反挖候选问句，避免评测集先天偏科。

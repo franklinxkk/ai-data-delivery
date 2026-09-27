@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""promote_gold.py — 闭环段：修过的 bad case 沉淀进 gold 集（ai-data-delivery v0.0.3）
+"""promote_gold.py — 闭环段：修过的 bad case 沉淀进 gold 集（ai-data-delivery v0.0.4）
 
 铁律：gold 集单调增长，修 A 坏 B 的防线。从 bad case 登记卡生成 gold 用例并落盘。
 
@@ -21,8 +21,10 @@ import yaml
 def load_cases(path):
     if not os.path.exists(path):
         # 自动初始化空 gold 集（merged 为 list；expect 格式亦为 list）
+        # 注意：data 与 lst 必须是同一对象，否则首条追加会写丢（v0.0.4 实测 bug）
         print(f"提示：{path} 不存在，自动初始化为空 gold 集")
-        return [], None, []
+        data = []
+        return data, None, data
     with open(path, encoding="utf-8") as f:
         data = json.load(f) if path.endswith(".json") else yaml.safe_load(f)
     wrapper = None

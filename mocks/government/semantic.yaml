@@ -1,0 +1,74 @@
+version: mock-government-1.0
+domain: 政务·民生服务
+
+datasets:
+  - name: service_request
+    source: service_request
+    cn: 政务办件事宜表
+    grain: 一行一件办件
+    primary_key: req_id
+    ai:
+      instructions: 能答办件量/办结效率/满意度统计；必带时间围栏（req_date）；不答办事群众身份信息
+    fields:
+      - {name: req_id, role: pk, cn: 办件编号}
+      - {name: req_date, role: time, cn: 申请日期}
+      - {name: category, role: dim, cn: 事项类别, enum: [社保, 医保, 户籍, 公积金, 税务]}
+      - {name: channel, role: dim, cn: 办理渠道, enum: [窗口, 网办, 电话]}
+      - {name: status, role: dim, cn: 办结状态, enum: [按期办结, 超期办结, 办理中]}
+      - {name: satisfaction, role: measure, cn: 满意度评分}
+
+concepts:
+  - term: 高频事项
+    synonyms: [热门事项]
+    expand: {dataset: service_request, field: category, values: [社保, 医保]}
+
+metrics:
+  - id: request_count
+    name: 办件总量
+    synonyms: [办件量]
+    type: count
+    dataset: service_request
+    structured: true
+    status: 已发布
+    expr: COUNT(*)
+    time_field: req_date
+    unit: 件
+    caliber: {note: 全部办件数, basis: mock 内部约定}
+
+  - id: ontime_rate
+    name: 按期办结率
+    synonyms: [按时办结率]
+    type: ratio
+    dataset: service_request
+    structured: true
+    status: 已发布
+    numerator: {expr: "SUM(CASE WHEN status = '按期办结' THEN 1 ELSE 0 END)"}
+    denominator: {expr: COUNT(*)}
+    time_field: req_date
+    unit: "%"
+    caliber: {note: 按期办结件占全部办件（SUM/SUM 加权）, basis: mock 内部约定}
+
+  - id: satisfaction_avg
+    name: 平均满意度
+    synonyms: [满意度均值]
+    type: avg
+    dataset: service_request
+    structured: true
+    status: 已发布
+    expr: AVG(satisfaction)
+    time_field: req_date
+    unit: 分
+    caliber: {note: 满意度评分算术平均（非比率指标，AVG 合法）, basis: mock 内部约定}
+
+  - id: overdue_request_count
+    name: 超期办结件数
+    synonyms: [超期办件数]
+    type: count
+    dataset: service_request
+    structured: true
+    status: 已发布
+    expr: COUNT(*)
+    filters: [{field: status, values: [超期办结]}]
+    time_field: req_date
+    unit: 件
+    caliber: {note: 状态为超期办结的办件数, basis: mock 内部约定}

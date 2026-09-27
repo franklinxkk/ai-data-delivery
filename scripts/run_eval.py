@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""run_eval.py — 回归比对器（ai-data-delivery v0.0.3，双模式）
+"""run_eval.py — 回归比对器（ai-data-delivery v0.0.4，双模式）
 
 模式 A · 活引擎（FDE 日常：改完一键回归）
   python run_eval.py --endpoint http://localhost:7100 --cases cases.json \
@@ -15,10 +15,16 @@
   fmt2  {"id","question","gold_rows":[[...]],"expect_reject":false}
   fmt3  {"id","question","gold_sql":"...","expect_table":"..."}  —— 需 --gold-results 提供期望行
 
+声明式冲突（v0.0.4 新增）：任何格式可叠加
+  "declared_conflict": {"ref": "决策日志/评审纪要出处", "note": "冲突说明"}
+  —— 已在评审中定性、决议暂保留的口径冲突用例：失败不计入 acc、不压退出码，
+     单独列入 summary.declared_cases 留痕；实测若已转 pass 会提示"冲突或已消解，建议移除标记"。
+     缺 ref 的声明会大声告警（无出处留痕的豁免 = 后门）。
+
 actual 文件（模式 B）：jsonl/yaml/json，每条形如
   {"id":"q001","value":123,"rows":null,"refused":false}
 
-退出码：0 = 全部通过；1 = 有失败项；2 = 用法/数据错误。
+退出码：0 = 全部通过（声明冲突不压门禁）；1 = 有失败项；2 = 用法/数据错误。
 """
 import os
 import argparse
@@ -185,6 +191,20 @@ def judge_live(resp, expect):
     return None, "无期望定义（跳过判定）"
 
 
+def apply_declared(case, ok, why):
+    """声明式冲突处理：返回 (declared, why)。declared=True 表示失败被声明豁免。"""
+    conf = case.get("declared_conflict")
+    if not conf or ok is None:
+        return False, why
+    if ok is True:
+        return False, "声明冲突但实测通过——冲突或已消解，建议移除 declared_conflict 标记"
+    if isinstance(conf, dict):
+        ref, note = conf.get("ref"), conf.get("note")
+        tag = f"已声明冲突（{ref or '⚠ 无出处引用'}）"
+        return True, f"{tag}：{note or why}"
+    return True, f"已声明冲突（⚠ 无出处引用）：{conf}；实测：{why}"
+
+
 def run_live(args):
     cases = load_cases(args.cases)
     gold_results = load_actual_map(args.gold_results) if args.gold_results else None
@@ -198,30 +218,36 @@ def run_live(args):
             expect = unify_expect(c, gold_results)
             resp = ask(args.endpoint, c["question"])
             ok, why = judge_live(resp, expect)
+            declared, why = apply_declared(c, ok, why)
             records.append({
                 "id": c["id"], "type": c.get("type", label), "pass": ok, "why": why,
+                "declared": declared or None,
                 "route": "reject" if resp.get("rejected") or resp.get("refused")
                          else ("table" if resp.get("rows") else "scalar"),
                 "value": resp.get("value"), "sql": resp.get("sql"),
                 "reasoning": resp.get("reasoning")})
-            mark = "pass" if ok else ("skip" if ok is None else "FAIL")
+            mark = "DECL" if declared else ("pass" if ok else ("skip" if ok is None else "FAIL"))
             print(f"{c['id']} [{label}] {mark}  {c['question'][:32]}"
-                  + ("" if ok else f"  << {why}"))
+                  + ("" if ok and not why else f"  << {why}" if why else ""))
 
     judged = [r for r in records if r["pass"] is not None]
     unknown = [r for r in records if r["pass"] is None]
-    passed = sum(1 for r in judged if r["pass"])
+    declared = [r for r in judged if r.get("declared")]
+    effective = [r for r in judged if not r.get("declared")]
+    passed = sum(1 for r in effective if r["pass"])
     by_type = {}
-    for r in judged:
+    for r in effective:
         t = by_type.setdefault(r["type"] or "main", [0, 0])
         t[1] += 1
         t[0] += bool(r["pass"])
-    summary = {"total": len(judged), "passed": passed,
-               "acc": round(passed / len(judged), 4) if judged else 0,
+    summary = {"total": len(effective), "passed": passed,
+               "acc": round(passed / len(effective), 4) if effective else 0,
                "unknown": len(unknown),
+               "declared": len(declared),
+               "declared_cases": [{"id": r["id"], "why": r["why"]} for r in declared],
                "by_type": {k: {"pass": v[0], "total": v[1], "acc": round(v[0] / v[1], 4)}
                            for k, v in sorted(by_type.items())},
-               "failures": [r for r in judged if not r["pass"]]}
+               "failures": [r for r in effective if not r["pass"]]}
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump({"summary": summary, "records": records}, f, ensure_ascii=False, indent=1)
@@ -230,9 +256,16 @@ def run_live(args):
               f"{[r['id'] for r in unknown]}")
         print("  这些用例既无 expect/expect_reject/gold_rows/gold_sql，也未标拒绝标记——"
               "请补齐期望后重跑，否则等于没测。")
+    if declared:
+        print(f"\n◆ {len(declared)} 条声明式冲突未计入 acc（豁免留痕）："
+              f"{[r['id'] for r in declared]}")
+        noref = [r["id"] for r in declared if "无出处引用" in (r["why"] or "")]
+        if noref:
+            print(f"  ⚠ 其中 {len(noref)} 条缺决策出处 ref：{noref}——"
+                  "无留痕的豁免是后门，请补 declared_conflict.ref 指向评审纪要/决策日志")
     print("\n==== SUMMARY ====")
     print(json.dumps(summary, ensure_ascii=False, indent=1, default=str)[:2000])
-    return 0 if passed == len(judged) else 1
+    return 0 if passed == len(effective) else 1
 
 
 # ---------- 模式 B：离线文件比对 ----------
@@ -259,27 +292,35 @@ def judge_file(case, actual):
 def run_offline(args):
     cases = load_cases(args.gold)
     actuals = load_actual_map(args.actual)
-    results, passed, unknown = [], 0, 0
+    results, passed, unknown, declared = [], 0, 0, 0
     for case in cases:
         ok, detail = judge_file(case, actuals.get(case["id"]))
+        decl, detail = apply_declared(case, ok, detail)
         if ok is None:
             unknown += 1
-        passed += bool(ok)
-        mark = "SKIP" if ok is None else ("PASS" if ok else "FAIL")
-        results.append({"id": case["id"], "pass": ok, "detail": detail})
+        elif decl:
+            declared += 1
+        else:
+            passed += bool(ok)
+        mark = "SKIP" if ok is None else ("DECL" if decl else ("PASS" if ok else "FAIL"))
+        results.append({"id": case["id"], "pass": ok, "declared": decl or None,
+                        "detail": detail})
         print(f"[{mark}] {case['id']}" + (f" —— {detail}" if detail else ""))
-    print(f"\n回归结果：{passed}/{len(cases) - unknown} 通过"
-          + (f"（另 {unknown} 条期望不明跳过）" if unknown else ""))
+    effective = len(cases) - unknown - declared
+    print(f"\n回归结果：{passed}/{effective} 通过"
+          + (f"（另 {unknown} 条期望不明跳过）" if unknown else "")
+          + (f"（另 {declared} 条声明冲突豁免留痕）" if declared else ""))
     if args.report:
         os.makedirs(os.path.dirname(args.report) or ".", exist_ok=True)
         with open(args.report, "w", encoding="utf-8") as f:
-            json.dump({"passed": passed, "total": len(cases), "unknown": unknown,
+            json.dump({"passed": passed, "total": effective, "unknown": unknown,
+                       "declared": declared,
                        "cases": results}, f, ensure_ascii=False, indent=2)
-    return 0 if passed == len(cases) - unknown else 1
+    return 0 if passed == effective else 1
 
 
 def main():
-    ap = argparse.ArgumentParser(description="回归比对器 v0.0.3（活引擎 / 离线双模式）")
+    ap = argparse.ArgumentParser(description="回归比对器 v0.0.4（活引擎 / 离线双模式）")
     ap.add_argument("--endpoint", help="活引擎地址（模式 A）")
     ap.add_argument("--cases", help="用例集 json/yaml（模式 A）")
     ap.add_argument("--gold-results", dest="gold_results", default=None,

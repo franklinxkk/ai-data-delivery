@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""propose_dws.py — 建模段：宽表设计草案生成（ai-data-delivery v0.0.3）
+"""propose_dws.py — 建模段：宽表设计草案生成（ai-data-delivery v0.0.4）
 
 按"问答主题域"把源表盘点聚成宽表草案。AI 提案、人审拍板——
 草案里的粒度/主题域必须人工确认后才准进入 gen_metadata。

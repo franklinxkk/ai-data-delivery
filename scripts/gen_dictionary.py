@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gen_dictionary.py — 运营段：指标口径字典生成（ai-data-delivery v0.0.3）
+"""gen_dictionary.py — 运营段：指标口径字典生成（ai-data-delivery v0.0.4）
 
 RULE-CONSUME-01：模型只有沉淀为"人能读的口径字典"，信息中心与甲方才接得住、审得了。
 从 semantic.yaml 一键生成 markdown 字典：数据集 / 业务概念 / 指标口径（含文号依据）/

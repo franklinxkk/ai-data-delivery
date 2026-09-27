@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check_consistency.py — 运营段：上游表结构漂移巡检（ai-data-delivery v0.0.3）
+"""check_consistency.py — 运营段：上游表结构漂移巡检（ai-data-delivery v0.0.4）
 
 RULE-STATE-01 的运营面：语义模型/宽表 meta 是对物理库的"快照承诺"，上游加列、删列、
 换类型后模型不会自动知道——巡检比对，漂移即报警。

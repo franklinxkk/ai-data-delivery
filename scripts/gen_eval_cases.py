@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gen_eval_cases.py — 评测资产段：从语义模型生成评测用例草稿（ai-data-delivery v0.0.3）
+"""gen_eval_cases.py — 评测资产段：从语义模型生成评测用例草稿（ai-data-delivery v0.0.4）
 
 RULE-EVAL-01：评测集要覆盖九组问法。手工写 62 条要几天，从模型按模板生成草稿只要几秒，
 人只做审核与 gold 补录。每组模板对应一类能力：

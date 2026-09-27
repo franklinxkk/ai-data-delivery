@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""harvest_metrics.py — 盘点段：既有指标库 → metrics_raw.yaml（ai-data-delivery v0.0.3）
+"""harvest_metrics.py — 盘点段：既有指标库 → metrics_raw.yaml（ai-data-delivery v0.0.4）
 
 把既有指标/报表导出（哪怕是中文伪代码 SQL）收成结构化盘点资产，
 每条指标三分：可执行候选 / 需改写（伪代码） / 无来源（数据缺口）。

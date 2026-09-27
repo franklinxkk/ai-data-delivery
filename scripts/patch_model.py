@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""patch_model.py — semantic.yaml 幂等补丁器（ai-data-delivery v0.0.3）
+"""patch_model.py — semantic.yaml 幂等补丁器（ai-data-delivery v0.0.4）
 
 权威源 Schema（semantic.yaml，唯一事实源）：
   datasets[]:       name / display_name / source(物理表) / grain / primary_key
@@ -316,7 +316,7 @@ def cmd_set(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="semantic.yaml 幂等补丁器（v0.0.3）")
+    ap = argparse.ArgumentParser(description="semantic.yaml 幂等补丁器（v0.0.4）")
     ap.add_argument("-f", "--file", required=True, help="semantic.yaml 路径")
     sub = ap.add_subparsers(dest="cmd", required=True)
 

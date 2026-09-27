@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""suggest_card.py — 评测资产段：bad case → 修订建议卡片（ai-data-delivery v0.0.3）
+"""suggest_card.py — 评测资产段：bad case → 修订建议卡片（ai-data-delivery v0.0.4）
 
 RULE-LOOP-01 的出口：登记卡 triage 出归因层之后，自动生成一张"修订建议卡片"，
 把证据、建议动作（精确到命令）、影响面、回归占位写成一页，FDE 评审照单执行即可。

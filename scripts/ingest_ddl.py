@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ingest_ddl.py — 盘点段：DDL → 源表清单（ai-data-delivery v0.0.3）
+"""ingest_ddl.py — 盘点段：DDL → 源表清单（ai-data-delivery v0.0.4）
 
 把"所有业务系统的 SQL 结构"变成可计算的盘点资产。
 

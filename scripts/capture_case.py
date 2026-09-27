@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""capture_case.py — 闭环段：bad case 一键取证（ai-data-delivery v0.0.3）
+"""capture_case.py — 闭环段：bad case 一键取证（ai-data-delivery v0.0.4）
 
 对活引擎复现 bad case，一次拿齐三件套再下结论：
   POST /api/ask       → 答案/SQL/推理链/拒绝判定

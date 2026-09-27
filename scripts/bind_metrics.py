@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""bind_metrics.py — 建模段：指标 → 宽表字段绑定建议（ai-data-delivery v0.0.3）
+"""bind_metrics.py — 建模段：指标 → 宽表字段绑定建议（ai-data-delivery v0.0.4）
 
 把 metrics_raw 的每条指标绑到宽表数据集：来源表 → meta sources 反查宽表；
 口径式标识符 ∩ 数据集字段 → 字段级绑定证据。绑不上的进缺口台账。

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""profile_db.py — 盘点段：连库出实测画像（ai-data-delivery v0.0.3）
+"""profile_db.py — 盘点段：连库出实测画像（ai-data-delivery v0.0.4）
 
 对源库逐表实测：行数、枚举实测值（低基数列）、空值率、近似粒度（唯一键基数）。
 敏感列（身份证/手机号等）只出计数与空值率，不取样值。

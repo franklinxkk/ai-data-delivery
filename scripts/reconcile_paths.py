@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""reconcile_paths.py — 闭环段：指标路径 vs 宽表路径双路对账（ai-data-delivery v0.0.3）
+"""reconcile_paths.py — 闭环段：指标路径 vs 宽表路径双路对账（ai-data-delivery v0.0.4）
 
 RULE-METRIC-01：同一问题两条路径结果必须一致，不一致即存在双口径（两个正确答案 = 零信任）。
 

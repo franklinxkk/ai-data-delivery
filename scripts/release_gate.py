@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""release_gate.py — 运营段：模型发版门禁（ai-data-delivery v0.0.3）
+"""release_gate.py — 运营段：模型发版门禁（ai-data-delivery v0.0.4）
 
 RULE-STATE-01 的收口：模型版本从"草案"到"已发布"必须过门禁，且留下发版日志。
 聚合四类闸门，任一不过则拒绝发版：
   G1 模型自检   check_model.py（结构/引用/口径完备性）
   G2 gold 体检  gold_lint.py（评测集自身无矛盾）
-  G3 全量回归   run_eval.py 的报告 json（acc 达标，默认 1.0；缺报告则跳过并声明）
+  G3 全量回归   run_eval.py 的报告 json（acc 达标，默认 1.0；缺报告则跳过并声明；
+               v0.0.4 起 declared_conflict 声明式冲突不计入分母，但明细中展示留痕）
   G4 计划稳定   plan_stability.py（可选，需 --endpoint；同句连跑 SQL 指纹一致）
 
 用法：
@@ -61,7 +62,8 @@ def main():
         rep = json.load(open(args.eval_report, encoding="utf-8"))
         s = rep.get("summary", {})
         ok = s.get("passed") == s.get("total") and s.get("acc", 0) >= args.min_acc
-        detail = f"acc={s.get('acc')} ({s.get('passed')}/{s.get('total')}) 阈值={args.min_acc}"
+        detail = (f"acc={s.get('acc')} ({s.get('passed')}/{s.get('total')}) "
+                  f"阈值={args.min_acc} 声明冲突={s.get('declared', 0)} 条")
         print(f"[{'PASS' if ok else 'REJ'}] G3 全量回归  {detail}")
         gates.append({"gate": "G3 全量回归", "ok": ok, "detail": detail})
     else:

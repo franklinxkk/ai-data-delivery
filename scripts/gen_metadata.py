@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gen_metadata.py — 建模段：宽表 DDL + 实测画像 → meta/*.yaml 草稿（ai-data-delivery v0.0.3）
+"""gen_metadata.py — 建模段：宽表 DDL + 实测画像 → meta/*.yaml 草稿（ai-data-delivery v0.0.4）
 
 生成表级 15 项 / 字段级 12 项的元数据骨架：枚举值从 profile 自动填实测值，
 敏感字段按命名模式预标记（sensitive + allow_llm: false），维度/度量/时间角色自动推断。

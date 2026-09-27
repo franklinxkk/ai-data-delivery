@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""coverage_check.py — 建模段门禁：覆盖率校验（ai-data-delivery v0.0.3）
+"""coverage_check.py — 建模段门禁：覆盖率校验（ai-data-delivery v0.0.4）
 
 指标 ↔ 模型 ↔ gold 三方覆盖矩阵。门禁规则：存在"未进模型且未登记缺口"的孤儿指标 → 失败。
 

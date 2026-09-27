@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ingest_feedback.py — 评测资产段：用户反馈入 bad case 池（ai-data-delivery v0.0.3）
+"""ingest_feedback.py — 评测资产段：用户反馈入 bad case 池（ai-data-delivery v0.0.4）
 
 RULE-LOOP-01 的入口：试点期用户在群里说"这个答错了"，不能止于聊天记录——就地进池，
 与 capture_case.py 的取证卡同构，统一走 triage → 修复 → promote_gold 闭环。
