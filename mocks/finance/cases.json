@@ -47,6 +47,9 @@
   "gold_rows": [[30]],
   "expect_reject": false,
   "declared_conflict": {
+   "owner": "synthetic-demo-reviewer",
+   "expires_on": "2099-12-31",
+   "case_ids": ["F06"],
    "ref": "风控评审纪要2026-09-15:第4条",
    "note": "逾期口径双定义（status=逾期 30 笔 vs overdue_days>0 12 笔），评审决议按状态口径；引擎当前按天数口径应答属已知偏差"
   }

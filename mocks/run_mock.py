@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""run_mock.py — 多领域快速 mock：无需活引擎，端到端自检工具链（ai-data-delivery v0.0.4）
+"""run_mock.py — 多领域快速 mock：无需活引擎，端到端自检工具链（ai-data-delivery v0.0.5）
 
 对每个领域场景目录（含 build_db.py + semantic.yaml + cases.json）依次执行：
   1) 建库：运行 build_db.py 生成确定性 SQLite 物理库（固定造数，可复算）
@@ -32,6 +32,7 @@ import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.normpath(os.path.join(HERE, "..", "scripts"))
+sys.path.insert(0, SCRIPTS)
 
 
 def load_recon():
@@ -120,7 +121,8 @@ def run_domain(domain_dir):
     actual = gen_actual(domain_dir, db_path, recon)
     ok = run_step("4 G3 回归比对 run_eval（离线）",
                   [os.path.join(SCRIPTS, "run_eval.py"), "--gold", "cases.json",
-                   "--actual", actual, "--report",
+                   "--actual", actual, "--mode", "mock", "--model", "semantic.yaml",
+                   "--db", db_path, "--report",
                    os.path.join(domain_dir, "report.json")], domain_dir)
     return ok
 

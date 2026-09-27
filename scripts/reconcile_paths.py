@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""reconcile_paths.py — 闭环段：指标路径 vs 宽表路径双路对账（ai-data-delivery v0.0.4）
+"""reconcile_paths.py — 闭环段：指标路径 vs 宽表路径双路对账（ai-data-delivery v0.0.5）
 
 RULE-METRIC-01：同一问题两条路径结果必须一致，不一致即存在双口径（两个正确答案 = 零信任）。
 
@@ -18,53 +18,18 @@ dataset./表名前缀自动剥离；仅对 single-dataset 的 count/sum/avg/rati
 import os
 import argparse
 import json
-import re
-import sqlite3
 import sys
 import urllib.request
 
 import yaml
-
-
-def strip_prefixes(sql, names):
-    for n in sorted((x for x in names if x), key=len, reverse=True):
-        sql = re.sub(rf"\b{re.escape(n)}\.", "", sql)
-    return sql
-
-
-def filters_to_sql(filters, names):
-    """filters: [{field, values}] → SQL 条件串（剥离前缀）。"""
-    parts = []
-    for f in filters or []:
-        vals = ", ".join("'" + str(v).replace("'", "''") + "'"
-                         for v in (f.get("values") or []))
-        if vals:
-            parts.append(f"{strip_prefixes(str(f['field']), names)} IN ({vals})")
-    return " AND ".join(parts)
+from _contract import readonly
+from _sql import compile_single
 
 
 def compile_metric_sql(mt, ds, names):
     """结构化指标 → 可执行 SQL（expr/分子分母 + filters + extra_where 全量口径）。
     返回 (sql, 不可编译原因)。"""
-    if ds is None:
-        return None, "无数据集挂载"
-    table = ds.get("source")
-    if not table:
-        return None, "数据集无 source 物理表"
-    if mt.get("expr"):
-        select = mt["expr"]
-    elif mt.get("numerator") and mt.get("denominator"):
-        select = f"({mt['numerator']['expr']}) * 1.0 / ({mt['denominator']['expr']})"
-    else:
-        return None, "缺 expr 且缺分子分母"
-    select = strip_prefixes(select, names)
-    sql = f"SELECT {select} AS v FROM {table}"
-    wheres = [w for w in (filters_to_sql(mt.get("filters"), names),
-                          strip_prefixes(mt["extra_where"], names)
-                          if mt.get("extra_where") else None) if w]
-    if wheres:
-        sql += " WHERE " + " AND ".join(f"({w})" for w in wheres)
-    return sql, None
+    return compile_single(mt, ds, names)
 
 
 def classify_diff(expected, actual, mt, tol=1e-4):
@@ -75,7 +40,7 @@ def classify_diff(expected, actual, mt, tol=1e-4):
         return "不一致"
     if abs(e - a) <= tol or (e and abs(a / e - 100) <= 0.01) or (a and abs(e / a - 100) <= 0.01):
         if abs(e - a) > tol:
-            return "量纲差异"  # 0.6667 vs 66.67：语义一致，展示口径不同
+            return "量纲差异"  # 候选解释，需要确认单位转换后重新对账
     return "不一致"
 
 
@@ -101,7 +66,7 @@ def run_active(args):
     m = yaml.safe_load(open(args.model, encoding="utf-8"))
     ds_index = {d["name"]: d for d in m.get("datasets", [])}
     names = set(ds_index) | {d.get("source") for d in m.get("datasets", [])}
-    conn = sqlite3.connect(args.db)
+    conn = readonly(args.db)
 
     only = set(args.metric or [])
     rows, n_mismatch, n_scale = [], 0, 0
@@ -114,9 +79,12 @@ def run_active(args):
         rec = {"metric": mt["id"], "name": mt.get("name")}
         if not sql:
             rec["status"] = "skip"; rec["why"] = why
+            n_mismatch += 1
         else:
             try:
                 expected = conn.execute(sql).fetchone()[0]
+                if expected is None:
+                    raise ValueError("NULL 结果未定义，不能标记为验证通过")
                 rec["metric_path"] = norm(expected)
                 rec["compiled_sql"] = sql
                 if args.endpoint:
@@ -130,8 +98,9 @@ def run_active(args):
                             classify_diff(expected, actual, mt) == "量纲差异":
                         rec["status"] = "量纲差异"
                         n_scale += 1
+                        n_mismatch += 1
                         rec["why"] = (f"指标路径={norm(expected)} 问数路径={norm(actual)}"
-                                      f"（×100 百分比量纲，语义一致；建议输出归一到模型单位 "
+                                      f"（疑似 ×100 量纲差异，尚未确认；请核对模型单位 "
                                       f"{mt.get('unit') or '?'}）")
                     else:
                         rec["status"] = "一致" if ok else "不一致"
@@ -146,6 +115,7 @@ def run_active(args):
                     rec["status"] = "computed_only"
             except Exception as e:
                 rec["status"] = "error"; rec["why"] = str(e)
+                n_mismatch += 1
         rows.append(rec)
 
     conn.close()
@@ -154,12 +124,12 @@ def run_active(args):
               f"{('vs ' + str(r.get('query_path', ''))) if 'query_path' in r else ''} {r.get('why', '')}")
     print(f"\n对账完成：{len(rows)} 个结构化指标，不一致 {n_mismatch} 个，量纲差异 {n_scale} 个")
     if n_scale:
-        print("提示：量纲差异不计入不一致，但建议引擎输出单位与模型 unit 归一，消除双展示口径。")
+        print("提示：量纲差异计入不一致，需明确单位转换并重新对账。")
     if args.out:
         os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump(rows, f, ensure_ascii=False, indent=1)
-    return 1 if n_mismatch else 0
+    return 1 if n_mismatch or not rows else 0
 
 
 def run_offline(args):

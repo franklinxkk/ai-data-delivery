@@ -1,91 +1,86 @@
-# ai-data-delivery
+# ai-data-delivery · v0.0.5
 
-AI+数据落地工具包（Kimi Work skill）：面向 **FDE（驻场/交付工程师）**、**产品经理** 与 **信息中心人员** 的企业级智能问数/数据分析系统**全周期交付工具链**，领域无关——同一套合同 Schema（`semantic.yaml`：`datasets[] / concepts[] / relationships[] / metrics[]`）已在交通安全真实项目与零售、金融、医疗、制造、政务 5 个行业 mock 上验证同构适用。
+面向 FDE、产品经理和甲方信息中心的语义交付 skill：从部分数据结构与业务描述出发，引导补齐语义，形成可审阅、可验证、可交换的标准结果。已有模型可直接进入检查和可视化。
 
-模型能力会持续换代贬值；**语义资产、回归集、操作规程**不随之过时——本工具包锚定这三个常量。
+本版以 `semantic.yaml` 的 datasets / concepts / relationships / metrics 为基础，新增持久补齐会话、复合关联键与查询粒度检查、SQLite 数据约束、离线可视化，以及更严格的证据门禁。保留 v0.0.4 的工具入口，收紧了原先会把缺报告或无效豁免当成成功的行为。
 
-## 5 分钟快速体验（无需活引擎）
+## 快速体验
+
+需要 Python 3.10+，只有 PyYAML 一个第三方 Python 依赖。
 
 ```bash
-python mocks/run_mock.py --all     # 5 个行业场景端到端自检：建库→模型lint→评测体检→口径编译→回归
+python -m pip install -r requirements.txt
+python examples/onboarding/run_demo.py --out tmp/demo
+python mocks/run_mock.py --all
 ```
 
-每个场景自包含（造数脚本 + 迷你本体 + gold 用例），是了解工具链最快的方式，也是新领域 PoC 的脚手架。详见 [mocks/README.md](mocks/README.md)。
+第一条示例从缺少粒度与口径的模型开始，加载**合成的已确认决策**，执行补丁审阅/应用、导出、关联/约束检查、评测、门禁及交换包生成。打开 `tmp/demo/model.html` 可搜索数据集、查看映射、补齐状态和验证证据。输出目录必须为空；重跑请换目录。
 
-## 你是哪类角色？——角色 × 阶段 × 价值地图
+示例金额为 300；订单到客户 N:1 保持订单粒度，订单直接连接商品明细则会累计成 400。五行业 Mock 直接根据 metric/SQL 生成应答，拒答由模拟器提供，**不验证真实 AI 理解或拒答能力**。
 
-### 🔧 FDE（驻场/交付工程师）——落地执行者
+## 按阶段使用
 
-| 阶段 | 你要做的事 | 跑什么 | 拿到什么 |
-| --- | --- | --- | --- |
-| 立项盘点 | 把甲方的业务系统 DDL 变成台账 | `ingest_ddl` `profile_db` `detect_isomorphic` | 字段台账、枚举画像、同构族清单（298 张源表里揪出 30 张同构表，避免 30 倍重复劳动） |
-| PoC 建模 | 起草宽表与语义模型 | `propose_dws` `gen_metadata` `bind_metrics` `coverage_check` | 宽表合并草案、meta 草稿、指标绑定缺口清单、三方覆盖报告 |
-| 试点闭环 | 排查 bad case、修模型 | `capture_case` `suggest_card` `patch_model` `reconcile_paths` `run_eval` | 一键取证登记卡、修订建议卡、验算过的幂等补丁、双路对账报告、回归报告 |
-| 生产运营 | 发版与巡检 | `release_gate` `check_consistency` `impact_analysis` | 四闸发版结论 + 发版日志（出事后唯一的免责证据）、上游漂移告警、变更影响面 |
+| 阶段 | 产品/业务负责人 | FDE | 信息中心 | 标准结果 |
+| --- | --- | --- | --- | --- |
+| S0 盘点 | 定义具体问题与价值 | 解析已有材料 | 提供可用结构与访问范围 | scope、源表/字段台账 |
+| S1 补齐 | 确认口径与例外；PM 需相应授权 | 提出有证据的候选并记录答案 | 确认来源、身份、历史与时效能力 | gap、decision、审阅补丁 |
+| S2 建模 | 审阅业务定义 | 映射实体/字段/关联与指标 | 核对实际数据契约 | semantic.yaml、结构与约束草案 |
+| S3 验证 | 确认独立期望 | 检查关联、结果对拍与回归 | 检查全量快照和数据质量 | 绑定版本/快照的验证报告 |
+| S4 交付 | 接受适用范围与剩余项 | 对接具体消费者、交付交换包 | 确認运行与权限条件 | manifest、字典、用例、证据、视图 |
+| S5 演进 | 调整优先级与口径 | 分析变更、修复和回归 | 巡检结构/数据/运行变化 | 差异、影响候选、再验证记录 |
 
-**核心价值：所有操作幂等留痕、可复跑、可审计——换人来接手不需要口口相传。**
+可以分段交付。没有数据库时，S1/S2 仍可推进；涉及真实数据的结论保留未验证。只有现状表时，历史月末问题应产出补采需求，不把当前状态当历史事实。
 
-### 📋 产品经理——口径定义的责任人
+## 从你的材料开始
 
-| 阶段 | 你要做的事 | 跑什么 | 拿到什么 |
-| --- | --- | --- | --- |
-| 立项盘点 | 盘点历史指标公式能不能落地 | `harvest_metrics` | 指标三分清单：可执行 / 需改写 / 无来源（无来源指标第一天就暴露，不混进合同） |
-| PoC 建模 | 定义口径并挂依据文号 | `patch_model struct`（带 `--db` 验算 + `--expect` 对拍）、`gen_eval_cases` | 自含全口径的指标定义（口径争议在评审会上定，不在引擎里猜）、评测用例草稿（你只补 gold） |
-| 试点闭环 | 提 bad case、确认期望 | `ingest_feedback` `promote_gold` | 反馈热度池（同问句自动累计次数=优先级）、不断长大的 gold 集 |
-| 生产运营 | 验收签字 | `run_eval` 报告 + `gold_lint` 体检 + `gen_dictionary` | 验收三件套：回归通过率、评测集无矛盾证明、人能读的口径字典 |
+```bash
+# 已有部分 semantic.yaml：先定义当前用例 scope（格式见 examples/onboarding/scope.yaml）
+python scripts/guide_model.py init --model partial.yaml --scope scope.yaml --session session.json
+python scripts/guide_model.py status --session session.json
+# 根据真实回答创建 answers.json，审阅生成的补丁后再应用
+python scripts/guide_model.py propose --session session.json --answers answers.json --patch review.json
+python scripts/guide_model.py apply --session session.json --patch review.json
+python scripts/guide_model.py export --session session.json --out draft
 
-**核心价值：你说的"口径"不再是微信群里的截图，而是写进 YAML、经过物理库验算、有文号依据的合同条款。**
-
-### 🏛 信息中心——数据源与门禁的把关方
-
-| 阶段 | 你要做的事 | 跑什么 | 拿到什么 |
-| --- | --- | --- | --- |
-| 立项盘点 | 提供数据源、评估数据质量 | `profile_db` | 空值率/枚举分布/敏感列画像（敏感列自动不取样） |
-| PoC 建模 | 确认列映射与新鲜度 | meta 草稿中的 `【】` 占位项清单 | 一份明确的"待信息中心确认"事项表 |
-| 试点闭环 | 区分"模型错"还是"数据错" | `reconcile_paths` | 双路径对账报告：指标口径直算 vs 引擎问数，不一致即双口径，责任边界一目了然 |
-| 生产运营 | 上线门禁与合规 | `release_gate` `check_consistency` `export_exchange` | 门禁结论（零失败才放行，已声明冲突豁免但留痕）、上游结构漂移巡检、带 sha256 清单的交换包 |
-
-**核心价值：上游表结构一变、字段一删，巡检立即报警——不再等业务投诉才发现数据断了。**
-
-## 全周期工具地图（27 个脚本 + 1 个 mock 运行器）
-
-| 阶段 | 输入 | 工具 | 输出 |
-| --- | --- | --- | --- |
-| 立项盘点 | 业务系统 DDL、历史指标公式 | `ingest_ddl` `profile_db` `detect_isomorphic` `harvest_metrics` `gold_seed` | 字段台账、枚举画像、同构族清单、指标三分清单、gold v0 骨架 |
-| PoC 建模 | 台账 + 指标清单 + 领域知识 | `propose_dws` `gen_metadata` `bind_metrics` `coverage_check` `gen_eval_cases` | 宽表草案、meta 草稿、绑定结果、覆盖报告、评测用例草稿 |
-| 试点闭环 | 活引擎 + gold 集 + 用户反馈 | `capture_case` `ingest_feedback` `suggest_card` `patch_model` `reconcile_paths` `promote_gold` `run_eval` | bad case 登记卡、修订建议卡、模型补丁、对账报告、回归报告 |
-| 生产运营 | 已发布模型 + 物理库 | `release_gate` `gen_dictionary` `export_exchange` `check_consistency` `plan_stability` `impact_analysis` `probe_model` `check_model` `gold_lint` | 发版日志、口径字典、sha256 交换包、漂移告警、影响面清单 |
-| 领域自检 | mocks/ 场景包 | `mocks/run_mock.py` | 5 行业端到端通过证明 |
-
-## 五条铁律
-
-1. 模型层 YAML 优先，引擎层次之，数据层最后
-2. 指标必须自含全口径，写入口径前必须对物理库验算（`patch_model --db --expect` 强制）
-3. 引擎不承载业务口径
-4. 先回归再交付（声明式冲突豁免必须带决策出处留痕）
-5. 一切修改走幂等脚本留痕，禁止手改 YAML
-
-## 目录结构
-
-```
-SKILL.md                      # 入口：铁律、模块工作流、全量工具清单
-references/
-  delivery-playbook.md        # 落地手册：阶段门禁、角色分工矩阵、死因预防
-  diagnosis-playbook.md       # 诊断手册：症状→层定位→修复对照、引擎不变式
-scripts/                      # 27 个幂等脚本（全部支持 --help）
-mocks/                        # 5 个行业 mock 场景 + run_mock.py 一键自检
+# 只有 DDL 时：生成台账及部分模型，不猜业务粒度/口径
+python scripts/ingest_ddl.py --ddl schema.sql --out inventory --model-out partial.yaml
 ```
 
-## 安装
+详细输入、回答、冲突修订和重新验证流程见 [补齐闭环](references/onboarding.md)。数据检查、关系与约束示例见 [合同与验证](references/contract.md)。
 
-- **Kimi Work**：把本仓库作为技能安装（Skills 管理 → 从 GitHub 安装），或下载 Release 中的 `ai-data-delivery_v0.0.4.skill` 包导入。
-- **手工**：clone 后将本目录放入你的 skills 目录即可，`SKILL.md` 为入口。
+## 证据与门禁
 
-## 实测自证
+```bash
+python scripts/check_model.py -f semantic.yaml
+python scripts/check_join_graph.py --model semantic.yaml --db snapshot.db --out joins.json
+python scripts/check_constraints.py --model semantic.yaml --db snapshot.db --out constraints.json
+python scripts/run_eval.py --gold cases.json --actual actual.json --model semantic.yaml --db snapshot.db --report eval.json
+python scripts/release_gate.py --profile validated --model semantic.yaml --cases cases.json --db snapshot.db --eval-report eval.json --out gate.json
+python scripts/visualize_model.py --model semantic.yaml --report joins.json --report constraints.json --report gate.json --out model.html
+```
 
-- **真实项目**（交通安全监管，15 宽表 / 94 指标 / 4395 行物理库 / 75 评测用例）：全链路回归 75/75，发版门禁 4/4 通过；v0.0.3 实测修复 10 项、v0.0.4 收口验证再修 2 项（promote_gold 首条丢失、声明式冲突机制）。
-- **多领域 mock**：零售 / 金融 / 医疗 / 制造 / 政务 5 场景 `run_mock.py --all` 5/5 通过——合同 Schema 领域无关。
+`static` 只证明指定结构检查通过；默认 `validated` 要求当前模型、用例、数据快照和完整评测证据；`production` 另要求真实端点证据和稳定性抽查。结论带 `mock/offline/live` 来源，有豁免时单独标记。技术门禁不代替业务签署、部署、身份认证或现场运行验收。
 
-## License
+## 文档与兼容性
 
-[MIT](LICENSE)
+- [SKILL.md](SKILL.md)：Agent 入口与任务路由。
+- [全部工具](references/tools.md)：保留原有 27 个工具，新增 4 个公开命令；共享辅助模块不属于 CLI。
+- [交付及迁移](references/delivery-playbook.md)：阶段门禁、旧版报告/豁免迁移。
+- [诊断手册](references/diagnosis-playbook.md)：已有 bad case 工作流。
+- [标准边界](references/standards.md)：GB/T 48000.3—2026、Apache Ossie 与其他规范的适用范围。
+- [本版验证记录](references/v0.0.5-validation.md)：测试范围和未验证项。
+
+没有通用跨表 SQL 编译器、OWL 推理器、Ossie 适配器或实时血缘采集器。关系键借鉴了显式左右列的做法，但此格式仍是本项目合同；YAML lint 不等于国标符合性。大型库/其他数据库需要接入真实消费者再评估。
+
+## 安装和维护
+
+把仓库目录放入宿主的 skills 目录；或从 [Releases](https://github.com/franklinxkk/ai-data-delivery/releases) 下载 `ai-data-delivery_v0.0.5.skill`，在支持该格式的宿主导入。不同宿主的发现、权限及脚本运行行为需要现场确认。
+
+```bash
+python -m unittest discover -s tests -v
+python maintainer/build_skill.py --out dist
+```
+
+构建脚本只打包 Git 已跟踪的运行资产，默认要求干净源码，生成确定性 `.skill` 与 SHA256 清单。开发态预览可加 `--allow-dirty`，不得将其当作已发布构建。
+
+[MIT License](LICENSE)

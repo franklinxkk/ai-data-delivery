@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+dist/
+tmp/
+mocks/*/domain.db
+mocks/*/actual.jsonl
+mocks/*/report.json

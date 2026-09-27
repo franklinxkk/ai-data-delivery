@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check_model.py — semantic.yaml 铁律 lint（ai-data-delivery v0.0.4）
+"""check_model.py — semantic.yaml 铁律 lint（ai-data-delivery v0.0.5）
 
 把五条铁律与评测暴露的元数据缺陷落成机器检查。发布门禁：零 ERROR。
 
@@ -66,6 +66,10 @@ def check_datasets(m, rep):
             rep.error("E01", where, "缺 grain 粒度声明（一行代表什么）")
         if not ds.get("primary_key"):
             rep.error("E02", where, "缺 primary_key（去重与 join 依据）")
+        else:
+            from _contract import keys
+            if not set(keys(ds["primary_key"])) <= field_names(ds):
+                rep.error("E02", where, "primary_key 引用了不存在的字段")
         if not (ds.get("ai") or {}).get("instructions"):
             rep.warn("W01", where, "缺 ai.instructions（能答什么/不能答什么/必带过滤）")
         tf = ds.get("tenant_field")
@@ -89,6 +93,8 @@ def check_datasets(m, rep):
 
 
 def check_relationships(m, rep, ds_names):
+    from check_join_graph import validate_relation
+    ds_index = {d["name"]: d for d in m.get("datasets", [])}
     for r in m.get("relationships", []) or []:
         where = f"relationship[{r.get('from','?')}→{r.get('to','?')}]"
         for ep in (r.get("from"), r.get("to")):
@@ -99,9 +105,13 @@ def check_relationships(m, rep, ds_names):
         trav = r.get("traversable")
         if trav is None:
             rep.error("E09", where, "缺 traversable 标记")
-        jk = r.get("join_key")
-        if trav and not jk:
-            rep.error("E09", where, "可遍历关系缺 join_key")
+        if trav:
+            try:
+                validate_relation(r, ds_index)
+            except (ValueError, TypeError) as exc:
+                rep.error("E09", where, str(exc))
+        elif not isinstance(trav, bool):
+            rep.error("E09", where, "traversable 必须为布尔值")
         if trav is False and not r.get("note"):
             rep.warn("E09", where, "不可遍历关系应写明原因（note），防静默弱 join")
 
@@ -176,6 +186,9 @@ def main():
 
     m = yaml.safe_load(open(args.file, encoding="utf-8")) or {}
     rep = Reporter()
+    if not isinstance(m, dict) or not m.get("datasets"):
+        print("[ERROR E00] 模型必须包含非空 datasets")
+        return 1
     ds_index = {d.get("name"): d for d in m.get("datasets", []) or []}
 
     check_datasets(m, rep)

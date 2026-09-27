@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""patch_model.py — semantic.yaml 幂等补丁器（ai-data-delivery v0.0.4）
+"""patch_model.py — semantic.yaml 幂等补丁器（ai-data-delivery v0.0.5）
 
 权威源 Schema（semantic.yaml，唯一事实源）：
   datasets[]:       name / display_name / source(物理表) / grain / primary_key
@@ -34,10 +34,9 @@
            python patch_model.py -f semantic.yaml set 指标ID --key extra_where --value "..."
            python patch_model.py -f semantic.yaml set --path engine.timezone --value Asia/Shanghai
 
-铁律：写入口径（struct）前必须对物理库验算。提供 --db 时自动执行
-  SELECT COUNT(*) FROM <数据集 source> WHERE <extra_where>
-验算失败或返回 0 行时拒绝写入（--force 强制写入并记 warning）。
-未提供 --db 时打印醒目提醒——验算留痕是交付要求。
+提供 --db 时编译完整单表口径并检查可执行性；提供 --expect 时再对拍期望。
+错误/NULL 拒绝写入（--force 会绕过，不能作为验证证据）；零值本身不是错误。
+未提供 --db 时只生成草案并提醒未验证。
 
 注意：PyYAML 重写会丢失原文件注释，重要注释请迁移到 caliber.note / description 字段。
 """
@@ -92,58 +91,22 @@ def merge_synonyms(existing, new_words):
 
 # ---------- 物理库验算 ----------
 
-def strip_dataset_prefixes(sql, model):
-    """去掉口径片段里的 数据集名./物理表名. 前缀（SQLite 物理表名与数据集名不同）。"""
-    names = set()
-    for d in model.get("datasets", []):
-        names.add(d.get("name"))
-        names.add(d.get("source"))
-    for n in sorted((x for x in names if x), key=len, reverse=True):
-        sql = re.sub(rf"\b{re.escape(n)}\.", "", sql)
-    return sql
-
-
-def filters_to_sql(filters):
-    """filters: [{field, values}] → SQL 条件串。"""
-    parts = []
-    for f in filters or []:
-        vals = ", ".join("'" + str(v).replace("'", "''") + "'"
-                         for v in (f.get("values") or []))
-        if vals:
-            parts.append(f"{f['field']} IN ({vals})")
-    return " AND ".join(parts)
-
-
 def compile_full_sql(model, mt):
     """指标完整口径（expr/分子分母 + filters + extra_where）→ 可执行 SQL。返回 (sql, err)。"""
+    from _sql import compile_single
     ds = find_one(model.get("datasets"), "name", mt.get("dataset"))
-    if ds is None:
-        return None, f"数据集 {mt.get('dataset')!r} 不存在，无法定位物理表"
-    table = ds.get("source")
-    if not table:
-        return None, f"数据集 {mt.get('dataset')!r} 无 source 物理表声明"
-    if mt.get("expr"):
-        sel = mt["expr"]
-    elif mt.get("numerator") and mt.get("denominator"):
-        sel = f"({mt['numerator']['expr']}) * 1.0 / ({mt['denominator']['expr']})"
-    else:
-        return None, "缺 expr 且缺分子分母，无口径可验算"
-    wheres = [w for w in (filters_to_sql(mt.get("filters")), mt.get("extra_where")) if w]
-    sql = f"SELECT {strip_dataset_prefixes(sel, model)} AS v FROM {table}"
-    if wheres:
-        sql += " WHERE " + " AND ".join(f"({strip_dataset_prefixes(w, model)})" for w in wheres)
-    return sql, None
+    return compile_single(mt, ds)
 
 
 def verify_with_db(db_path, model, mt, expect=None, tol=1e-6):
     """对物理库验算 patched 后的完整口径。返回 (ok, detail)。
-    给了 --expect 就对拍数值；没给只保证可执行且有量（非 None/非 0）。"""
+    给了 --expect 就对拍数值；没给只证明可执行且非 NULL，不证明业务正确。"""
     sql, err_ = compile_full_sql(model, mt)
     if err_:
         return False, err_
-    import sqlite3
     try:
-        conn = sqlite3.connect(db_path)
+        from _contract import readonly
+        conn = readonly(db_path)
         row = conn.execute(sql).fetchone()
         conn.close()
     except Exception as e:
@@ -160,12 +123,7 @@ def verify_with_db(db_path, model, mt, expect=None, tol=1e-6):
             return False, (f"验算对拍失败：实算 {v} ≠ 期望 {expect}（容差 {tol}）\n  SQL: {sql}\n"
                            "  口径改错了还是金标准变了？先确认再 --force")
         return True, f"验算对拍通过：{v} ≈ {expect}\n  SQL: {sql}"
-    try:
-        if float(v) == 0:
-            return False, f"验算结果为 0（口径可能过严或枚举值写错）\n  SQL: {sql}"
-    except (TypeError, ValueError):
-        pass
-    return True, f"验算通过：命中值 {v}\n  SQL: {sql}"
+    return True, f"可执行性检查通过：值 {v}；未提供 --expect，业务口径正确性未验证\n  SQL: {sql}"
 
 
 # ---------- 子命令 ----------
@@ -247,7 +205,8 @@ def cmd_struct(args):
         cal = m.setdefault("caliber", {})
         if args.caliber_note:
             cal["note"] = args.caliber_note
-        cal["basis"] = args.caliber_basis or cal.get("basis") or "内部约定"
+        if args.caliber_basis:
+            cal["basis"] = args.caliber_basis
     if args.synonym:
         merged, added = merge_synonyms(m.get("synonyms"), args.synonym)
         m["synonyms"] = merged
@@ -274,9 +233,11 @@ def cmd_struct(args):
             print("warning：--force 生效，验算未通过仍写入（必须在交付说明中声明）", file=sys.stderr)
     else:
         print("提醒：未提供 --db，本次口径写入未经物理库验算——交付前必须补验算并留痕", file=sys.stderr)
-    print("边界声明：验算只保证口径可执行且有量（或与 --expect 对拍一致）；"
+    print("边界声明：验算只保证口径可执行且非 NULL（或与 --expect 对拍一致）；"
           "口径语义正确性仍须金标准用例 run_eval 定向回归把关。")
 
+    if m != find_one(before.get("metrics"), "id", args.target):
+        m["status"] = "草案"
     dump_if_changed(args.file, before, data)
     n = sum(1 for t in metrics if t.get("structured"))
     print(f"structured: {n}/{len(metrics)}")
@@ -316,7 +277,7 @@ def cmd_set(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="semantic.yaml 幂等补丁器（v0.0.4）")
+    ap = argparse.ArgumentParser(description="semantic.yaml 幂等补丁器（v0.0.5）")
     ap.add_argument("-f", "--file", required=True, help="semantic.yaml 路径")
     sub = ap.add_subparsers(dest="cmd", required=True)
 

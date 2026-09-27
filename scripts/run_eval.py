@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""run_eval.py — 回归比对器（ai-data-delivery v0.0.4，双模式）
+"""run_eval.py — 回归比对器（ai-data-delivery v0.0.5，双模式）
 
 模式 A · 活引擎（FDE 日常：改完一键回归）
   python run_eval.py --endpoint http://localhost:7100 --cases cases.json \
@@ -15,16 +15,14 @@
   fmt2  {"id","question","gold_rows":[[...]],"expect_reject":false}
   fmt3  {"id","question","gold_sql":"...","expect_table":"..."}  —— 需 --gold-results 提供期望行
 
-声明式冲突（v0.0.4 新增）：任何格式可叠加
-  "declared_conflict": {"ref": "决策日志/评审纪要出处", "note": "冲突说明"}
-  —— 已在评审中定性、决议暂保留的口径冲突用例：失败不计入 acc、不压退出码，
-     单独列入 summary.declared_cases 留痕；实测若已转 pass 会提示"冲突或已消解，建议移除标记"。
-     缺 ref 的声明会大声告警（无出处留痕的豁免 = 后门）。
+声明式冲突：需要 ref/note/owner/expires_on/case_ids；无效或过期声明仍计入失败。
+有效豁免单列，不计入 acc；不等于全部通过或业务验收。发布门禁不允许豁免拒答失败。
+报告可用 --model/--db 绑定证据；缺绑定不能用于 validated 门禁。
 
 actual 文件（模式 B）：jsonl/yaml/json，每条形如
   {"id":"q001","value":123,"rows":null,"refused":false}
 
-退出码：0 = 全部通过（声明冲突不压门禁）；1 = 有失败项；2 = 用法/数据错误。
+退出码：0 = 非空有效用例通过（有效豁免单列）；1 = 失败/未知/无有效用例；2 = 用法错误。
 """
 import os
 import argparse
@@ -39,6 +37,7 @@ import yaml
 # ---------- 载入 ----------
 
 def load_structured(path):
+    path = os.fspath(path)
     with open(path, encoding="utf-8") as f:
         if path.endswith((".yaml", ".yml")):
             return yaml.safe_load(f)
@@ -56,6 +55,7 @@ def load_cases(path):
 
 
 def load_actual_map(path):
+    path = os.fspath(path)
     if path.endswith(".jsonl"):
         out = {}
         with open(path, encoding="utf-8") as f:
@@ -185,9 +185,7 @@ def judge_live(resp, expect):
     if kind == "rows":
         return cmp_rows(expect["rows"], resp.get("rows"))
     if kind == "sql_only":
-        has_answer = resp.get("rows") is not None or resp.get("value") is not None
-        return (True, "仅可回答性检查（无期望行，需 --gold-results）") if has_answer \
-            else (False, "引擎未给出任何结果")
+        return None, "仅有 SQL 无期望结果，需 --gold-results；可回答性不证明正确性"
     return None, "无期望定义（跳过判定）"
 
 
@@ -198,6 +196,9 @@ def apply_declared(case, ok, why):
         return False, why
     if ok is True:
         return False, "声明冲突但实测通过——冲突或已消解，建议移除 declared_conflict 标记"
+    from _evaluation import valid_waiver
+    if not valid_waiver(case):
+        return False, f"无效/过期豁免（需 ref、note、owner、expires_on、case_ids）：{why}"
     if isinstance(conf, dict):
         ref, note = conf.get("ref"), conf.get("note")
         tag = f"已声明冲突（{ref or '⚠ 无出处引用'}）"
@@ -206,6 +207,8 @@ def apply_declared(case, ok, why):
 
 
 def run_live(args):
+    from _evaluation import report_evidence
+    ev = report_evidence(args, args.cases)
     cases = load_cases(args.cases)
     gold_results = load_actual_map(args.gold_results) if args.gold_results else None
     suites = [("main", cases)]
@@ -221,7 +224,7 @@ def run_live(args):
             declared, why = apply_declared(c, ok, why)
             records.append({
                 "id": c["id"], "type": c.get("type", label), "pass": ok, "why": why,
-                "declared": declared or None,
+                "declared": declared or None, "waiver": c.get("declared_conflict") if declared else None,
                 "route": "reject" if resp.get("rejected") or resp.get("refused")
                          else ("table" if resp.get("rows") else "scalar"),
                 "value": resp.get("value"), "sql": resp.get("sql"),
@@ -250,7 +253,10 @@ def run_live(args):
                "failures": [r for r in effective if not r["pass"]]}
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
-        json.dump({"summary": summary, "records": records}, f, ensure_ascii=False, indent=1)
+        from _evaluation import report_evidence
+        summary["all_cases"] = len(records)
+        json.dump({"summary": summary, "records": records,
+                   "evidence": ev}, f, ensure_ascii=False, indent=1)
     if unknown:
         print(f"\n⚠ {len(unknown)} 条用例期望不明（未计入 acc）："
               f"{[r['id'] for r in unknown]}")
@@ -265,7 +271,7 @@ def run_live(args):
                   "无留痕的豁免是后门，请补 declared_conflict.ref 指向评审纪要/决策日志")
     print("\n==== SUMMARY ====")
     print(json.dumps(summary, ensure_ascii=False, indent=1, default=str)[:2000])
-    return 0 if passed == len(effective) else 1
+    return 0 if effective and not unknown and passed == len(effective) else 1
 
 
 # ---------- 模式 B：离线文件比对 ----------
@@ -277,6 +283,8 @@ def judge_file(case, actual):
         return None, "无期望定义（跳过判定）"
     if actual is None:
         return False, "无实际输出（引擎未返回该用例）"
+    if actual.get("error"):
+        return False, "执行错误：" + str(actual["error"])
     refused = bool(actual.get("refused") or actual.get("rejected"))
     if kind == "refusal":
         return (True, "") if refused else (False, "期望拒绝，但引擎给出了答案")
@@ -290,6 +298,8 @@ def judge_file(case, actual):
 
 
 def run_offline(args):
+    from _evaluation import report_evidence
+    ev = report_evidence(args, args.gold)
     cases = load_cases(args.gold)
     actuals = load_actual_map(args.actual)
     results, passed, unknown, declared = [], 0, 0, 0
@@ -304,6 +314,7 @@ def run_offline(args):
             passed += bool(ok)
         mark = "SKIP" if ok is None else ("DECL" if decl else ("PASS" if ok else "FAIL"))
         results.append({"id": case["id"], "pass": ok, "declared": decl or None,
+                        "waiver": case.get("declared_conflict") if decl else None,
                         "detail": detail})
         print(f"[{mark}] {case['id']}" + (f" —— {detail}" if detail else ""))
     effective = len(cases) - unknown - declared
@@ -313,14 +324,17 @@ def run_offline(args):
     if args.report:
         os.makedirs(os.path.dirname(args.report) or ".", exist_ok=True)
         with open(args.report, "w", encoding="utf-8") as f:
-            json.dump({"passed": passed, "total": effective, "unknown": unknown,
-                       "declared": declared,
-                       "cases": results}, f, ensure_ascii=False, indent=2)
-    return 0 if passed == effective else 1
+            from _evaluation import report_evidence
+            summary = {"passed": passed, "total": effective, "unknown": unknown,
+                       "all_cases": len(cases), "declared": declared,
+                       "acc": passed / effective if effective else 0}
+            json.dump({**summary, "summary": summary, "cases": results,
+                       "evidence": ev}, f, ensure_ascii=False, indent=2)
+    return 0 if effective and not unknown and passed == effective else 1
 
 
 def main():
-    ap = argparse.ArgumentParser(description="回归比对器 v0.0.4（活引擎 / 离线双模式）")
+    ap = argparse.ArgumentParser(description="回归比对器 v0.0.5（活引擎 / 离线双模式）")
     ap.add_argument("--endpoint", help="活引擎地址（模式 A）")
     ap.add_argument("--cases", help="用例集 json/yaml（模式 A）")
     ap.add_argument("--gold-results", dest="gold_results", default=None,
@@ -330,6 +344,9 @@ def main():
     ap.add_argument("--gold", help="gold 用例集（模式 B）")
     ap.add_argument("--actual", help="引擎实际输出 jsonl/yaml/json（模式 B）")
     ap.add_argument("--report", default=None, help="模式 B 报告输出路径")
+    ap.add_argument("--model", help="绑定当前模型文件哈希；缺失时报告不能用于验证门禁")
+    ap.add_argument("--db", help="绑定 SQLite 数据快照；不证明端点使用了此快照")
+    ap.add_argument("--mode", choices=["mock"], help="显式标记合成模拟证据")
     args = ap.parse_args()
 
     if args.endpoint:

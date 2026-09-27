@@ -1,0 +1,57 @@
+# v0.0.5 合同与可执行边界
+
+`semantic.yaml` 延续 datasets/concepts/relationships/metrics。模型本身的 version 与 skill 版本分别管理。新增字段保持增量，但下游是否忽略/拒绝/正确执行要在实际消费者验证。
+
+## 身份、来源、关联与粒度
+
+dataset 使用 name 作本合同内稳定引用，metric 用 id，concept 用 term；有多个语义关系或左右异名键时显式给 relationship.id。物理 source 当前是 SQLite 表/视图名；字段以同名映射执行，没有任意跨库/列重命名映射执行器。需要重命名时建视图或在消费者侧实现并验证。
+
+```yaml
+relationships:
+  - id: order_customer
+    from: orders
+    to: customers
+    from_columns: [tenant_id, customer_ref]
+    to_columns: [tenant_id, customer_id]
+    cardinality: 'N:1'
+    traversable: true
+query_plans:
+  - id: gmv_by_customer
+    metric: gmv
+    relationships: [order_customer]
+```
+
+同名键仍可写 `join_key: customer_id` 或列表。基数支持 `1:1/N:1/1:N/N:M`。验证双侧列存在，数据快照检查声明为“一”侧的复合键唯一且非空；没有 DB 时不声称已证明唯一。N:M 没有“一”侧，不能据此称关联安全。
+
+query_plans 从 metric.dataset 的行粒度出发，按显式关系 ID 逐跳检查（可正向或反向）。走向多侧报告 fanout；走向一侧仍需唯一性证据。字段别名、自连接和回到已访问数据集的路径当前不支持。整个模型图存在环不自动报错；多条业务可选路径必须由当前 query_plan 明确选择，不自动择路。
+
+图检查证明的是指定关联对原始粒度是否有重复风险，不证明 INNER JOIN 不丢数据、NULL 关联政策、特定指标可加性或跨表计算正确。引用覆盖另用 referential 约束；需要保持未匹配行时由业务确认 LEFT JOIN/缺省维度处理并做独立对拍。策略字段只是建议，不能消除风险状态。
+
+## 数据约束
+
+顶层 constraints 的每条规则需要唯一 id、kind、dataset、columns（单列可 field）和显式 null_policy。支持：
+
+| kind | 参数 | 检查 |
+| --- | --- | --- |
+| unique | columns | 非 NULL 复合键的重复；按多出的记录计数 |
+| not_null | columns；null_policy=forbid | 任一指定列为空 |
+| allowed_values | 单 field + 非空 values | 值不在集合 |
+| range | 单 field + min/max 至少一个 | 数字范围（闭区间）；文本值不当数字通过 |
+| date_order | columns: [earlier,later] | SQLite julianday 可解析且先后成立 |
+| referential | references: {dataset,columns} | 非 NULL 源键在目标表有匹配 |
+
+null_policy：forbid 把 NULL 计入违规；ignore 明确排除 NULL；unknown 发现 NULL 后不能宣布通过。没有数据或没有规则不算验证成功。日期检查遵循 SQLite 的日期解析，不是严格 ISO 格式、时区或业务日历验证；需要更严格语义时应增加专用消费者检查。
+
+报告统计整个一致快照，默认不导出任何数据行，避免在质量报告内泄露敏感样本。违反约束为 fail；缺定义/不支持为 unknown；SQL 执行失败为 error。父状态只有所有已声明约束 pass 才为 pass。未知数据类型、外部系统、新鲜度、权限规则本版不执行，不能当隐式已通过。
+
+## 指标与评测
+
+本地共享编译器只处理单 source，支持 expr 或 numerator/denominator、filters、extra_where；分母零返回 NULL，不能宣称结果已验证。未知/跨表前缀、join_path、子查询、SQL 注释、多语句、分组/窗口等拒绝编译；字符串字面量不会被去前缀修改。它不是通用 SQL 解析器或安全执行平台，仅用于受控本地模型片段。
+
+全量检查通过也只代表已声明规则。业务口径正确性需要独立确认的期望；从同一生成器输出实际值和期望值的自证不足。原有 ratio 禁 AVG 的 lint 仍保留；确有行均值业务语义时应建独立指标类型并明确期望，不用强制把所有平均都改成加权比率。
+
+## 报告身份与交换
+
+evidence 保存 created_at、mode、model_sha256、cases_sha256 和适用的 data_snapshot_sha256/actual_sha256/gold_results_sha256/multihop_sha256。哈希绑定内容而非宣告来源可信，不是电子签名或防篡改审计服务。角色与来源权限仍由操作者核对。
+
+交换包包含模型、字典、用例、可选会话/报告/HTML 和 manifest；清单逐文件绑定 SHA256。HTML 可搜索、筛选、查看属性/来源与决策，所有输入通过 textContent 展示；失配或过期证据显示失效。它展示设计声明和已有验证结果，未采集作业、请求或运行事件。
