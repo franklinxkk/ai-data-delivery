@@ -6,10 +6,12 @@ import json
 from pathlib import Path
 import sys
 
-from _contract import digest, keys, load, now, object_digest, relation_id, write
+from _contract import digest, get_path, keys, load, now, object_digest, relation_id, write
 
 COLLECTIONS = {"dataset": ("datasets", "name"), "metric": ("metrics", "id"),
-               "relationship": ("relationships", "id"), "concept": ("concepts", "term")}
+               "relationship": ("relationships", "id"), "concept": ("concepts", "term"),
+               "ontology_entity": ("ontology.entities", "name"),
+               "ontology_relation": ("ontology.relations", "id")}
 
 
 def target(model, scope, ref):
@@ -19,7 +21,7 @@ def target(model, scope, ref):
         return model
     kind, name = ref.split(":", 1)
     collection, key = COLLECTIONS[kind]
-    matches = [obj for obj in model.get(collection, []) if obj.get(key) == name]
+    matches = [obj for obj in get_path(model, collection) if obj.get(key) == name]
     if len(matches) != 1:
         raise ValueError(f"missing or ambiguous object {ref}")
     return matches[0]
@@ -53,9 +55,24 @@ def new_session(model, scope, source_hash):
     for rel in model.get("relationships", []):
         rel.setdefault("id", relation_id(rel))
     requirements = []
+    has_ontology = bool(model.get("ontology"))
     for name in scope["datasets"]:
         ref = "dataset:" + name
         ds = target(model, scope, ref)
+        # 先业务后物理：先确认业务对象与属性，再谈表、键与粒度
+        if has_ontology:
+            if not ds.get("ontology_ref"):
+                requirements.append({"object": ref, "property": "ontology_ref", "owner_role": "fde",
+                                     "question": "该数据集承载哪个业务对象（ontology 实体）？没有对应实体请先在 ontology 段声明。"})
+            else:
+                try:
+                    entity = target(model, scope, "ontology_entity:" + ds["ontology_ref"])
+                    if not entity.get("attributes"):
+                        requirements.append({"object": "ontology_entity:" + ds["ontology_ref"],
+                                             "property": "attributes", "owner_role": "business_owner",
+                                             "question": "该业务对象的关键业务属性（不依赖具体表）有哪些？给出 name、value_type 及含义。"})
+                except ValueError:
+                    pass  # 悬空 ontology_ref 由 check_model E14 报告
         for prop, role, question in [
             ("grain", "business_owner", "一行代表什么业务事实？"),
             ("primary_key", "data_owner", "哪个字段或复合键唯一标识该粒度？"),

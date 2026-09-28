@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check_model.py — semantic.yaml 铁律 lint（ai-data-delivery v0.0.5）
+"""check_model.py — semantic.yaml 铁律 lint（ai-data-delivery v0.0.6）
 
 把五条铁律与评测暴露的元数据缺陷落成机器检查。发布门禁：零 ERROR。
 
@@ -19,12 +19,29 @@
        （traversable=true 必须有真实 join_key；弱关联必须 traversable=false 且有 note）
   E10 概念缺可执行展开（expand.dataset/field/values 或 union；无展开条件的概念不准发布）
   E11 id/name/term 重复
+  E12 本体实体 name 缺失/重复、is_a 指向未声明实体、is_a 成环
+  E13 本体关系端点不是已声明本体实体、缺 predicate、mapping 非法，
+       或 mapping≠equi_key 而无 note（无键关系必须写明落地说明）
+  E14 投影回指悬空：dataset/relationship 的 ontology_ref 指向不存在的本体对象
+       （含声明了 ontology_ref 但模型无 ontology 段）
+  E15 无键关系被投影：合同 relationship 的 ontology_ref 指向 mapping≠equi_key 的本体关系
+       （合同只承载等值键关系；本体表达得了 ≠ 合同该承载）
+  E16 概念禁用词与自身 term/synonyms 冲突（禁用词是被禁止的说法，不能同时是别名）
+  E17 指标 on_zero_denominator 非法（∈ null/zero/error；缺省为 null）
   W01 数据集缺 ai.instructions（表描述是给模型的路由+边界指令，不是给人看的说明书）
   W02 维度字段缺 enum（若该字段是状态/枚举类，缺字典则模型写错过滤条件且不报错）
   W03 数据集无 time 角色字段（时间围栏无法落地，"今天/本月"必错）
   W04 structured 指标缺 time_field
   W05 structured 指标还是 草案 状态
   W06 tenant_field 指向不存在字段
+  W07 本体实体未被任何数据集投影且未写 unprojected_reason（未投影必须说明原因）
+  W08 本体关系 mapping=equi_key 但未被任何合同关系投影（声明了可落地关系却未落地）
+  W09 同一 domain 内两个概念认领同一 synonym（路由会歧义）
+  W10 概念 valid_to 已过期（需复审：续期、下线或改口径）
+  W11 比率指标有分母但未显式声明 on_zero_denominator（缺省 null 会把除零静默变 NULL）
+
+本体段是声明式事实清单：本工具只做静态结构检查与两层对账，不做任何跨声明推导
+（不推 is-a 传递、不推子类继承关系、不推逆关系、不做逻辑一致性判定；不是 OWL/SHACL）。
 """
 import argparse
 import re
@@ -117,13 +134,33 @@ def check_relationships(m, rep, ds_names):
 
 
 def check_concepts(m, rep, ds_index):
+    import datetime as dt
     seen = set()
+    synonym_owner = {}
     for c in m.get("concepts", []) or []:
         term = c.get("term", "?")
         where = f"concept[{term}]"
         if term in seen:
             rep.error("E11", where, "概念 term 重复")
         seen.add(term)
+        own_words = {term} | set(c.get("synonyms", []) or []) | set(c.get("aliases", []) or [])
+        forbidden = set(c.get("forbidden", []) or [])
+        if forbidden & own_words:
+            rep.error("E16", where, f"禁用词与自身说法冲突：{sorted(forbidden & own_words)}")
+        domain = c.get("domain", "")
+        for syn in (c.get("synonyms", []) or []) + (c.get("aliases", []) or []):
+            key = (domain, syn)
+            if key in synonym_owner and synonym_owner[key] != term:
+                rep.warn("W09", where,
+                         f"synonym {syn!r} 在同 domain 内已被概念 {synonym_owner[key]!r} 认领")
+            synonym_owner.setdefault(key, term)
+        valid_to = c.get("valid_to")
+        if valid_to:
+            try:
+                if dt.date.fromisoformat(str(valid_to)[:10]) < dt.date.today():
+                    rep.warn("W10", where, f"valid_to {valid_to} 已过期（需复审：续期/下线/改口径）")
+            except ValueError:
+                rep.warn("W10", where, f"valid_to {valid_to!r} 不是 ISO 日期")
         ex = c.get("expand")
         if not ex:
             rep.error("E10", where, "无 expand 展开条件（概念必须可执行，不准发布）")
@@ -139,6 +176,93 @@ def check_concepts(m, rep, ds_index):
                 rep.error("E10", where, f"expand.dataset {dsn!r} 不存在")
             elif fld not in field_names(ds):
                 rep.error("E10", where, f"expand.field {fld!r} 不在 {dsn} 的字段中")
+
+
+def check_ontology(m, rep):
+    """本体段结构检查 + 合同投影对账。ontology 段是声明式事实清单，不做推理。"""
+    from _contract import MAPPINGS, ont_entities, ont_relations, ont_relation_id
+    entities = ont_entities(m)
+    relations = ont_relations(m)
+    datasets = m.get("datasets", []) or []
+    contract_rels = m.get("relationships", []) or []
+    has_refs = any(d.get("ontology_ref") for d in datasets) or \
+        any(r.get("ontology_ref") for r in contract_rels)
+    if not entities and not relations:
+        if has_refs:
+            rep.error("E14", "model", "声明了 ontology_ref 但模型无 ontology 段")
+        return
+    ent_names = set()
+    for e in entities:
+        name = e.get("name")
+        where = f"ontology.entity[{name or '?'}]"
+        if not name:
+            rep.error("E12", "ontology.entity[?]", "缺 name")
+            continue
+        if name in ent_names:
+            rep.error("E12", where, "本体实体 name 重复")
+        ent_names.add(name)
+    for e in entities:
+        name, parent = e.get("name"), e.get("is_a")
+        if parent is not None and parent not in ent_names:
+            rep.error("E12", f"ontology.entity[{name}]", f"is_a 指向未声明实体 {parent!r}")
+    # is_a 环检测（静态结构检查，不是推理）
+    parent_of = {e.get("name"): e.get("is_a") for e in entities if e.get("name")}
+    for start in parent_of:
+        seen, node = set(), start
+        while node in parent_of and parent_of[node]:
+            node = parent_of[node]
+            if node in seen or node == start:
+                rep.error("E12", f"ontology.entity[{start}]", "is_a 成环")
+                break
+            seen.add(node)
+    rel_ids = set()
+    for r in relations:
+        rid = ont_relation_id(r)
+        where = f"ontology.relation[{rid}]"
+        if rid in rel_ids:
+            rep.error("E11", where, "本体关系 id 重复（平行边请显式给 id）")
+        rel_ids.add(rid)
+        for ep in (r.get("from"), r.get("to")):
+            if ep not in ent_names:
+                rep.error("E13", where, f"端点 {ep!r} 不是已声明本体实体")
+        if not r.get("predicate"):
+            rep.error("E13", where, "缺 predicate（语义谓词是关系的核心，键只是落地方式之一）")
+        mapping = r.get("mapping")
+        if mapping not in MAPPINGS:
+            rep.error("E13", where, f"mapping 非法：{mapping!r}（∈ {sorted(MAPPINGS)}）")
+        elif mapping != "equi_key" and not r.get("note"):
+            rep.error("E13", where, "mapping≠equi_key 必须写 note（无键关系的落地说明）")
+    # 投影对账
+    projected_entities = set()
+    for d in datasets:
+        ref = d.get("ontology_ref")
+        if ref:
+            if ref not in ent_names:
+                rep.error("E14", f"dataset[{d.get('name','?')}]", f"ontology_ref 指向未声明实体 {ref!r}")
+            projected_entities.add(ref)
+    ont_rel_by_id = {ont_relation_id(r): r for r in relations}
+    projected_rel_ids = set()
+    for r in contract_rels:
+        ref = r.get("ontology_ref")
+        if not ref:
+            continue
+        where = f"relationship[{r.get('from','?')}→{r.get('to','?')}]"
+        target = ont_rel_by_id.get(ref)
+        if target is None:
+            rep.error("E14", where, f"ontology_ref 指向未声明本体关系 {ref!r}")
+        elif target.get("mapping") != "equi_key":
+            rep.error("E15", where,
+                      f"无键关系不得投影：{ref!r} 的 mapping={target.get('mapping')!r}，合同只承载 equi_key")
+        projected_rel_ids.add(ref)
+    for e in entities:
+        name = e.get("name")
+        if name and name not in projected_entities and not e.get("unprojected_reason"):
+            rep.warn("W07", f"ontology.entity[{name}]",
+                     "未被任何数据集投影且未写 unprojected_reason")
+    for r in relations:
+        rid = ont_relation_id(r)
+        if r.get("mapping") == "equi_key" and rid not in projected_rel_ids:
+            rep.warn("W08", f"ontology.relation[{rid}]", "equi_key 关系未被任何合同关系投影")
 
 
 def check_metrics(m, rep, ds_index):
@@ -170,6 +294,12 @@ def check_metrics(m, rep, ds_index):
                     rep.error("E05", where, "ratio 缺分子/分母（numerator/denominator 或含 / 的 expr）")
                 if re.search(r"\bAVG\s*\(", " ".join([expr, num, den]), re.I):
                     rep.error("E06", where, "ratio 含 AVG( —— 禁行级平均，必须 SUM/SUM 加权")
+            if den:
+                policy = mt.get("on_zero_denominator")
+                if policy is None:
+                    rep.warn("W11", where, "有分母但未声明 on_zero_denominator（缺省 null 会把除零静默变 NULL）")
+                elif policy not in {"null", "zero", "error"}:
+                    rep.error("E17", where, f"on_zero_denominator 非法：{policy!r}（∈ null/zero/error）")
             if not (expr or num):
                 rep.error("E07", where, "structured 指标缺 expr 且缺分子分母（口径未自含）")
             if not tf:
@@ -195,12 +325,15 @@ def main():
     check_relationships(m, rep, set(ds_index))
     check_concepts(m, rep, ds_index)
     check_metrics(m, rep, ds_index)
+    check_ontology(m, rep)
 
     for line in rep.errors + rep.warnings:
         print(line)
+    from _contract import ont_entities, ont_relations
     print(f"\nlint 结果：{len(rep.errors)} ERROR / {len(rep.warnings)} WARN"
           f"（数据集 {len(ds_index)}，关系 {len(m.get('relationships', []) or [])}，"
-          f"概念 {len(m.get('concepts', []) or [])}，指标 {len(m.get('metrics', []) or [])}）")
+          f"概念 {len(m.get('concepts', []) or [])}，指标 {len(m.get('metrics', []) or [])}，"
+          f"本体实体 {len(ont_entities(m))}，本体关系 {len(ont_relations(m))}）")
     if rep.errors or (args.strict and rep.warnings):
         print("门禁：未通过")
         return 1

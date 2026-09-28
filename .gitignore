@@ -1,8 +1,8 @@
+*.db
 __pycache__/
 *.pyc
-.venv/
+actual.jsonl
+report.json
+tmp*/
+release_log.yaml
 dist/
-tmp/
-mocks/*/domain.db
-mocks/*/actual.jsonl
-mocks/*/report.json

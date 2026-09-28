@@ -100,6 +100,37 @@ def relation_id(rel):
     return rel.get("id") or f"{rel.get('from')}->{rel.get('to')}:{','.join(keys(rel.get('join_key')))}"
 
 
+# ---------- ontology 段（声明式事实清单；不做推理，只做静态对账） ----------
+
+MAPPINGS = {"equi_key", "weak", "derived", "semantic_only"}
+
+
+def ontology(model):
+    ont = model.get("ontology") or {}
+    return ont if isinstance(ont, dict) else {}
+
+
+def ont_entities(model):
+    return ontology(model).get("entities", []) or []
+
+
+def ont_relations(model):
+    return ontology(model).get("relations", []) or []
+
+
+def ont_relation_id(rel):
+    return rel.get("id") or f"{rel.get('from')}->{rel.get('to')}:{rel.get('predicate')}"
+
+
+def get_path(obj, dotted):
+    """Walk a dotted collection path like 'ontology.entities'."""
+    for part in dotted.split("."):
+        if not isinstance(obj, dict):
+            return []
+        obj = obj.get(part, [])
+    return obj
+
+
 def binding_errors(report, model, cases=None, max_age_hours=24):
     ev = report.get("evidence", {})
     errors = []

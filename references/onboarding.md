@@ -25,7 +25,9 @@ required:
 
 自动补齐项包括 scoped 数据集的 grain/primary_key/fields/source/temporal.kind，以及 scoped 指标的 dataset/caliber.note/unit/time_field/expr。已有非空属性原样保留，不等于程序重新验证了业务正确性。已有但有争议的内容放到 `required`，成为带证据的候选等待确认。
 
-scope.required 支持 object：`model`（顶层合同）、`scope`、`dataset:<name>`、`metric:<id>`、`relationship:<id>`、`concept:<term>`。property 是对象内的点分路径；列表属性以整体值提交，例如 fields/constraints；禁止通过回答修改对象 identity。模型中的企业自定义属性可保留，但不意味着执行器支持它们。
+**先业务后物理**（v0.0.6）：模型含 `ontology` 段时，业务问题排在物理问题之前——数据集缺 `ontology_ref` 先问"该数据集承载哪个业务对象"（fde）；对应实体缺 `attributes` 再问"该业务对象的关键业务属性（不依赖具体表）有哪些"（business_owner）；然后才是粒度/主键/字段/来源/时态。提问顺序就是建模顺序的起点：先确认业务世界，再谈表。无 `ontology` 段的模型不产生本体类缺口，行为与 v0.0.5 一致。
+
+scope.required 支持 object：`model`（顶层合同）、`scope`、`dataset:<name>`、`metric:<id>`、`relationship:<id>`、`concept:<term>`、`ontology_entity:<name>`、`ontology_relation:<id>`。property 是对象内的点分路径；列表属性以整体值提交，例如 fields/constraints/attributes；禁止通过回答修改对象 identity。模型中的企业自定义属性可保留，但不意味着执行器支持它们。
 
 ```bash
 python scripts/guide_model.py init --model partial.yaml --scope scope.yaml --session session.json

@@ -1,6 +1,29 @@
-# v0.0.5 合同与可执行边界
+# v0.0.6 合同与可执行边界
 
-`semantic.yaml` 延续 datasets/concepts/relationships/metrics。模型本身的 version 与 skill 版本分别管理。新增字段保持增量，但下游是否忽略/拒绝/正确执行要在实际消费者验证。
+`semantic.yaml` 延续 datasets/concepts/relationships/metrics，v0.0.6 新增可选 `ontology` 段。模型本身的 version 与 skill 版本分别管理。新增字段保持增量，但下游是否忽略/拒绝/正确执行要在实际消费者验证。
+
+## 本体声明层与合同投影
+
+`ontology` 段承载**业务世界本身**的声明：业务对象（可以还没有表）、对象属性、语义关系（谓词 + 落地方式）。它是**声明式事实清单**——系统只做静态结构检查与两层对账，**不做任何跨声明推导**：不推 is-a 传递、不推子类继承关系、不推逆关系、不做逻辑一致性判定；不是 OWL/SHACL 验证。需要某条结论就显式声明，每条结论都能指认到具体某行声明与某次决策。
+
+```yaml
+ontology:
+  entities:
+    - name: 借款人
+      attributes: [{name: 风险等级, value_type: enum, values: [低, 中, 高]}]
+    - name: 担保人
+      unprojected_reason: 担保台账未结构化，仅业务声明   # 未投影必须说明
+  relations:
+    - {from: 借款人, to: 贷款, predicate: 申请, mapping: equi_key}
+    - {from: 担保人, to: 贷款, predicate: 担保, mapping: weak, note: 依赖人工台账}
+```
+
+- 实体：`name` 唯一；`is_a` 只能指向已声明实体且不得成环（环检测是结构检查，不是推理）；`attributes` 是业务属性（name/value_type/unit/values/note），不依赖具体表。
+- 关系：`predicate`（语义谓词）是核心，`mapping ∈ equi_key/weak/derived/semantic_only` 是落地方式；**键只是落地方式之一**，`mapping≠equi_key` 必须写 `note`。无键关系留在本体里，不得因为"没有外键"被移出。
+- 投影：datasets/relationships 是本体在物理来源上的**合同投影**，用 `ontology_ref` 回指。合同只承载 `equi_key` 关系；`ontology_ref` 指向无键关系是 ERROR（E15）。投影损失（本体有而合同表达不了的）必须留在本体侧并说明，不得静默丢弃。
+- 兼容：无 `ontology` 段的模型不受新规则约束；声明了 `ontology_ref` 却无 `ontology` 段是 ERROR（E14）。
+
+概念层同时扩充词表属性：`synonyms`（同义说法）、`forbidden`（禁用说法，不得与自身 term/synonyms 冲突）、`domain`（业务域，同域内 synonym 不得被两个概念认领）、`owner`、`valid_from/valid_to`（过期需复审）。概念仍需 `expand` 可执行展开才准发布；`is_a` 层级写在 ontology 实体上，概念保持词与宏的定位。
 
 ## 身份、来源、关联与粒度
 
@@ -46,7 +69,9 @@ null_policy：forbid 把 NULL 计入违规；ignore 明确排除 NULL；unknown 
 
 ## 指标与评测
 
-本地共享编译器只处理单 source，支持 expr 或 numerator/denominator、filters、extra_where；分母零返回 NULL，不能宣称结果已验证。未知/跨表前缀、join_path、子查询、SQL 注释、多语句、分组/窗口等拒绝编译；字符串字面量不会被去前缀修改。它不是通用 SQL 解析器或安全执行平台，仅用于受控本地模型片段。
+本地共享编译器只处理单 source，支持 expr 或 numerator/denominator、filters、extra_where。有分母的指标用 `on_zero_denominator` 显式声明除零策略：`null`（缺省，NULLIF 返回 NULL）、`zero`（COALESCE 归 0）、`error`（SQLite 除零不报错，编译为哨兵文本 `ZERO_DENOMINATOR`，数值比对必失败，除零无法静默通过）；缺声明 lint 告警（W11），非法值编译拒绝。任何策略下都不能宣称结果已验证。未知/跨表前缀、join_path、子查询、SQL 注释、多语句、分组/窗口等拒绝编译；字符串字面量不会被去前缀修改。它不是通用 SQL 解析器或安全执行平台，仅用于受控本地模型片段。
+
+评测用例可附 `answer_must_not_contain: [禁用词…]`：答案值/行集/SQL 中命中任一禁用词即判失败（来源通常是概念 `forbidden`，用例需显式列出，评测器不自行从模型推导）。
 
 全量检查通过也只代表已声明规则。业务口径正确性需要独立确认的期望；从同一生成器输出实际值和期望值的自证不足。原有 ratio 禁 AVG 的 lint 仍保留；确有行均值业务语义时应建独立指标类型并明确期望，不用强制把所有平均都改成加权比率。
 

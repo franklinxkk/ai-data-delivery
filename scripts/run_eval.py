@@ -165,7 +165,16 @@ def ask(endpoint, question, timeout=30):
         return {"error": str(e)}
 
 
-def judge_live(resp, expect):
+def check_forbidden(case, *payloads):
+    """answer_must_not_contain：答案/行集/SQL 中不得出现禁用词（来源通常是概念 forbidden）。"""
+    forbidden = case.get("answer_must_not_contain") or []
+    if not forbidden:
+        return []
+    haystack = " ".join(str(p) for p in payloads if p is not None)
+    return [w for w in forbidden if str(w) in haystack]
+
+
+def judge_live(resp, expect, case=None):
     """活引擎响应 × 统一期望 → (pass|None, detail)。pass=None 表示无法判定。"""
     if "error" in resp:
         return False, f"http_error: {resp['error']}"
@@ -179,14 +188,20 @@ def judge_live(resp, expect):
     if refused:
         return False, "引擎拒绝了，但期望给出答案"
     if kind == "scalar":
-        return cmp_scalar(expect["value"], resp.get("value"), expect.get("tolerance", 1e-6)) \
+        ok, why = cmp_scalar(expect["value"], resp.get("value"), expect.get("tolerance", 1e-6)) \
             if resp.get("value") is not None else \
             cmp_rows([[expect["value"]]], resp.get("rows"))
-    if kind == "rows":
-        return cmp_rows(expect["rows"], resp.get("rows"))
-    if kind == "sql_only":
+    elif kind == "rows":
+        ok, why = cmp_rows(expect["rows"], resp.get("rows"))
+    elif kind == "sql_only":
         return None, "仅有 SQL 无期望结果，需 --gold-results；可回答性不证明正确性"
-    return None, "无期望定义（跳过判定）"
+    else:
+        return None, "无期望定义（跳过判定）"
+    if ok and case is not None:
+        hits = check_forbidden(case, resp.get("value"), resp.get("rows"), resp.get("sql"))
+        if hits:
+            return False, f"答案含禁用词：{hits}"
+    return ok, why
 
 
 def apply_declared(case, ok, why):
@@ -220,7 +235,7 @@ def run_live(args):
         for c in suite:
             expect = unify_expect(c, gold_results)
             resp = ask(args.endpoint, c["question"])
-            ok, why = judge_live(resp, expect)
+            ok, why = judge_live(resp, expect, c)
             declared, why = apply_declared(c, ok, why)
             records.append({
                 "id": c["id"], "type": c.get("type", label), "pass": ok, "why": why,
@@ -291,10 +306,16 @@ def judge_file(case, actual):
     if refused:
         return False, "引擎拒绝了，但期望给出答案"
     if kind == "scalar":
-        return cmp_scalar(expect["value"], actual.get("value"), expect.get("tolerance", 1e-6))
-    if kind == "rows":
-        return cmp_rows(expect["rows"], actual.get("rows"))
-    return False, f"离线模式不支持的断言类型：{kind}"
+        ok, why = cmp_scalar(expect["value"], actual.get("value"), expect.get("tolerance", 1e-6))
+    elif kind == "rows":
+        ok, why = cmp_rows(expect["rows"], actual.get("rows"))
+    else:
+        return False, f"离线模式不支持的断言类型：{kind}"
+    if ok:
+        hits = check_forbidden(case, actual.get("value"), actual.get("rows"), actual.get("sql"))
+        if hits:
+            return False, f"答案含禁用词：{hits}"
+    return ok, why
 
 
 def run_offline(args):

@@ -11,7 +11,18 @@ def compile_single(mt, ds, names=()):
     if mt.get("expr"):
         select = mt["expr"]
     elif (mt.get("numerator") or {}).get("expr") and (mt.get("denominator") or {}).get("expr"):
-        select = f"({mt['numerator']['expr']}) * 1.0 / NULLIF(({mt['denominator']['expr']}), 0)"
+        num, den = mt["numerator"]["expr"], mt["denominator"]["expr"]
+        policy = mt.get("on_zero_denominator", "null")
+        if policy == "null":
+            select = f"({num}) * 1.0 / NULLIF(({den}), 0)"
+        elif policy == "zero":
+            select = f"COALESCE(({num}) * 1.0 / NULLIF(({den}), 0), 0)"
+        elif policy == "error":
+            # SQLite 除零返回 NULL 而不报错；哨兵文本使数值比对必失败，除零无法静默通过
+            select = (f"CASE WHEN ({den}) = 0 THEN 'ZERO_DENOMINATOR' "
+                      f"ELSE ({num}) * 1.0 / ({den}) END")
+        else:
+            return None, f"on_zero_denominator 非法：{policy!r}（∈ null/zero/error）"
     else:
         return None, "缺 expr 或完整分子分母"
     if mt.get("type") not in {"count", "sum", "avg", "min", "max", "ratio"}:

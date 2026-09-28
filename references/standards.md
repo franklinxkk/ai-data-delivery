@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | [GB/T 48000.3—2026 官方条目](https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=25590A00B58C94EE8F675D1A6B01DD5F) | 标识、语义关系、约束、可追溯与分层表达 | 范围为标准数字化中的本体建设/应用；企业分析 YAML 不等于其形式化、序列化、SHACL 等要求已满足 |
 | [Apache Ossie core 固定提交](https://github.com/apache/ossie/blob/744b4055149d80dece8d4524883427ce354a47d4/core-spec/spec.md) | 数据集/字段/关系/指标交换、左右键显式建模 | 本项目不是 Ossie core 实现；未导入、导出或做消费者兼容验证 |
-| [Ossie Ontology](https://github.com/apache/ossie/blob/744b4055149d80dece8d4524883427ce354a47d4/ontology/ontology.md) | 概念与数据映射分离 | 当前仍以现有 datasets 合同为主，未实现完整 EntityType/ValueType 模型 |
+| [Ossie Ontology](https://github.com/apache/ossie/blob/744b4055149d80dece8d4524883427ce354a47d4/ontology/ontology.md) | 概念与数据映射分离 | v0.0.6 起以 `ontology` 段承载声明层（实体/属性/谓词/落地方式），但只是声明式事实清单：不做推理、不做 OWL/SHACL、未实现完整 EntityType/ValueType 模型 |
 | [dbt MetricFlow joins](https://docs.getdbt.com/docs/build/join-logic) | 按度量粒度评估 fanout，不把 N:1 一律判高危 | 无通用 join 规划/聚合重写器 |
 | [W3C SHACL](https://www.w3.org/TR/shacl/) / [PROV-O](https://www.w3.org/TR/prov-o/) | 将约束结果与证据主体/活动区分 | constraints 是 SQLite 完整性检查，不是 RDF/SHACL 验证或 OWL 推理 |
 | [ODCS 3.2.0](https://bitol-io.github.io/open-data-contract-standard/v3.2.0/) | 结构、质量、责任、服务约定有明确合同 | 未声称导出 ODCS 或执行时效/权限约束 |
