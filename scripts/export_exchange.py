@@ -20,7 +20,6 @@ import hashlib
 import json
 import os
 import shutil
-import subprocess
 import sys
 
 import yaml
@@ -67,8 +66,10 @@ def main():
     dic = args.dictionary
     if not dic:
         dic = os.path.join(args.out, "dictionary.md")
-        subprocess.run([sys.executable, os.path.join(HERE, "gen_dictionary.py"),
-                        "--model", args.model, "--out", dic], check=True)
+        import gen_dictionary
+        rc = gen_dictionary.main(["--model", args.model, "--out", dic])
+        if rc != 0:
+            raise SystemExit(rc)
     else:
         shutil.copyfile(dic, os.path.join(args.out, "dictionary.md"))
         dic = os.path.join(args.out, "dictionary.md")

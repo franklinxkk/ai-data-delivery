@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""check_model.py — semantic.yaml 铁律 lint（ai-data-delivery v0.0.6）
+"""check_model.py — semantic.yaml 铁律 lint（ai-data-delivery v0.0.7）
 
 把五条铁律与评测暴露的元数据缺陷落成机器检查。发布门禁：零 ERROR。
 
 用法：
   python check_model.py -f semantic.yaml [--strict]   # --strict：WARN 也视为失败
+  python check_model.py -f semantic.yaml --drift 上一版.yaml [--drift-report drift.json]
+      # 维护模式：与基线对比，输出 新增/删除/变更/破坏 四级分类；有 breaking 即退出码 1
+  python check_model.py -f semantic.yaml --history quality_history.jsonl
+      # 追加一条质量记录（release 趋势用），不影响门禁退出码
 
 规则（E=ERROR / W=WARN）：
   E01 数据集缺 grain（粒度声明是第一约束，粒度不清则聚合必错）
@@ -39,6 +43,7 @@
   W09 同一 domain 内两个概念认领同一 synonym（路由会歧义）
   W10 概念 valid_to 已过期（需复审：续期、下线或改口径）
   W11 比率指标有分母但未显式声明 on_zero_denominator（缺省 null 会把除零静默变 NULL）
+  W12 本体实体缺 uid（缺省以 name 为身份，重命名后 drift/历史不可追踪；建议 ent_xxx 稳定 ID）
 
 本体段是声明式事实清单：本工具只做静态结构检查与两层对账，不做任何跨声明推导
 （不推 is-a 传递、不推子类继承关系、不推逆关系、不做逻辑一致性判定；不是 OWL/SHACL）。
@@ -180,7 +185,8 @@ def check_concepts(m, rep, ds_index):
 
 def check_ontology(m, rep):
     """本体段结构检查 + 合同投影对账。ontology 段是声明式事实清单，不做推理。"""
-    from _contract import MAPPINGS, ont_entities, ont_relations, ont_relation_id
+    from _contract import (MAPPINGS, EVIDENCE_SOURCES, evidence_source,
+                           ont_entities, ont_relations, ont_relation_id)
     entities = ont_entities(m)
     relations = ont_relations(m)
     datasets = m.get("datasets", []) or []
@@ -192,6 +198,7 @@ def check_ontology(m, rep):
             rep.error("E14", "model", "声明了 ontology_ref 但模型无 ontology 段")
         return
     ent_names = set()
+    ent_uids = set()
     for e in entities:
         name = e.get("name")
         where = f"ontology.entity[{name or '?'}]"
@@ -201,6 +208,17 @@ def check_ontology(m, rep):
         if name in ent_names:
             rep.error("E12", where, "本体实体 name 重复")
         ent_names.add(name)
+        uid = e.get("uid")
+        if uid:
+            if uid in ent_uids:
+                rep.error("E11", where, f"本体实体 uid 重复：{uid!r}")
+            ent_uids.add(uid)
+        else:
+            rep.warn("W12", where, "缺 uid（缺省以 name 为身份，重命名后 drift 不可追踪）")
+        source = evidence_source(e)
+        if e.get("evidence") is not None and source is None:
+            rep.warn("W12", where,
+                     f"evidence.source 非法（∈ {sorted(EVIDENCE_SOURCES)}），可视化将忽略证据着色")
     for e in entities:
         name, parent = e.get("name"), e.get("is_a")
         if parent is not None and parent not in ent_names:
@@ -308,10 +326,107 @@ def check_metrics(m, rep, ds_index):
                 rep.warn("W05", where, "structured 指标仍为 草案 状态，验收后改 已发布")
 
 
+def model_index(m):
+    """按稳定身份索引全部可维护对象。身份优先级：uid > id > name/term/relation_id。"""
+    from _contract import (keys, ont_entities, ont_entity_id, ont_relations,
+                           ont_relation_id, relation_id)
+    idx = {}
+    for d in m.get("datasets", []) or []:
+        idx[("dataset", d.get("name"))] = d
+    for mt in m.get("metrics", []) or []:
+        idx[("metric", mt.get("id"))] = mt
+    for r in m.get("relationships", []) or []:
+        idx[("relationship", relation_id(r))] = r
+    for c in m.get("concepts", []) or []:
+        idx[("concept", c.get("term"))] = c
+    for e in ont_entities(m):
+        idx[("ontology_entity", ont_entity_id(e))] = e
+    for r in ont_relations(m):
+        idx[("ontology_relation", ont_relation_id(r))] = r
+    return {k: v for k, v in idx.items() if k[1]}
+
+
+def drift_report(current, baseline):
+    """四级 drift 分类。breaking = 会破坏现有消费者的变更（删除被引用对象、改主键/粒度/映射）。"""
+    from _contract import keys, object_digest
+    cur, base = model_index(current), model_index(baseline)
+    added = sorted(k for k in cur if k not in base)
+    removed = sorted(k for k in base if k not in cur)
+    changed = sorted(k for k in cur if k in base
+                     and object_digest(cur[k]) != object_digest(base[k]))
+    breaking = []
+    cur_ds = {d.get("name"): d for d in current.get("datasets", []) or []}
+    cur_ents = {e.get("name") for e in (current.get("ontology") or {}).get("entities", []) or []}
+    removed_names = {k for k in removed}
+
+    def broke(kind, key, reason):
+        breaking.append({"kind": kind, "key": key, "reason": reason})
+
+    for kind, key in removed:
+        if kind == "dataset":
+            for mt in current.get("metrics", []) or []:
+                if mt.get("dataset") == key:
+                    broke(kind, key, f"数据集已删除但指标 {mt.get('id')} 仍挂载")
+            for r in current.get("relationships", []) or []:
+                if key in (r.get("from"), r.get("to")):
+                    broke(kind, key, "数据集已删除但仍是合同关系端点")
+        if kind == "ontology_entity":
+            base_ent = base[("ontology_entity", key)]
+            for d in current.get("datasets", []) or []:
+                if d.get("ontology_ref") in {key, base_ent.get("name")}:
+                    broke(kind, key, f"实体已删除但数据集 {d.get('name')} 仍投影它")
+        if kind == "ontology_relation":
+            for r in current.get("relationships", []) or []:
+                if r.get("ontology_ref") == key:
+                    broke(kind, key, "本体关系已删除但合同关系仍回指")
+    for kind, key in changed:
+        before, after = base[(kind, key)], cur[(kind, key)]
+        if kind == "dataset":
+            if before.get("primary_key") != after.get("primary_key"):
+                broke(kind, key, "primary_key 变更（去重与 join 依据改变）")
+            if before.get("grain") != after.get("grain"):
+                broke(kind, key, "grain 粒度变更（所有聚合口径失效）")
+            lost = {f.get("name") for f in before.get("fields", []) or []} - \
+                   {f.get("name") for f in after.get("fields", []) or []}
+            for mt in current.get("metrics", []) or []:
+                if mt.get("dataset") == key and mt.get("time_field") in lost:
+                    broke(kind, key, f"字段 {mt.get('time_field')} 已删但指标 {mt.get('id')} 用作 time_field")
+        if kind == "ontology_relation" and before.get("mapping") != after.get("mapping"):
+            if before.get("mapping") == "equi_key":
+                broke(kind, key, f"mapping 由 equi_key 变为 {after.get('mapping')!r}（已投影关系失去落地键）")
+        if kind == "ontology_entity" and before.get("name") != after.get("name"):
+            if before.get("name") not in cur_ents:
+                for d in current.get("datasets", []) or []:
+                    if d.get("ontology_ref") == before.get("name"):
+                        broke(kind, key, f"实体重命名 {before.get('name')!r}→{after.get('name')!r} "
+                                         f"但数据集 {d.get('name')} 仍按旧名投影（uid 保住了身份，引用要跟着改）")
+    return {"schema_version": "1.0", "baseline_objects": len(base), "current_objects": len(cur),
+            "added": [{"kind": k, "key": v} for k, v in added],
+            "removed": [{"kind": k, "key": v} for k, v in removed],
+            "changed": [{"kind": k, "key": v} for k, v in changed],
+            "breaking": breaking}
+
+
+def append_history(path, model_path, m, rep):
+    import json as _json
+    from _contract import digest, now
+    by_code = {}
+    for line in rep.errors + rep.warnings:
+        code = line.split("]", 1)[0].split()[-1]
+        by_code[code] = by_code.get(code, 0) + 1
+    record = {"at": now(), "model_sha256": digest(model_path),
+              "model_version": m.get("version"),
+              "errors": len(rep.errors), "warnings": len(rep.warnings), "by_code": by_code}
+    with open(path, "a", encoding="utf-8") as stream:
+        stream.write(_json.dumps(record, ensure_ascii=False) + "\n")
+    return record
 def main():
     ap = argparse.ArgumentParser(description="semantic.yaml 铁律 lint")
     ap.add_argument("-f", "--file", required=True)
     ap.add_argument("--strict", action="store_true", help="WARN 也视为失败")
+    ap.add_argument("--drift", help="基线 semantic.yaml：输出新增/删除/变更/破坏四级分类")
+    ap.add_argument("--drift-report", help="drift 结果 JSON 输出路径")
+    ap.add_argument("--history", help="追加一条质量记录到 JSONL（release 趋势用）")
     args = ap.parse_args()
 
     m = yaml.safe_load(open(args.file, encoding="utf-8")) or {}
@@ -334,11 +449,32 @@ def main():
           f"（数据集 {len(ds_index)}，关系 {len(m.get('relationships', []) or [])}，"
           f"概念 {len(m.get('concepts', []) or [])}，指标 {len(m.get('metrics', []) or [])}，"
           f"本体实体 {len(ont_entities(m))}，本体关系 {len(ont_relations(m))}）")
+    exit_code = 0
     if rep.errors or (args.strict and rep.warnings):
         print("门禁：未通过")
-        return 1
-    print("门禁：通过")
-    return 0
+        exit_code = 1
+    else:
+        print("门禁：通过")
+    if args.drift:
+        baseline = yaml.safe_load(open(args.drift, encoding="utf-8")) or {}
+        drift = drift_report(m, baseline)
+        print(f"\ndrift：+{len(drift['added'])} 新增 / -{len(drift['removed'])} 删除 / "
+              f"~{len(drift['changed'])} 变更 / !{len(drift['breaking'])} 破坏")
+        for cls, mark in (("added", "+"), ("removed", "-"), ("changed", "~")):
+            for item in drift[cls]:
+                print(f"  {mark} {item['kind']}[{item['key']}]")
+        for item in drift["breaking"]:
+            print(f"  ! {item['kind']}[{item['key']}] —— {item['reason']}")
+        if args.drift_report:
+            from _contract import write
+            write(args.drift_report, drift)
+        if drift["breaking"]:
+            print("drift 门禁：存在破坏性变更")
+            exit_code = 1
+    if args.history:
+        record = append_history(args.history, args.file, m, rep)
+        print(f"质量记录已追加 → {args.history}（{record['errors']} ERROR / {record['warnings']} WARN）")
+    return exit_code
 
 
 if __name__ == "__main__":

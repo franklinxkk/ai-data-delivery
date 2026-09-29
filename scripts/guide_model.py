@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Persistent, scoped semantic onboarding: init → propose → apply → export."""
+"""Persistent, scoped semantic onboarding: init → propose → apply → export.
+
+v0.0.7：init 支持 --pack 冷启动模板包（把 starter_packs 的本体声明合并进模型再开会话）；
+gap 增加 suggestion（AI 建议+依据）与 state_label（三态标签）；status/export 输出清零报告。"""
 import argparse
 import copy
 import json
 from pathlib import Path
 import sys
 
-from _contract import digest, get_path, keys, load, now, object_digest, relation_id, write
+from _contract import (digest, get_path, keys, load, now, object_digest,
+                       ont_entity_id, relation_id, write)
 
 COLLECTIONS = {"dataset": ("datasets", "name"), "metric": ("metrics", "id"),
                "relationship": ("relationships", "id"), "concept": ("concepts", "term"),
@@ -48,8 +52,74 @@ def set_value(obj, prop, value):
     obj[parts[-1]] = value
 
 
-def new_session(model, scope, source_hash):
+def merge_packs(model, pack_paths):
+    """冷启动：把模板包的本体声明合并进模型。按 uid/name/id 去重，已有对象不覆盖。"""
+    applied = []
+    for path in pack_paths:
+        pack = load(path)
+        meta = pack.get("pack") or {}
+        ont = (pack.get("ontology") or {})
+        if not isinstance(ont, dict) or not (ont.get("entities") or ont.get("relations")):
+            raise ValueError(f"pack {path} 缺少 ontology.entities/relations")
+        target_ont = model.setdefault("ontology", {})
+        entities = target_ont.setdefault("entities", [])
+        relations = target_ont.setdefault("relations", [])
+        seen_ent = {ont_entity_id(e) for e in entities} | {e.get("name") for e in entities}
+        seen_rel = {r.get("id") for r in relations if r.get("id")} | \
+                   {f"{r.get('from')}->{r.get('to')}:{r.get('predicate')}" for r in relations}
+        ent_added = rel_added = 0
+        for e in ont.get("entities") or []:
+            if e.get("name") in seen_ent or (e.get("uid") and e["uid"] in seen_ent):
+                continue
+            entities.append(copy.deepcopy(e))
+            seen_ent.add(e.get("name"))
+            if e.get("uid"):
+                seen_ent.add(e["uid"])
+            ent_added += 1
+        for r in ont.get("relations") or []:
+            rid = r.get("id") or f"{r.get('from')}->{r.get('to')}:{r.get('predicate')}"
+            if rid in seen_rel:
+                continue
+            relations.append(copy.deepcopy(r))
+            seen_rel.add(rid)
+            rel_added += 1
+        applied.append({"pack": str(path), "id": meta.get("id"), "name": meta.get("name"),
+                        "entities_added": ent_added, "relations_added": rel_added})
+    return applied
+
+
+STATE_LABELS = {"pending": "[待确认]", "candidate": "[AI建议]",
+                "confirmed": "[已确认]", "deferred": "[暂缓]", "rejected": "[已否决]"}
+
+
+def gap_view(gap):
+    view = dict(gap)
+    source, state = gap.get("source"), gap.get("state")
+    if state == "candidate" and source == "supplied_input":
+        view["state_label"] = "[候选·来自材料]"
+    else:
+        view["state_label"] = STATE_LABELS.get(state, f"[{state}]")
+    if gap.get("candidate") is not None:
+        view.setdefault("suggestion", {
+            "value": gap["candidate"],
+            "basis": "来自现有模型或输入材料；可原样采纳（confirmed + value=建议值），修改后采纳，或 rejected 并说明理由",
+            "adopt_hint": "按 AI 建议：decision 填 state=confirmed、value=建议值、actor/role/basis 如实"})
+    return view
+
+
+def clearance(session):
+    """待确认清零报告：发布前 pending/candidate 必须清零。"""
+    counts = {}
+    for g in session["gaps"]:
+        counts[g["state"]] = counts.get(g["state"], 0) + 1
+    outstanding = counts.get("pending", 0) + counts.get("candidate", 0)
+    return {"counts": counts, "outstanding": outstanding,
+            "ready_for_validation": outstanding == 0 and not blockers(session)}
+
+
+def new_session(model, scope, source_hash, pack_paths=()):
     model, scope = copy.deepcopy(model), copy.deepcopy(scope)
+    packs_applied = merge_packs(model, pack_paths) if pack_paths else []
     if not scope.get("id") or not scope.get("question") or not scope.get("datasets"):
         raise ValueError("scope requires id, question, datasets (explicit current use case)")
     for rel in model.get("relationships", []):
@@ -107,6 +177,7 @@ def new_session(model, scope, source_hash):
                      "source": "supplied_input" if candidate == get_value(obj, prop) else "proposal"}
     return {"schema_version": "1.0", "revision": 0, "created_at": now(),
             "source_model_sha256": source_hash, "model": model, "scope": scope,
+            "packs_applied": packs_applied,
             "gaps": list(gaps.values()), "decisions": []}
 
 
@@ -190,7 +261,9 @@ def apply_proposal(session, patch):
 def show(session):
     return {"revision": session["revision"], "scope": session["scope"]["id"],
             "status": "needs_input" if blockers(session) else "ready_for_validation",
-            "blockers": blockers(session), "gaps": session["gaps"]}
+            "clearance": clearance(session),
+            "packs_applied": session.get("packs_applied", []),
+            "blockers": blockers(session), "gaps": [gap_view(g) for g in session["gaps"]]}
 
 
 def main():
@@ -200,6 +273,8 @@ def main():
     init.add_argument("--model", required=True)
     init.add_argument("--scope", required=True)
     init.add_argument("--session", required=True)
+    init.add_argument("--pack", action="append", default=[],
+                      help="冷启动模板包（可重复）：先把 starter_packs 的本体声明合并进模型")
     status = sub.add_parser("status")
     status.add_argument("--session", required=True)
     propose = sub.add_parser("propose")
@@ -217,7 +292,8 @@ def main():
         if args.command == "init":
             if Path(args.session).exists():
                 raise ValueError("session exists; resume it or use a new path")
-            session = new_session(load(args.model), load(args.scope), digest(args.model))
+            session = new_session(load(args.model), load(args.scope), digest(args.model),
+                                  pack_paths=args.pack)
             write(args.session, session)
         else:
             session = load(args.session)

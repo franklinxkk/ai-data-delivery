@@ -164,6 +164,9 @@ ontology:
   - name: 生产批次
     attributes: []
     note: 一行一个生产批次
+    uid: ent_production_batch
+    evidence:
+      source: data_observed
   - name: 设备
     attributes:
     - name: 设备状态
@@ -173,6 +176,9 @@ ontology:
       value_type: enum
       values: *id002
     note: 一行一台设备
+    uid: ent_equipment
+    evidence:
+      source: owner_confirmed
   relations:
   - from: 设备
     to: 生产批次

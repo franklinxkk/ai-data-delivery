@@ -14,6 +14,8 @@ RULE-METRIC-01：同一问题两条路径结果必须一致，不一致即存在
 
 口径编译规则（与引擎不变式一致）：expr/分子分母 + extra_where + 数据集 source 表；
 dataset./表名前缀自动剥离；仅对 single-dataset 的 count/sum/avg/ratio 编译，其余跳过并声明。
+
+安全声明：网络访问仅限 --endpoint 指定地址（预期本地/内网验证端点）；无任何其他出站请求。
 """
 import os
 import argparse

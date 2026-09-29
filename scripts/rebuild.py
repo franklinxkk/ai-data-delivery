@@ -14,9 +14,13 @@
         --port 8080
 
 退出码：0 = 服务已就绪；1 = 任一环节失败。
+
+安全声明：网络访问仅限 --health-url 指定地址（预期本地/内网就绪端点），
+无任何其他出站请求；--build-cmd / --start-cmd 以 shell=False 参数数组方式执行。
 """
 import argparse
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -131,7 +135,7 @@ def main():
     # 3) 构建
     if not args.skip_build:
         log(f"构建：{args.build_cmd}")
-        r = subprocess.run(args.build_cmd, shell=True, cwd=project_dir)
+        r = subprocess.run(shlex.split(args.build_cmd), cwd=project_dir)
         if r.returncode != 0:
             log(f"构建失败（exit={r.returncode}）")
             return 1
@@ -144,7 +148,7 @@ def main():
     log_path = args.log_file or os.path.join(project_dir, "service.log")
     log(f"启动：{args.start_cmd}（日志 → {log_path}）")
     logf = open(log_path, "ab")
-    proc = subprocess.Popen(args.start_cmd, shell=True, cwd=project_dir,
+    proc = subprocess.Popen(shlex.split(args.start_cmd), cwd=project_dir,
                             stdout=logf, stderr=subprocess.STDOUT,
                             start_new_session=True)
     log(f"服务进程 pid={proc.pid}")

@@ -125,8 +125,14 @@ ontology:
       value_type: enum
       values: *id001
     note: 一行一件办件
+    uid: ent_gov_service_case
+    evidence:
+      source: data_observed
   - name: 办事群众
     unprojected_reason: 无对应物理表，仅业务声明
+    uid: ent_citizen
+    evidence:
+      source: user_provided
   relations:
   - from: 办事群众
     to: 政务办件

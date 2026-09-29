@@ -12,6 +12,8 @@
       --out badcases/
 
 输出 badcases/<id>.yaml：bad case 登记卡（证据已填，symptom/layer/fix 留待归因）。
+
+安全声明：网络访问仅限 --endpoint 指定地址（预期本地/内网验证端点）；无任何其他出站请求。
 """
 import argparse
 import datetime

@@ -27,11 +27,11 @@ def fmt_metric(m):
     return " ".join(parts)
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="指标口径字典生成")
     ap.add_argument("--model", required=True)
     ap.add_argument("--out", required=True)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     m = yaml.safe_load(open(args.model, encoding="utf-8"))
     ds_list = m.get("datasets", [])

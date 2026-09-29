@@ -13,6 +13,8 @@ readiness 通过不代表是新实例。本工具直接核对运行时模型与�
   GET /api/model             → {version, datasets[], metrics[], ...}
 
 退出码：0 = 一致（或未给 --model 仅报告）；1 = 不一致；2 = 端点不可达/返回无法解析。
+
+安全声明：网络访问仅限 --endpoint 指定地址（预期本地/内网验证端点）；无任何其他出站请求。
 """
 import argparse
 import json

@@ -1,6 +1,6 @@
-# v0.0.6 合同与可执行边界
+# v0.0.7 合同与可执行边界
 
-`semantic.yaml` 延续 datasets/concepts/relationships/metrics，v0.0.6 新增可选 `ontology` 段。模型本身的 version 与 skill 版本分别管理。新增字段保持增量，但下游是否忽略/拒绝/正确执行要在实际消费者验证。
+`semantic.yaml` 延续 datasets/concepts/relationships/metrics，v0.0.6 新增可选 `ontology` 段；v0.0.7 新增可维护性字段（uid/evidence/domain，见下）。模型本身的 version 与 skill 版本分别管理。新增字段保持增量，但下游是否忽略/拒绝/正确执行要在实际消费者验证。
 
 ## 本体声明层与合同投影
 
@@ -10,18 +10,27 @@
 ontology:
   entities:
     - name: 借款人
+      uid: ent_borrower            # v0.0.7：稳定身份，重命名后 drift 可追踪；缺省以 name 为身份（W12）
+      domain: 信贷                  # v0.0.7：主题域，可视化按域过滤
+      evidence: {source: user_provided}   # v0.0.7：证据来源 ∈ user_provided/data_observed/model_inferred/owner_confirmed
       attributes: [{name: 风险等级, value_type: enum, values: [低, 中, 高]}]
     - name: 担保人
       unprojected_reason: 担保台账未结构化，仅业务声明   # 未投影必须说明
   relations:
-    - {from: 借款人, to: 贷款, predicate: 申请, mapping: equi_key}
+    - {id: rel_borrower_loan, from: 借款人, to: 贷款, predicate: 申请, mapping: equi_key}
     - {from: 担保人, to: 贷款, predicate: 担保, mapping: weak, note: 依赖人工台账}
 ```
 
-- 实体：`name` 唯一；`is_a` 只能指向已声明实体且不得成环（环检测是结构检查，不是推理）；`attributes` 是业务属性（name/value_type/unit/values/note），不依赖具体表。
-- 关系：`predicate`（语义谓词）是核心，`mapping ∈ equi_key/weak/derived/semantic_only` 是落地方式；**键只是落地方式之一**，`mapping≠equi_key` 必须写 `note`。无键关系留在本体里，不得因为"没有外键"被移出。
-- 投影：datasets/relationships 是本体在物理来源上的**合同投影**，用 `ontology_ref` 回指。合同只承载 `equi_key` 关系；`ontology_ref` 指向无键关系是 ERROR（E15）。投影损失（本体有而合同表达不了的）必须留在本体侧并说明，不得静默丢弃。
+- 实体：`name` 唯一；`uid` 是稳定身份（建议 `ent_xxx`，重命名不改 uid）；`is_a` 只能指向已声明实体且不得成环（环检测是结构检查，不是推理）；`attributes` 是业务属性（name/value_type/unit/values/note），不依赖具体表。
+- 关系：`predicate`（语义谓词）是核心，`mapping ∈ equi_key/weak/derived/semantic_only` 是落地方式；**键只是落地方式之一**，`mapping≠equi_key` 必须写 `note`。建议显式 `id`（`rel_xxx`）使重命名后引用稳定。无键关系留在本体里，不得因为"没有外键"被移出。
+- 投影：datasets/relationships 是本体在物理来源上的**合同投影**，用 `ontology_ref` 回指；回指关系时用其稳定 `id`。合同只承载 `equi_key` 关系；`ontology_ref` 指向无键关系是 ERROR（E15）。投影损失（本体有而合同表达不了的）必须留在本体侧并说明，不得静默丢弃。
 - 兼容：无 `ontology` 段的模型不受新规则约束；声明了 `ontology_ref` 却无 `ontology` 段是 ERROR（E14）。
+
+## 模型维护（v0.0.7）
+
+- **drift 对比**：`check_model.py -f 当前.yaml --drift 基线.yaml` 输出新增/删除/变更/破坏四级分类。破坏 = 删除仍被引用的对象、主键/粒度变更、equi_key 关系降级、实体重命名但投影未跟随（uid 保住身份、引用要跟着改）。存在破坏即退出码 1。
+- **质量历史**：`--history quality_history.jsonl` 每次追加一条 ERROR/WARN 记录；`visualize_model.py --history` 渲染趋势图。release 时各跑一次，WARN 应随版本收敛。
+- **冷启动包**：`guide_model.py init --pack starter_packs/<领域>.yaml` 先把模板本体合并进模型（已有对象不覆盖），再走正常补齐；合并结果记入会话 `packs_applied`。
 
 概念层同时扩充词表属性：`synonyms`（同义说法）、`forbidden`（禁用说法，不得与自身 term/synonyms 冲突）、`domain`（业务域，同域内 synonym 不得被两个概念认领）、`owner`、`valid_from/valid_to`（过期需复审）。概念仍需 `expand` 可执行展开才准发布；`is_a` 层级写在 ontology 实体上，概念保持词与宏的定位。
 

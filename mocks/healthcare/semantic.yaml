@@ -165,12 +165,18 @@ ontology:
       value_type: enum
       values: *id002
     note: 一行一次门诊就诊
+    uid: ent_outpatient_visit
+    evidence:
+      source: data_observed
   - name: 医生
     attributes:
     - name: 职称
       value_type: enum
       values: *id003
     note: 一行一个医生
+    uid: ent_doctor
+    evidence:
+      source: user_provided
   relations:
   - from: 医生
     to: 门诊就诊

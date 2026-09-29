@@ -122,6 +122,20 @@ def ont_relation_id(rel):
     return rel.get("id") or f"{rel.get('from')}->{rel.get('to')}:{rel.get('predicate')}"
 
 
+def ont_entity_id(entity):
+    """本体实体的稳定身份：uid 优先（重命名后可追踪），缺省回退 name。"""
+    return entity.get("uid") or entity.get("name")
+
+
+EVIDENCE_SOURCES = {"user_provided", "data_observed", "model_inferred", "owner_confirmed"}
+
+
+def evidence_source(obj):
+    """元素级证据来源分级：用户提供/数据观测/模型推断/责任人确认。无声明返回 None。"""
+    source = (obj.get("evidence") or {}).get("source")
+    return source if source in EVIDENCE_SOURCES else None
+
+
 def get_path(obj, dotted):
     """Walk a dotted collection path like 'ontology.entities'."""
     for part in dotted.split("."):

@@ -182,6 +182,9 @@ ontology:
       - 正常
       - 逾期
       - 结清
+    uid: ent_loan
+    evidence:
+      source: owner_confirmed
   - name: 借款人
     cn: 借款人
     attributes:
@@ -191,9 +194,15 @@ ontology:
       - 低
       - 中
       - 高
+    uid: ent_borrower
+    evidence:
+      source: user_provided
   - name: 担保人
     cn: 担保人
     unprojected_reason: 担保台账未结构化，仅业务声明
+    uid: ent_guarantor
+    evidence:
+      source: model_inferred
   relations:
   - from: 借款人
     to: 贷款

@@ -31,8 +31,14 @@ scope.required 支持 object：`model`（顶层合同）、`scope`、`dataset:<n
 
 ```bash
 python scripts/guide_model.py init --model partial.yaml --scope scope.yaml --session session.json
+python scripts/guide_model.py init --model partial.yaml --scope scope.yaml --session session.json \
+    --pack starter_packs/general.yaml --pack starter_packs/traffic.yaml   # v0.0.7 冷启动
 python scripts/guide_model.py status --session session.json
 ```
+
+**冷启动模板包**（v0.0.7）：不从白板开始建模。`--pack` 把 `starter_packs/` 的本体声明（实体含 uid/属性/证据来源，关系含 mapping）合并进模型，已存在的对象不覆盖——你的模型永远优先。合并结果记入会话 `packs_applied` 可追溯。领域包清单与自定义写法见 `starter_packs/README.md`。
+
+**提问与采纳协议**（v0.0.7）：向用户提问时每批 3~6 个问题；每个问题给出 **AI 建议（suggestion.value）+ 依据 + 备选**，用户可直接回"按 AI 建议"——落成 decision 即 `state=confirmed、value=建议值`，actor/basis 如实填写（脚本不认证角色身份，采纳仍由人确认）。status/export 的 gap 带三态标签：`[待确认]`（无候选）、`[AI建议]`（模型推断候选）、`[候选·来自材料]`（材料里已有）、`[已确认]`/`[暂缓]`/`[已否决]`。`clearance` 是待确认清零报告：outstanding（pending+candidate）清零且无阻断项才 ready_for_validation——发布前先清零。
 
 会话单文件包含 model、scope、revision、gaps、decisions；JSON 是权威状态，Markdown/HTML 是展示。gap ID 由 scope/object/property 生成，与问题措辞、数组顺序无关。session 是串行文件工作流，不支持多用户并发编辑/事务合并；同时编辑前先合并意见，再生成一个补丁。
 

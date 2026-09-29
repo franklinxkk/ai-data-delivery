@@ -2,7 +2,7 @@
 name: ai-data-delivery
 description: 为 FDE、产品经理和甲方信息中心交付数据与 AI 应用的语义资产。用于部分 DDL/数据结构与业务语义的理解补齐、semantic.yaml 本体声明层（业务对象/属性/谓词）与合同投影（数据集/指标/关系）建模、数据约束和关联风险检查、智能问数 bad case 诊断、评测与分阶段交付。已有模型可直接进入验证、可视化或巡检。不用于通用模型微调、OWL 推理或与数据无关的应用开发。
 metadata:
-  version: 0.0.6
+  version: 0.0.7
 ---
 
 # AI Data Delivery
@@ -15,9 +15,10 @@ metadata:
 
 | 当前需要 | 下一步 | 按需读取 |
 | --- | --- | --- |
-| 只有部分结构或语义 | 给出证据支持的理解、候选解释、阻断当前用例的缺口；开始补齐会话（先业务后物理） | [补齐闭环](references/onboarding.md) |
-| 要声明业务对象/属性/关系（不只是表） | 写入 `ontology` 声明层；数据集/关系用 `ontology_ref` 投影回指；无键关系留在本体并写落地说明 | [合同与验证](references/contract.md) |
+| 只有部分结构或语义 | 给出证据支持的理解、候选解释、阻断当前用例的缺口；开始补齐会话（先业务后物理）；可从 starter_packs 选模板包冷启动（--pack，已有对象不覆盖） | [补齐闭环](references/onboarding.md) |
+| 要声明业务对象/属性/关系（不只是表） | 写入 `ontology` 声明层（实体带 uid/证据来源/主题域）；数据集/关系用 `ontology_ref` 投影回指；无键关系留在本体并写落地说明 | [合同与验证](references/contract.md) |
 | 已有模型，要查结构/关联/数据 | 分别做模型 lint（含本体结构与投影对账）、具体查询路径的粒度检查、全量 SQLite 快照约束 | [合同与验证](references/contract.md) |
+| 模型要演进/发版 | check_model --drift 对比基线（新增/删除/变更/破坏四级，破坏即门禁失败）；--history 记录质量趋势 | [合同与验证](references/contract.md) |
 | 问数答错、漏过滤、错误拒答 | 取证，区分环境、语义、引擎、数据原因，修复后验证 | [诊断手册](references/diagnosis-playbook.md) |
 | 交付、验收、阶段规划、巡检 | 明确阶段、证据与责任；按所需 profile 执行门禁 | [交付手册](references/delivery-playbook.md) |
 | 要看模型、缺口与来源 | 从当前模型和同版本报告生成可搜索的离线只读视图 | [工具清单](references/tools.md) |

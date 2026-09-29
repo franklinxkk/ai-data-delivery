@@ -10,6 +10,8 @@
 
 判定依据：响应中的 sql 字段（无 sql 字段则退化比对 value/rows 指纹）。
 退出码：0 = 全部稳定；1 = 发现漂移；2 = 用法错误。
+
+安全声明：网络访问仅限 --endpoint 指定地址（预期本地/内网验证端点）；无任何其他出站请求。
 """
 import argparse
 import hashlib

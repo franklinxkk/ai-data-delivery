@@ -168,12 +168,18 @@ ontology:
       value_type: enum
       values: *id002
     note: 一行一笔订单
+    uid: ent_order
+    evidence:
+      source: user_provided
   - name: 客户
     attributes:
     - name: 会员等级
       value_type: enum
       values: *id003
     note: 一行一个客户
+    uid: ent_customer
+    evidence:
+      source: user_provided
   relations:
   - from: 客户
     to: 订单
