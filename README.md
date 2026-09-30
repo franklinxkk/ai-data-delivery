@@ -1,14 +1,16 @@
-# ai-data-delivery · v0.0.8
+# ai-data-delivery · v0.0.9
 
-[![version](https://img.shields.io/badge/version-0.0.8-orange)](https://github.com/franklinxkk/ai-data-delivery/releases)
+[![version](https://img.shields.io/badge/version-0.0.9-orange)](https://github.com/franklinxkk/ai-data-delivery/releases)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-121%20passed-brightgreen)](#三分钟跑起来)
+[![tests](https://img.shields.io/badge/tests-140%20passed-brightgreen)](#三分钟跑起来)
 [![host](https://img.shields.io/badge/host-Kimi%20%C2%B7%20Claude%20Code%20%C2%B7%20Cursor%20%C2%B7%20%E4%BB%BB%E4%BD%95%20SKILL.md%20%E8%BF%90%E8%A1%8C%E6%97%B6-blueviolet)](#与任何-agent-共存)
 
 > 把零散的 DDL 和业务描述，变成有依据、可追溯、按阶段验证的语义合同资产。
 > 它治理的是交付过程——口径可验证、证据可追溯、变更可审计；问数引擎的自然语言理解不在它的边界内（README 结尾有明确声明）。
 >
 > *Turn partial DDLs and business descriptions into an evidence-graded semantic contract for AI-powered data Q&A. Declaration, not inference. Evidence, not claims.*
+>
+> ⭐ 如果这个 skill 帮到了你，欢迎到 [GitHub 项目](https://github.com/franklinxkk/ai-data-delivery)点个 Star——这是让它持续迭代的直接动力。*If this skill helps you, a star on GitHub means a lot.*
 
 **English**：ai-data-delivery is an agent skill (SKILL.md + Python scripts) that helps FDE engineers, data product managers and IT-center staff turn partial DDLs and business descriptions into a maintainable ontology declaration layer with machine-checked projection onto physical datasets — plus constraint validation, NL2SQL bad-case diagnosis, evaluation gates and staged delivery. The documentation is Chinese-first; users may interact in **any language** and agents will reply in the user's language (example packs are Chinese-domain but the workflow is language-agnostic). Security posture: no credential reads, network access is restricted to user-specified localhost/intranet endpoints (remote requires `--allow-remote`), read-only compiled SQL, no shell invocations — see [SECURITY.md](SECURITY.md).
 
@@ -51,15 +53,40 @@
 ```bash
 python -m pip install -r requirements.txt
 python examples/onboarding/run_demo.py --out tmp/demo   # 从缺粒度/口径的模型到交换包全链路
-python mocks/run_mock.py --all                          # 金融/政务/医疗/制造/零售 5 领域
-python -m unittest discover -s tests -v                 # 121 项边界测试
+python mocks/run_mock.py --all                          # 金融/政务/医疗/制造/零售/CRM/OA/教育 8 领域
+python -m unittest discover -s tests -v                 # 140 项边界测试
 ```
 
 打开 `tmp/demo/model.html`：双层语义图（上本体层/下投影层）——搜索定位、边类型过滤、主题域视图、证据来源着色、点击聚焦、导出 SVG；另有补齐进度与证据面板。离线单文件、零外部依赖。示例与 Mock 的应答由模拟器生成，**不验证真实 AI 理解或拒答能力**。
 
 ## 真实项目验证过
 
-交通安全监管领域完整回迁（v0.0.6 起，v0.0.7 补齐 uid/主题域/证据分级）：16 个业务对象、18 条语义关系（16 等值键 + 2 弱关系）、94 个指标、15 张宽表——lint 0 ERROR；16 条关联的键唯一性在真实库全过；17 条数据约束（主键唯一/枚举字典/引用完整）全过。迁移还顺手抓出并修复了原合同两处异名键缺陷；v0.0.8 的新增口径规则又在这份生产模型上抓出 7 条真实风险（比率指标缺展示刻度 ×6、筛选值越出字段枚举 ×1）——规则迭代能在存量资产上持续产生价值，这正是留痕体系的意义。结构级证据（join/约束报告与质量趋势）已脱敏入仓：[references/evidence/traffic](references/evidence/traffic/README.md)；测试范围与未验证项见 [验证记录](references/v0.0.8-validation.md)。
+交通安全监管领域完整回迁（v0.0.6 起，v0.0.7 补齐 uid/主题域/证据分级）：16 个业务对象、18 条语义关系（16 等值键 + 2 弱关系）、94 个指标、15 张宽表——lint 0 ERROR；16 条关联的键唯一性在真实库全过；17 条数据约束（主键唯一/枚举字典/引用完整）全过。迁移还顺手抓出并修复了原合同两处异名键缺陷；v0.0.8 的新增口径规则又在这份生产模型上抓出 7 条真实风险（比率指标缺展示刻度 ×6、筛选值越出字段枚举 ×1）——规则迭代能在存量资产上持续产生价值，这正是留痕体系的意义。结构级证据（join/约束报告与质量趋势）已脱敏入仓：[references/evidence/traffic](references/evidence/traffic/README.md)；测试范围与未验证项见 [验证记录](references/v0.0.9-validation.md)。
+
+运智管家企业 Agent（v0.0.9）：一句话办事/问数/知识检索三类入口共用一套语义底座。31 张宽表建模（本体 15 实体 18 关系）lint 0 ERROR；86 条盘点指标经 `promote_draft` 逐条分类（7 条映射待确认 / 3 条需业务定义 / 44 条明细模板 / 32 条已合入或缺口），与人工逐条审阅结论**完全一致**；明细查询首次成为一等资产（`templates` 段）。本轮改动全部来自这次实战暴露的缝隙：uid 回指解析、批量补丁、原子写、同义词门禁。
+
+## 八阶段落地故事地图
+
+新领域从这个 skill 得到什么、每步做什么、产出什么价值——完整版含命令、角色泳道与时间账本：[references/story-map.md](references/story-map.md)
+
+```
+备货        划域         冷启动        首链          提升           收口        验证        运营
+原材料盘点 → 子系统切分 → 骨架建模 → 3表打通链路 → 指标可执行化 → 网关护栏 → 上线门禁 → 持续质量
+ 0.5天       0.5天       1天          2-3天        1-2周(主战场)   并行        2-3天      持续
+```
+
+| 阶段 | 你做什么 | 得到什么价值 |
+| --- | --- | --- |
+| 0 备货 | `ingest_ddl` + `harvest_metrics` + `profile_db` | 家底台账 + 指标可执行率三分 + **gaps.yaml 缺口台账**（第一天就能甩给信息中心闭环） |
+| 1 划域 | 按前缀聚类切分子系统，共享概念层 | 避免"几百张表揉一个模型"的后期纠缠 |
+| 2 冷启动 | `guide_model --pack` 引导会话，先业务后物理 | 团队对业务对象与称呼达成一致；未清零缺口一目了然 |
+| 3 首链 | 选 3 个高频主题建宽表，lint 0 ERROR | 端到端跑通"提问→指标→SQL→结果"的第一公里演示 |
+| 4 提升 | `promote_draft` 逐条草稿 → 业务审阅会 → `patch batch` | 可执行指标覆盖率 17%→70%+；每条口径谁拍的、依据什么全部留痕 |
+| 5 收口 | 租户/敏感/时间三层护栏 | 不出跨租户串数事故——比答错更严重的事故 |
+| 6 验证 | 正式引擎 live 评测 + `release_gate` | 带证据分级的准确率数字：敢上线，也敢向甲方汇报 |
+| 7 运营 | drift 四级接 CI + 质量趋势图 | 破坏级变更 CI 直接拦；ERROR 恒零、WARN 收敛是持续价值的可视化证明 |
+
+约 3-4 周到上线门禁。瓶颈从来不在工具，在业务决策速度——所以工具的职责是把每个决策点摆到桌面上。
 
 ## 谁在什么阶段用它
 
@@ -118,14 +145,15 @@ python scripts/visualize_model.py --model semantic.yaml --report joins.json --re
 ## 文档
 
 - **快速通道**：[FDE 工程师](references/quickstart-fde.md) · [数据产品经理](references/quickstart-pm.md) · [信息中心](references/quickstart-infocenter.md)
+- **[八阶段故事地图](references/story-map.md)**：新领域落地的完整操作路径、角色泳道与时间账本
 - [SKILL.md](SKILL.md)：Agent 入口与任务路由
-- [合同与验证](references/contract.md)：本体声明层、投影、维护（drift/质量历史）、约束、指标与评测边界
+- [合同与验证](references/contract.md)：本体声明层、投影、维护（drift/质量历史）、约束、指标/明细模板与评测边界
 - [补齐闭环](references/onboarding.md)：部分输入/模板包冷启动 → 可审阅合同
 - [交付及迁移](references/delivery-playbook.md)：阶段门禁、旧版报告/豁免迁移
 - [诊断手册](references/diagnosis-playbook.md)：bad case 取证瀑布与工作流
 - [标准边界](references/standards.md)：GB/T 48000.3—2026、Apache Ossie 与其他规范的适用范围
 - [冷启动模板包](starter_packs/README.md)：通用/交通/金融/政务/医疗/制造/零售
-- [全部工具](references/tools.md) · [本版验证记录](references/v0.0.8-validation.md)
+- [全部工具](references/tools.md) · [本版验证记录](references/v0.0.9-validation.md)
 
 ## 它不做什么
 
@@ -140,4 +168,4 @@ python -m unittest discover -s tests -v
 python maintainer/build_skill.py --out dist   # 确定性构建：只打 Git 已跟踪文件，附 SHA256 清单
 ```
 
-[MIT License](LICENSE) · 欢迎 Issue / PR / 领域症状包投稿
+[MIT License](LICENSE) · 欢迎 Issue / PR / 领域症状包投稿 · **如果它帮到你，请给 [GitHub 项目](https://github.com/franklinxkk/ai-data-delivery)点个 ⭐**

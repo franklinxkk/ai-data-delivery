@@ -84,6 +84,25 @@ null_policy：forbid 把 NULL 计入违规；ignore 明确排除 NULL；unknown 
 
 全量检查通过也只代表已声明规则。业务口径正确性需要独立确认的期望；从同一生成器输出实际值和期望值的自证不足。原有 ratio 禁 AVG 的 lint 仍保留；确有行均值业务语义时应建独立指标类型并明确期望，不用强制把所有平均都改成加权比率。
 
+## 明细查询模板（templates，v0.0.9）
+
+真实项目实测约半数问数需求是"给我列出来"而非聚合数字——明细查询是一等资产，不挤进 metrics。顶层 `templates` 段逐条声明：
+
+```yaml
+templates:
+  - id: refund_orders          # 稳定 id，drift 追踪身份
+    name: 退款订单明细
+    dataset: 订单              # 挂载数据集 name（必须已声明）
+    columns: [order_id, customer_id, amount, stat_date]   # 物理列，必须存在于数据集字段
+    extra_where: "status = '已退款'"   # 可选：固定过滤（同指标 extra_where 语义）
+    time_field: stat_date      # 明细也必须时间围栏，缺省 lint 告警（W18）
+    synonyms: [退款单列表, 哪些订单退款了]   # 命中路由，<3 告警（W18）
+    note: 按 stat_date 倒序，默认最多 100 行
+    status: 草案               # 草案|已发布|停用
+```
+
+lint 校验：id 重复、dataset 未声明、columns/time_field 引用不存在字段均为 ERROR（E18）；缺 time_field 或 synonyms<3 为 WARN（W18）。模板只声明"哪个数据集、哪些列、什么固定过滤"，执行层负责分页/排序/脱敏，模型不承载行级安全策略。promote_draft.py 把 list/rank 类盘点指标自动产出为本段草稿（`columns_raw` 待映射伪代码列，人审改成物理列后才算数）。
+
 ## 报告身份与交换
 
 evidence 保存 created_at、mode、model_sha256、cases_sha256 和适用的 data_snapshot_sha256/actual_sha256/gold_results_sha256/multihop_sha256。哈希绑定内容而非宣告来源可信，不是电子签名或防篡改审计服务。角色与来源权限仍由操作者核对。

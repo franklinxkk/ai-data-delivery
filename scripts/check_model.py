@@ -27,11 +27,12 @@
   E13 本体关系端点不是已声明本体实体、缺 predicate、mapping 非法，
        或 mapping≠equi_key 而无 note（无键关系必须写明落地说明）
   E14 投影回指悬空：dataset/relationship 的 ontology_ref 指向不存在的本体对象
-       （含声明了 ontology_ref 但模型无 ontology 段）
+       （含声明了 ontology_ref 但模型无 ontology 段；实体引用接受 name 或 uid 两种写法）
   E15 无键关系被投影：合同 relationship 的 ontology_ref 指向 mapping≠equi_key 的本体关系
        （合同只承载等值键关系；本体表达得了 ≠ 合同该承载）
   E16 概念禁用词与自身 term/synonyms 冲突（禁用词是被禁止的说法，不能同时是别名）
   E17 指标 on_zero_denominator 非法（∈ null/zero/error；缺省为 null）
+  E18 明细模板 id 重复 / 挂载数据集不存在 / columns、time_field 引用数据集没有的字段
   W01 数据集缺 ai.instructions（表描述是给模型的路由+边界指令，不是给人看的说明书）
   W02 维度字段缺 enum（若该字段是状态/枚举类，缺字典则模型写错过滤条件且不报错）
   W03 数据集无 time 角色字段（时间围栏无法落地，"今天/本月"必错）
@@ -47,6 +48,8 @@
   W14 无 datasets 的纯本体草案（仅做本体结构检查；投影对账与合同检查不适用）
   W15 unit 为 % 的 ratio 未声明 display_scale（编译值是 0–1 分数，×100 展示责任必须显式落地）
   W16 指标 filters / 概念 expand 的取值不在字段 enum 字典中（会静默错过滤）
+  W17 structured 指标同义词 <3 个（同义词是指标命中路由的生命线，命中不了就掉进慢速 NL2SQL）
+  W18 明细模板缺 time_field（明细也必须时间围栏）或同义词 <3 个
   W12 本体实体缺 uid（缺省以 name 为身份，重命名后 drift/历史不可追踪；建议 ent_xxx 稳定 ID）
 
 本体段是声明式事实清单：本工具只做静态结构检查与两层对账，不做任何跨声明推导
@@ -226,6 +229,7 @@ def check_ontology(m, rep):
         return
     ent_names = set()
     ent_uids = set()
+    uid2name = {}
     for e in entities:
         name = e.get("name")
         where = f"ontology.entity[{name or '?'}]"
@@ -240,6 +244,7 @@ def check_ontology(m, rep):
             if uid in ent_uids:
                 rep.error("E11", where, f"本体实体 uid 重复：{uid!r}")
             ent_uids.add(uid)
+            uid2name[uid] = name
         else:
             rep.warn("W12", where, "缺 uid（缺省以 name 为身份，重命名后 drift 不可追踪）")
         source = evidence_source(e)
@@ -277,14 +282,15 @@ def check_ontology(m, rep):
             rep.error("E13", where, f"mapping 非法：{mapping!r}（∈ {sorted(MAPPINGS)}）")
         elif mapping != "equi_key" and not r.get("note"):
             rep.error("E13", where, "mapping≠equi_key 必须写 note（无键关系的落地说明）")
-    # 投影对账
+    # 投影对账（ontology_ref 接受实体 name 或 uid 两种写法，内部统一归一为 name）
+    ent_refs = ent_names | set(uid2name)
     projected_entities = set()
     for d in datasets:
         ref = d.get("ontology_ref")
         if ref:
-            if ref not in ent_names:
+            if ref not in ent_refs:
                 rep.error("E14", f"dataset[{d.get('name','?')}]", f"ontology_ref 指向未声明实体 {ref!r}")
-            projected_entities.add(ref)
+            projected_entities.add(uid2name.get(ref, ref))
     ont_rel_by_id = {ont_relation_id(r): r for r in relations}
     projected_rel_ids = set()
     for r in contract_rels:
@@ -359,6 +365,37 @@ def check_metrics(m, rep, ds_index):
                     and mt.get("display_scale") is None:
                 rep.warn("W15", where,
                          "unit 为 % 的 ratio 编译值是 0–1 分数；未声明 display_scale（如 100），×100 展示责任未落地")
+            syns = mt.get("synonyms") or []
+            if mt.get("status") != "停用" and len(syns) < 3:
+                rep.warn("W17", where,
+                         f"同义词仅 {len(syns)} 个（<3）：同义词是指标命中路由的生命线，"
+                         "用户问法命中不了就会掉进慢速 NL2SQL 路径，请补到 3 个以上")
+
+
+def check_templates(m, rep, ds_index):
+    """明细查询模板（一等资产）：结构非法 E18，缺时间围栏/同义词 W18。"""
+    seen = set()
+    for t in m.get("templates", []) or []:
+        tid = t.get("id", "?")
+        where = f"template[{tid}]"
+        if tid in seen:
+            rep.error("E18", where, "模板 id 重复")
+        seen.add(tid)
+        ds = ds_index.get(t.get("dataset"))
+        if ds is None:
+            rep.error("E18", where, f"挂载的数据集 {t.get('dataset')!r} 不存在")
+        else:
+            fnames = field_names(ds)
+            for c in t.get("columns", []) or []:
+                if c not in fnames:
+                    rep.error("E18", where, f"columns 引用了数据集没有的字段 {c!r}")
+            tf = t.get("time_field")
+            if tf and tf not in fnames:
+                rep.error("E18", where, f"time_field {tf!r} 不在数据集字段中")
+            if not tf:
+                rep.warn("W18", where, "缺 time_field（明细查询也必须时间围栏）")
+        if t.get("status") != "停用" and len(t.get("synonyms") or []) < 3:
+            rep.warn("W18", where, "同义词 <3 个（明细模板同样靠同义词命中路由）")
 
 
 def model_index(m):
@@ -370,6 +407,8 @@ def model_index(m):
         idx[("dataset", d.get("name"))] = d
     for mt in m.get("metrics", []) or []:
         idx[("metric", mt.get("id"))] = mt
+    for t in m.get("templates", []) or []:
+        idx[("template", t.get("id"))] = t
     for r in m.get("relationships", []) or []:
         idx[("relationship", relation_id(r))] = r
     for c in m.get("concepts", []) or []:
@@ -402,6 +441,9 @@ def drift_report(current, baseline):
             for mt in current.get("metrics", []) or []:
                 if mt.get("dataset") == key:
                     broke(kind, key, f"数据集已删除但指标 {mt.get('id')} 仍挂载")
+            for t in current.get("templates", []) or []:
+                if t.get("dataset") == key:
+                    broke(kind, key, f"数据集已删除但明细模板 {t.get('id')} 仍挂载")
             for r in current.get("relationships", []) or []:
                 if key in (r.get("from"), r.get("to")):
                     broke(kind, key, "数据集已删除但仍是合同关系端点")
@@ -485,6 +527,7 @@ def main():
     check_relationships(m, rep, set(ds_index))
     check_concepts(m, rep, ds_index)
     check_metrics(m, rep, ds_index)
+    check_templates(m, rep, ds_index)
     check_ontology(m, rep)
 
     for line in rep.errors + rep.warnings:
@@ -493,6 +536,7 @@ def main():
     print(f"\nlint 结果：{len(rep.errors)} ERROR / {len(rep.warnings)} WARN"
           f"（数据集 {len(ds_index)}，关系 {len(m.get('relationships', []) or [])}，"
           f"概念 {len(m.get('concepts', []) or [])}，指标 {len(m.get('metrics', []) or [])}，"
+          f"模板 {len(m.get('templates', []) or [])}，"
           f"本体实体 {len(ont_entities(m))}，本体关系 {len(ont_relations(m))}）")
     exit_code = 0
     if rep.errors or (args.strict and rep.warnings):

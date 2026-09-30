@@ -57,6 +57,8 @@ metrics:
   name: 办件总量
   synonyms:
   - 办件量
+  - 办件总数
+  - 一共受理多少件
   type: count
   dataset: service_request
   structured: true
@@ -71,6 +73,8 @@ metrics:
   name: 按期办结率
   synonyms:
   - 按时办结率
+  - 按期办结比例
+  - 办结及时率
   type: ratio
   dataset: service_request
   structured: true
@@ -89,6 +93,8 @@ metrics:
   name: 平均满意度
   synonyms:
   - 满意度均值
+  - 满意度平均分
+  - 群众满意度
   type: avg
   dataset: service_request
   structured: true
@@ -103,6 +109,8 @@ metrics:
   name: 超期办结件数
   synonyms:
   - 超期办件数
+  - 超期办件有多少
+  - 逾期办件量
   type: count
   dataset: service_request
   structured: true

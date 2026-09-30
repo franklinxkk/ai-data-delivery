@@ -35,7 +35,8 @@
 | S3/S5 | capture_case | 请求/SQL/结果取证卡；注意报告可能有敏感数据 |
 | S3/S5 | ingest_feedback | 用户反馈归集 |
 | S3/S5 | suggest_card | 修订建议卡，不自动授权修改 |
-| S3/S5 | patch_model | 原有 syn/struct/set 修改入口；--db/--expect 作用见入口说明 |
+| S3/S5 | patch_model | syn/struct/set/batch/fixuid 五入口；batch 一次写入 ops.yaml，--db/--expect 验算作用见入口说明 |
+| S4 | promote_draft | 盘点指标 → ✅/🔶/⛔/📋 四分提升草稿 + ops.yaml + 提升清单.md；草稿必须人审后 batch 合入 |
 | S3/S5 | promote_gold | 已确认反馈加入评测集 |
 | S4 | release_gate | --profile static/validated/production；默认不再跳过必需证据 |
 | S4 | gen_dictionary | 由模型生成可读口径字典 |

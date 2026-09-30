@@ -94,6 +94,8 @@ metrics:
   name: 总产量
   synonyms:
   - 产量合计
+  - 总产出
+  - 生产了多少件
   type: sum
   dataset: production_run
   structured: true
@@ -109,6 +111,7 @@ metrics:
   synonyms:
   - 次品率
   - 不良品率
+  - 次品占比
   type: ratio
   dataset: production_run
   structured: true
@@ -127,6 +130,8 @@ metrics:
   name: A线产量
   synonyms:
   - A线产出
+  - A线生产量
+  - 一号线产量
   type: sum
   dataset: production_run
   structured: true
@@ -145,6 +150,8 @@ metrics:
   name: 停机设备数
   synonyms:
   - 停机台数
+  - 停机设备有多少台
+  - 停机数量
   type: count
   dataset: equipment
   structured: true

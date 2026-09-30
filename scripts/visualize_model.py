@@ -342,7 +342,7 @@ $('search').addEventListener('input',render);$('filter').addEventListener('chang
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--model", required=True)
+    ap.add_argument("-f", "--model", required=True, help="semantic.yaml 路径（-f 与 check_model 对齐）")
     ap.add_argument("--session")
     ap.add_argument("--report", action="append", default=[])
     ap.add_argument("--history", help="check_model --history 产出的质量趋势 JSONL")

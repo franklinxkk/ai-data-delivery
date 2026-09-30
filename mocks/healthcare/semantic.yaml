@@ -93,6 +93,7 @@ metrics:
   synonyms:
   - 就诊人次
   - 门诊量
+  - 门诊人数
   type: count
   dataset: visits
   structured: true
@@ -107,6 +108,8 @@ metrics:
   name: 复诊率
   synonyms:
   - 门诊复诊率
+  - 复诊比例
+  - 病人复诊率
   type: ratio
   dataset: visits
   structured: true
@@ -125,6 +128,8 @@ metrics:
   name: 门诊总费用
   synonyms:
   - 门诊收入
+  - 门诊费用总额
+  - 门诊营收
   type: sum
   dataset: visits
   structured: true
@@ -139,6 +144,8 @@ metrics:
   name: 专家医师数
   synonyms:
   - 专家数
+  - 专家医生有多少
+  - 专家人数
   type: count
   dataset: doctors
   structured: true

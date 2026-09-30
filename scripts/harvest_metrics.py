@@ -82,17 +82,23 @@ def expand_source(s):
 
 
 def mapping_from_meta(meta_dir):
-    """从宽表 meta 目录派生 源表→宽表 映射（sources 字段，范围写法展开）。"""
+    """从宽表 meta 目录派生 源表→宽表 映射（sources 字段，范围写法展开）。
+    返回 (mapping, 占位sources的表清单)：sources 还是【待填】占位的表不参与映射并点名提醒。"""
     import glob
-    mapping = {}
+    mapping, placeholder_tables = {}, []
     for p in sorted(glob.glob(os.path.join(meta_dir, "*.yaml"))):
         m = contract_load(p)
         if not m or not m.get("table"):
             continue
-        for s in m.get("sources") or []:
+        sources = m.get("sources") or []
+        if any("【" in str(s) for s in sources):
+            placeholder_tables.append(m["table"])
+        for s in sources:
+            if "【" in str(s):
+                continue
             for t in expand_source(s):
                 mapping[t] = m["table"]
-    return mapping
+    return mapping, placeholder_tables
 
 
 def classify(rec, mapping):
@@ -132,7 +138,11 @@ def main():
     raw = load_from_model(args.model) if args.model else load(args.metrics)
     mapping = {}
     if args.from_meta:
-        mapping.update(mapping_from_meta(args.from_meta))
+        meta_map, placeholder_tables = mapping_from_meta(args.from_meta)
+        mapping.update(meta_map)
+        if placeholder_tables:
+            print(f"提醒：以下宽表 meta 的 sources 仍是占位，未参与映射（先补 sources 或显式 --mapping）："
+                  f"{placeholder_tables}", file=sys.stderr)
     if args.mapping:
         mapping.update(contract_load(args.mapping) or {})
 

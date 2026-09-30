@@ -90,6 +90,8 @@ metrics:
   name: 贷款总笔数
   synonyms:
   - 放款笔数
+  - 放款总量
+  - 一共放了多少笔贷款
   type: count
   dataset: loans
   structured: true
@@ -104,6 +106,8 @@ metrics:
   name: 逾期贷款笔数
   synonyms:
   - 逾期笔数
+  - 逾期贷款有多少笔
+  - 逾期贷款数
   type: count
   dataset: loans
   structured: true
@@ -122,6 +126,8 @@ metrics:
   name: 逾期率
   synonyms:
   - 贷款逾期率
+  - 贷款逾期比例
+  - 逾期占比
   type: ratio
   dataset: loans
   structured: true
@@ -141,6 +147,8 @@ metrics:
   name: 放款总额
   synonyms:
   - 贷款总额
+  - 放款总金额
+  - 一共放了多少钱
   type: sum
   dataset: loans
   structured: true
@@ -155,6 +163,8 @@ metrics:
   name: 高风险借款人数
   synonyms:
   - 高风险客户数
+  - 高风险借款人有多少
+  - 高风险人数
   type: count
   dataset: borrowers
   structured: true

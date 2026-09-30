@@ -77,8 +77,10 @@ def main():
         for c in by_table.get(name, []):
             pc = profile.get(name, {}).get(c["name"])
             role = guess_role(c, c.get("pk"), (pc or {}).get("enum_values"))
-            rec = {"name": c["name"], "cn": "【待填中文名】", "role": role,
+            rec = {"name": c["name"], "cn": c.get("comment") or "【待填中文名】", "role": role,
                    "type": (c.get("type") or "").lower()}
+            if c.get("comment"):
+                rec["cn_source"] = "DDL COMMENT 预填，人审确认"
             if pc:
                 if pc.get("enum_values") and role == "dim":
                     rec["enum"] = {v: f"【待确认含义：{v}】" for v in pc["enum_values"]}

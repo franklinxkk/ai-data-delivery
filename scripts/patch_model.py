@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""patch_model.py — semantic.yaml 幂等补丁器（ai-data-delivery v0.0.5）
+"""patch_model.py — semantic.yaml 幂等补丁器（ai-data-delivery v0.0.9）
 
 权威源 Schema（semantic.yaml，唯一事实源）：
   datasets[]:       name / display_name / source(物理表) / grain / primary_key
@@ -11,8 +11,10 @@
                     / expr / numerator{expr,dialect} / denominator{expr,dialect}
                     / extra_where / time_field / unit / grain
                     / caliber{note,basis} / synonyms[] / status
+  ontology:         entities[]{name,uid,...} / relations[]
 
-四个子命令（全部幂等：内容无变化时不写盘）：
+五个子命令（全部幂等：内容无变化时不写盘；写盘为原子写：tmp + os.replace，
+Windows 安全软件偶发拦写时自动重试一次）：
 
   syn    补同义词（自然问法）。三类目标：
            python patch_model.py -f semantic.yaml syn 指标ID 词1 词2 ...
@@ -34,16 +36,52 @@
            python patch_model.py -f semantic.yaml set 指标ID --key extra_where --value "..."
            python patch_model.py -f semantic.yaml set --path engine.timezone --value Asia/Shanghai
 
+  batch  批量补丁（ops.yaml 一次写入，避免逐条整文件重写）：
+           python patch_model.py -f semantic.yaml batch ops.yaml [--db 物理库.db]
+           ops.yaml 格式：
+             ops:
+               - op: syn
+                 metric: 指标ID          # 三选一：metric / dataset / concept
+                 words: [词1, 词2]
+               - op: struct
+                 id: 指标ID
+                 create: true            # 新建时需提供 name/type/dataset
+                 name: 指标名
+                 type: count
+                 dataset: 数据集
+                 expr: "COUNT(*)"
+                 extra_where: "..."
+                 time_field: stat_date
+                 unit: 条
+                 synonyms: [词1, 词2]
+               - op: set
+                 metric: 指标ID          # 或 path: engine.timezone
+                 key: extra_where
+                 value: "..."
+               - op: set_uid
+                 entity: 企业
+                 uid: ent_enterprise
+           逐条应用、单条失败跳过并继续，最后汇总；任一失败退出码 1。
+           --db 作用于所有未自带 db 的 struct op（写入口径前逐条验算）。
+
+  fixuid 给缺 uid 的本体实体补稳定身份（drift/历史可追踪的前提）：
+           python patch_model.py -f semantic.yaml fixuid [--map uid_map.yaml]
+           --map 格式：{实体name: uid}；未命中映射的实体用内置词表（企业→enterprise 等），
+           再未命中回退 ent_<sha1前6位>。全部逐条打印，请人工审阅后再提交。
+
 提供 --db 时编译完整单表口径并检查可执行性；提供 --expect 时再对拍期望。
 错误/NULL 拒绝写入（--force 会绕过，不能作为验证证据）；零值本身不是错误。
 未提供 --db 时只生成草案并提醒未验证。
 
-注意：PyYAML 重写会丢失原文件注释，重要注释请迁移到 caliber.note / description 字段。
+注意：PyYAML 重写会丢失原文件注释，重要注释请迁移到 caliber.note / description 字段；
+batch 模式把多次重写收敛为一次，是把注释损失降到最小的推荐用法。
 """
 import argparse
 import copy
+import os
 import re
 import sys
+import time
 
 import yaml
 
@@ -63,9 +101,30 @@ def dump_if_changed(path, before, after):
     import shutil
     backup = path + ".bak"
     shutil.copyfile(path, backup)
-    with open(path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(after, f, allow_unicode=True, sort_keys=False,
-                       default_flow_style=False, width=120)
+    payload = yaml.safe_dump(after, allow_unicode=True, sort_keys=False,
+                             default_flow_style=False, width=120)
+    # 原子写：先写临时文件再 os.replace，避免半写文件；Windows 安全软件偶发
+    # 拦写（OSError 22）时等待后重试一次。
+    tmp = path + ".tmp"
+    last = None
+    for attempt in (0, 1):
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(payload)
+            os.replace(tmp, path)
+            last = None
+            break
+        except OSError as e:
+            last = e
+            if attempt == 0:
+                time.sleep(0.6)
+    if last is not None:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
+        raise last
     print(f"patched ✓（原文已备份 → {backup}）")
     return True
 
@@ -130,109 +189,108 @@ def verify_with_db(db_path, model, mt, expect=None, tol=1e-6):
     return True, f"可执行性检查通过：值 {v}；未提供 --expect，业务口径正确性未验证\n  SQL: {sql}"
 
 
-# ---------- 子命令 ----------
+# ---------- 核心操作（原地改 data，返回退出码；供 CLI 与 batch 复用） ----------
 
-def cmd_syn(args):
-    data = load(args.file)
-    before = copy.deepcopy(data)
-    words = list(args.words or []) + list(args.synonym or [])
+def apply_syn(data, target, words, dataset=False, concept=False):
     if not words:
         return err("syn 需要一个以上同义词（位置参数或 --synonym）")
-
-    if args.dataset:
-        ds = find_one(data.get("datasets"), "name", args.target)
+    if dataset:
+        ds = find_one(data.get("datasets"), "name", target)
         if ds is None:
-            return err(f"数据集 {args.target!r} 不存在于 datasets")
+            return err(f"数据集 {target!r} 不存在于 datasets")
         syns = ds.setdefault("ai", {}).setdefault("synonyms", [])
         merged, added = merge_synonyms(syns, words)
         ds["ai"]["synonyms"] = merged
-        print(f"数据集 {args.target!r} 新增同义词 {added}" if added else "同义词已存在")
-    elif args.concept:
-        c = find_one(data.get("concepts"), "term", args.target)
+        print(f"数据集 {target!r} 新增同义词 {added}" if added else "同义词已存在")
+    elif concept:
+        c = find_one(data.get("concepts"), "term", target)
         if c is None:
-            return err(f"概念 {args.target!r} 不存在于 concepts")
+            return err(f"概念 {target!r} 不存在于 concepts")
         merged, added = merge_synonyms(c.setdefault("aliases", []), words)
         c["aliases"] = merged
-        print(f"概念 {args.target!r} 新增别名 {added}" if added else "别名已存在")
+        print(f"概念 {target!r} 新增别名 {added}" if added else "别名已存在")
     else:
-        m = find_one(data.get("metrics"), "id", args.target)
+        m = find_one(data.get("metrics"), "id", target)
         if m is None:
-            return err(f"指标 {args.target!r} 不存在于 metrics（按 id 寻址；数据集用 --dataset，概念用 --concept）")
+            return err(f"指标 {target!r} 不存在于 metrics（按 id 寻址；数据集用 --dataset，概念用 --concept）")
         merged, added = merge_synonyms(m.setdefault("synonyms", []), words)
         m["synonyms"] = merged
-        print(f"指标 {args.target!r} 新增同义词 {added}" if added else "同义词已存在")
-
-    dump_if_changed(args.file, before, data)
+        print(f"指标 {target!r} 新增同义词 {added}" if added else "同义词已存在")
     return 0
 
 
-def cmd_struct(args):
-    data = load(args.file)
-    before = copy.deepcopy(data)
+def apply_struct(data, target, *, expr=None, numerator=None, denominator=None,
+                 extra_where=None, time_field=None, unit=None, grain=None,
+                 caliber_note=None, caliber_basis=None, synonyms=None,
+                 create=False, name=None, type_=None, dataset=None,
+                 db=None, expect=None, tol=1e-6, force=False):
+    """结构化指标。返回 (exit_code, ok)；调用方负责 dump。"""
     metrics = data.setdefault("metrics", [])
-    m = find_one(metrics, "id", args.target)
+    m = find_one(metrics, "id", target)
 
     if m is None:
-        if not args.create:
-            return err(f"指标 {args.target!r} 不存在；确认 id 后重试，或显式加 --create 新建")
-        missing = [k for k in ("name", "type", "dataset") if not getattr(args, k)]
+        if not create:
+            return err(f"指标 {target!r} 不存在；确认 id 后重试，或显式加 --create 新建"), False
+        missing = [k for k, v in (("name", name), ("type", type_), ("dataset", dataset)) if not v]
         if missing:
-            return err(f"--create 需提供 --name/--type/--dataset，缺：{missing}")
-        if find_one(data.get("datasets"), "name", args.dataset) is None:
-            return err(f"数据集 {args.dataset!r} 不存在，先建数据集再挂指标")
-        m = {"id": args.target, "name": args.name, "type": args.type,
-             "dataset": args.dataset, "status": "草案", "synonyms": []}
+            return err(f"--create 需提供 --name/--type/--dataset，缺：{missing}"), False
+        if find_one(data.get("datasets"), "name", dataset) is None:
+            return err(f"数据集 {dataset!r} 不存在，先建数据集再挂指标"), False
+        m = {"id": target, "name": name, "type": type_,
+             "dataset": dataset, "status": "草案", "synonyms": []}
         metrics.append(m)
-        print(f"新建指标 {args.target!r}（status=草案，验收后改 已发布）")
+        print(f"新建指标 {target!r}（status=草案，验收后改 已发布）")
+
+    before_m = copy.deepcopy(m)
 
     # 幂等写入（先改内存副本，验算不过不落盘）
     m["structured"] = True
-    if args.expr:
-        m["expr"] = args.expr
+    if expr:
+        m["expr"] = expr
         m.pop("numerator", None)
         m.pop("denominator", None)
-    if args.numerator or args.denominator:
-        if not (args.numerator and args.denominator):
-            return err("ratio 口径必须同时给 --numerator 与 --denominator（禁行级平均）")
-        m["numerator"] = {"expr": args.numerator, "dialect": "ANSI_SQL"}
-        m["denominator"] = {"expr": args.denominator, "dialect": "ANSI_SQL"}
+    if numerator or denominator:
+        if not (numerator and denominator):
+            return err("ratio 口径必须同时给 --numerator 与 --denominator（禁行级平均）"), False
+        m["numerator"] = {"expr": numerator, "dialect": "ANSI_SQL"}
+        m["denominator"] = {"expr": denominator, "dialect": "ANSI_SQL"}
         m.pop("expr", None)
-    if args.extra_where is not None:
-        m["extra_where"] = args.extra_where
-    if args.time_field:
-        m["time_field"] = args.time_field
-    if args.unit:
-        m["unit"] = args.unit
-    if args.grain:
-        m["grain"] = args.grain
-    if args.caliber_note or args.caliber_basis:
+    if extra_where is not None:
+        m["extra_where"] = extra_where
+    if time_field:
+        m["time_field"] = time_field
+    if unit:
+        m["unit"] = unit
+    if grain:
+        m["grain"] = grain
+    if caliber_note or caliber_basis:
         cal = m.setdefault("caliber", {})
-        if args.caliber_note:
-            cal["note"] = args.caliber_note
-        if args.caliber_basis:
-            cal["basis"] = args.caliber_basis
-    if args.synonym:
-        merged, added = merge_synonyms(m.get("synonyms"), args.synonym)
+        if caliber_note:
+            cal["note"] = caliber_note
+        if caliber_basis:
+            cal["basis"] = caliber_basis
+    if synonyms:
+        merged, added = merge_synonyms(m.get("synonyms"), synonyms)
         m["synonyms"] = merged
         if added:
             print(f"同步补充同义词 {added}")
 
     if not (m.get("expr") or m.get("numerator")):
-        return err("结构化指标必须提供 --expr 或 --numerator/--denominator")
+        return err("结构化指标必须提供 --expr 或 --numerator/--denominator"), False
     if m.get("type") == "ratio":
         expr_text = " ".join([m.get("expr", ""),
                               (m.get("numerator") or {}).get("expr", ""),
                               (m.get("denominator") or {}).get("expr", "")])
         if re.search(r"\bAVG\s*\(", expr_text, re.I):
-            return err("ratio 指标禁止行级平均（DEC-METRIC-01）：请用 SUM/SUM 分子分母")
+            return err("ratio 指标禁止行级平均（DEC-METRIC-01）：请用 SUM/SUM 分子分母"), False
 
     # 验算（铁律：写口径前必须验算；验算对象是 patched 后的完整口径——filters + extra_where 全量）
-    if args.db:
-        ok, detail = verify_with_db(args.db, data, m, expect=args.expect, tol=args.tol)
+    if db:
+        ok, detail = verify_with_db(db, data, m, expect=expect, tol=tol)
         print(detail)
-        if not ok and not args.force:
+        if not ok and not force:
             print("验算未通过，拒绝写入（确认无误后加 --force 强制写入）", file=sys.stderr)
-            return 2
+            return 2, False
         if not ok:
             print("warning：--force 生效，验算未通过仍写入（必须在交付说明中声明）", file=sys.stderr)
     else:
@@ -240,24 +298,21 @@ def cmd_struct(args):
     print("边界声明：验算只保证口径可执行且非 NULL（或与 --expect 对拍一致）；"
           "口径语义正确性仍须金标准用例 run_eval 定向回归把关。")
 
-    if m != find_one(before.get("metrics"), "id", args.target):
+    if m != before_m:
         m["status"] = "草案"
-    dump_if_changed(args.file, before, data)
     n = sum(1 for t in metrics if t.get("structured"))
     print(f"structured: {n}/{len(metrics)}")
-    return 0
+    return 0, True
 
 
-def cmd_set(args):
-    data = load(args.file)
-    before = copy.deepcopy(data)
+def apply_set(data, target=None, key=None, path=None, value=None):
     try:
-        value = yaml.safe_load(args.value)
+        parsed = yaml.safe_load(value) if isinstance(value, str) else value
     except yaml.YAMLError:
-        value = args.value
+        parsed = value
 
-    if args.path:
-        keys = args.path.split(".")
+    if path:
+        keys = path.split(".")
         node = data
         for k in keys[:-1]:
             nxt = node.get(k)
@@ -265,23 +320,196 @@ def cmd_set(args):
                 nxt = {}
                 node[k] = nxt
             node = nxt
-        node[keys[-1]] = value
-        print(f"set {args.path} = {value!r}")
+        node[keys[-1]] = parsed
+        print(f"set {path} = {parsed!r}")
     else:
-        if not args.key:
+        if not key:
             return err("set 指标键值需要 --key 与 --value；全局点路径用 --path")
-        m = find_one(data.get("metrics"), "id", args.target)
+        m = find_one(data.get("metrics"), "id", target)
         if m is None:
-            return err(f"指标 {args.target!r} 不存在")
-        m[args.key] = value
-        print(f"set {args.target}.{args.key} = {value!r}")
+            return err(f"指标 {target!r} 不存在")
+        m[key] = parsed
+        print(f"set {target}.{key} = {parsed!r}")
+    return 0
 
+
+# 内置实体 name → uid 词表（fixuid 用；命不中再回退哈希）
+UID_VOCAB = {
+    "企业": "enterprise", "公司": "company", "车辆": "vehicle", "人员": "person",
+    "驾驶人": "driver", "驾驶员": "driver", "组织": "organization", "机构": "organization",
+    "道路": "road", "路段": "road_section", "设备": "device", "设施": "facility",
+    "事件": "event", "事故": "accident", "隐患": "hazard", "客户": "customer",
+    "产品": "product", "订单": "order", "工单": "work_order", "员工": "employee",
+    "部门": "department", "项目": "project", "合同": "contract", "供应商": "supplier",
+    "学生": "student", "课程": "course", "学校": "school", "患者": "patient",
+    "医生": "doctor", "科室": "department", "门店": "store", "商品": "goods",
+    "用户": "user", "账户": "account", "案件": "case", "警情": "incident",
+}
+
+
+def apply_fixuid(data, uid_map=None, quiet=False):
+    """给缺 uid 的本体实体补稳定身份。返回 (exit_code, [(name, uid, 来源)])。
+    只读不写盘；调用方负责 dump。"""
+    import hashlib
+    from _contract import ont_entities
+    uid_map = uid_map or {}
+    taken = {e.get("uid") for e in ont_entities(data) if e.get("uid")}
+    assigned = []
+    for e in ont_entities(data):
+        if e.get("uid") or not e.get("name"):
+            continue
+        name = e["name"]
+        src = "map"
+        uid = uid_map.get(name)
+        if not uid:
+            eng = UID_VOCAB.get(name)
+            uid = f"ent_{eng}" if eng else None
+            src = "内置词表" if eng else "哈希回退"
+        if not uid:
+            uid = f"ent_{hashlib.sha1(name.encode('utf-8')).hexdigest()[:6]}"
+        if uid in taken:  # 撞车则加哈希后缀保唯一
+            uid = f"{uid}_{hashlib.sha1(name.encode('utf-8')).hexdigest()[:4]}"
+            src += "+去重"
+        taken.add(uid)
+        e["uid"] = uid
+        assigned.append((name, uid, src))
+        if not quiet:
+            print(f"实体 {name!r} → uid {uid!r}（{src}）")
+    if not assigned and not quiet:
+        print("所有实体均已有 uid，无需处理")
+    return 0, assigned
+
+
+# ---------- 子命令 ----------
+
+def cmd_syn(args):
+    data = load(args.file)
+    before = copy.deepcopy(data)
+    words = list(args.words or []) + list(args.synonym or [])
+    rc = apply_syn(data, args.target, words, dataset=args.dataset, concept=args.concept)
+    if rc:
+        return rc
+    dump_if_changed(args.file, before, data)
+    return 0
+
+
+def cmd_struct(args):
+    data = load(args.file)
+    before = copy.deepcopy(data)
+    rc, _ok = apply_struct(
+        data, args.target, expr=args.expr, numerator=args.numerator,
+        denominator=args.denominator, extra_where=args.extra_where,
+        time_field=args.time_field, unit=args.unit, grain=args.grain,
+        caliber_note=args.caliber_note, caliber_basis=args.caliber_basis,
+        synonyms=list(args.synonym or []), create=args.create, name=args.name,
+        type_=args.type, dataset=args.dataset, db=args.db, expect=args.expect,
+        tol=args.tol, force=args.force)
+    if rc:
+        return rc
+    dump_if_changed(args.file, before, data)
+    return 0
+
+
+def cmd_set(args):
+    data = load(args.file)
+    before = copy.deepcopy(data)
+    rc = apply_set(data, target=args.target, key=args.key, path=args.path, value=args.value)
+    if rc:
+        return rc
+    dump_if_changed(args.file, before, data)
+    return 0
+
+
+def cmd_batch(args):
+    ops_doc = load(args.ops)
+    ops = ops_doc.get("ops")
+    if not isinstance(ops, list) or not ops:
+        return err(f"{args.ops} 缺 ops 列表")
+    data = load(args.file)
+    before = copy.deepcopy(data)
+    ok_n, fail = 0, []
+    for i, op in enumerate(ops, 1):
+        if not isinstance(op, dict) or "op" not in op:
+            fail.append((i, "缺 op 字段"))
+            print(f"[{i}/{len(ops)}] ✗ 缺 op 字段", file=sys.stderr)
+            continue
+        kind = op["op"]
+        snap = copy.deepcopy(data)
+        print(f"[{i}/{len(ops)}] op={kind}", end=" ")
+        if kind == "syn":
+            target = op.get("metric") or op.get("dataset") or op.get("concept")
+            words = list(op.get("words") or []) + list(op.get("synonyms") or [])
+            rc = apply_syn(data, target, words,
+                           dataset=bool(op.get("dataset")), concept=bool(op.get("concept")))
+            if rc:
+                data = snap
+                fail.append((i, f"syn {target!r} 失败"))
+                continue
+        elif kind == "struct":
+            rc, applied = apply_struct(
+                data, op.get("id"), expr=op.get("expr"), numerator=op.get("numerator"),
+                denominator=op.get("denominator"), extra_where=op.get("extra_where"),
+                time_field=op.get("time_field"), unit=op.get("unit"), grain=op.get("grain"),
+                caliber_note=op.get("caliber_note"), caliber_basis=op.get("caliber_basis"),
+                synonyms=list(op.get("synonyms") or []), create=bool(op.get("create")),
+                name=op.get("name"), type_=op.get("type"), dataset=op.get("dataset"),
+                db=op.get("db") or args.db, expect=op.get("expect"),
+                tol=float(op.get("tol", 1e-6)), force=bool(op.get("force")))
+            if not applied:
+                data = snap
+                fail.append((i, f"struct {op.get('id')!r} 失败/被拒"))
+                continue
+        elif kind == "set":
+            rc = apply_set(data, target=op.get("metric"), key=op.get("key"),
+                           path=op.get("path"), value=op.get("value"))
+            if rc:
+                data = snap
+                fail.append((i, "set 失败"))
+                continue
+        elif kind == "set_uid":
+            ent_name, uid = op.get("entity"), op.get("uid")
+            if not ent_name or not uid:
+                data = snap
+                fail.append((i, "set_uid 缺 entity/uid"))
+                print("✗ set_uid 缺 entity/uid", file=sys.stderr)
+                continue
+            from _contract import ont_entities
+            ent = find_one(ont_entities(data), "name", ent_name)
+            if ent is None:
+                data = snap
+                fail.append((i, f"set_uid 实体 {ent_name!r} 不存在"))
+                print(f"✗ 实体 {ent_name!r} 不存在", file=sys.stderr)
+                continue
+            ent["uid"] = uid
+            print(f"实体 {ent_name!r} → uid {uid!r}")
+        else:
+            fail.append((i, f"未知 op {kind!r}"))
+            print(f"✗ 未知 op {kind!r}", file=sys.stderr)
+            continue
+        ok_n += 1
+    print(f"\nbatch 汇总：{ok_n}/{len(ops)} 条应用成功" +
+          (f"；失败 {len(fail)} 条：{[f'#{i} {m}' for i, m in fail]}" if fail else ""))
+    dump_if_changed(args.file, before, data)
+    return 1 if fail else 0
+
+
+def cmd_fixuid(args):
+    uid_map = {}
+    if args.map:
+        uid_map = load(args.map)
+        if not isinstance(uid_map, dict):
+            return err(f"{args.map} 应为 {{实体name: uid}} 映射")
+    data = load(args.file)
+    before = copy.deepcopy(data)
+    _rc, assigned = apply_fixuid(data, uid_map=uid_map)
+    if assigned:
+        print("请人工审阅以上 uid 分配（uid 是稳定身份，一旦发布不要改）", file=sys.stderr)
     dump_if_changed(args.file, before, data)
     return 0
 
 
 def main():
-    ap = argparse.ArgumentParser(description="semantic.yaml 幂等补丁器（v0.0.5）")
+    ap = argparse.ArgumentParser(description="semantic.yaml 幂等补丁器（v0.0.9）")
     ap.add_argument("-f", "--file", required=True, help="semantic.yaml 路径")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -322,6 +550,15 @@ def main():
     p.add_argument("--path", default=None, help="全局点路径，如 engine.timezone")
     p.add_argument("--value", required=True)
     p.set_defaults(fn=cmd_set)
+
+    p = sub.add_parser("batch", help="批量补丁（ops.yaml 一次写入）")
+    p.add_argument("ops", help="ops.yaml 路径（ops: [...]）")
+    p.add_argument("--db", default=None, help="作用于所有未自带 db 的 struct op")
+    p.set_defaults(fn=cmd_batch)
+
+    p = sub.add_parser("fixuid", help="给缺 uid 的本体实体补稳定身份")
+    p.add_argument("--map", dest="map", default=None, help="uid_map.yaml：{实体name: uid}")
+    p.set_defaults(fn=cmd_fixuid)
 
     args = ap.parse_args()
     return args.fn(args)

@@ -11,7 +11,7 @@ capabilities:
   environment: 子进程使用白名单环境（不透传凭据变量）/ minimal whitelist env for subprocesses, no credential passthrough
   sql: 仅执行模型编译的只读单表聚合查询 / read-only single-table aggregates compiled from the model
 metadata:
-  version: 0.0.8
+  version: 0.0.9
 ---
 
 # AI Data Delivery

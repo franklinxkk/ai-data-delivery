@@ -88,6 +88,7 @@ metrics:
   synonyms:
   - 订单量
   - 成交订单数
+  - 订单总数
   type: count
   dataset: orders
   structured: true
@@ -107,6 +108,8 @@ metrics:
   synonyms:
   - GMV
   - 销售额
+  - 总成交额
+  - 卖了多少钱
   type: sum
   dataset: orders
   structured: true
@@ -125,6 +128,8 @@ metrics:
   name: 退款率
   synonyms:
   - 订单退款率
+  - 退款比例
+  - 退货率
   type: ratio
   dataset: orders
   structured: true
@@ -143,6 +148,8 @@ metrics:
   name: 金卡客户数
   synonyms:
   - 高价值客户数
+  - 金卡会员数
+  - 金卡客户有多少
   type: count
   dataset: customers
   structured: true
@@ -185,3 +192,20 @@ ontology:
     to: 订单
     predicate: 下单
     mapping: equi_key
+templates:
+- id: refund_orders
+  name: 退款订单明细
+  dataset: orders
+  columns:
+  - order_id
+  - customer_id
+  - amount
+  - order_date
+  extra_where: status = '已退款'
+  time_field: order_date
+  synonyms:
+  - 退款单列表
+  - 哪些订单退款了
+  - 退款明细
+  note: 按 order_date 倒序，默认最多 100 行
+  status: 已发布
