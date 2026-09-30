@@ -11,7 +11,7 @@
 判定依据：响应中的 sql 字段（无 sql 字段则退化比对 value/rows 指纹）。
 退出码：0 = 全部稳定；1 = 发现漂移；2 = 用法错误。
 
-安全声明：网络访问仅限 --endpoint 指定地址（预期本地/内网验证端点）；无任何其他出站请求。
+安全声明：网络访问仅限 --endpoint 指定地址，默认仅本机/内网（端点守卫，远程需 --allow-remote）；无任何其他出站请求。
 """
 import argparse
 import hashlib
@@ -20,6 +20,8 @@ import sys
 import urllib.request
 
 import yaml
+
+from _contract import guard_endpoint
 
 
 def ask(endpoint, q, timeout=30):
@@ -59,7 +61,14 @@ def main():
     ap.add_argument("--cases", default=None)
     ap.add_argument("--times", type=int, default=10)
     ap.add_argument("--limit", type=int, default=20, help="--cases 模式下抽查前 N 条")
+    ap.add_argument("--allow-remote", action="store_true",
+                    help="允许非本机/内网端点（默认拒绝，防误发业务内容到公网）")
     args = ap.parse_args()
+    try:
+        guard_endpoint(args.endpoint, args.allow_remote)
+    except ValueError as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
 
     questions = []
     if args.question:

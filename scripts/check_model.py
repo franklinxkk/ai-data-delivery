@@ -43,6 +43,10 @@
   W09 同一 domain 内两个概念认领同一 synonym（路由会歧义）
   W10 概念 valid_to 已过期（需复审：续期、下线或改口径）
   W11 比率指标有分母但未显式声明 on_zero_denominator（缺省 null 会把除零静默变 NULL）
+  W13 不可遍历关系未写明原因（note）
+  W14 无 datasets 的纯本体草案（仅做本体结构检查；投影对账与合同检查不适用）
+  W15 unit 为 % 的 ratio 未声明 display_scale（编译值是 0–1 分数，×100 展示责任必须显式落地）
+  W16 指标 filters / 概念 expand 的取值不在字段 enum 字典中（会静默错过滤）
   W12 本体实体缺 uid（缺省以 name 为身份，重命名后 drift/历史不可追踪；建议 ent_xxx 稳定 ID）
 
 本体段是声明式事实清单：本工具只做静态结构检查与两层对账，不做任何跨声明推导
@@ -53,9 +57,12 @@ import re
 import sys
 
 import yaml
+from _contract import load
 
 ROLES = {"pk", "fk", "dim", "measure", "time", "attr"}
-SENSITIVE_PAT = re.compile(r"身份证|手机号|电话|资格证号|证件号|license_no|id_card|phone|mobile", re.I)
+SENSITIVE_PAT = re.compile(
+    r"身份证|手机号|电话|资格证号|证件号|护照|银行卡|社保卡|医保|邮箱|"
+    r"license_no|id_card|phone|mobile|ssn|passport|bank_card|card_no|email", re.I)
 ENUM_HINT = re.compile(r"状态|类型|等级|类别|方式|来源|是否|标志|类目|岗位|"
                        r"status|type|level|category|class|post|source|is_", re.I)
 
@@ -135,7 +142,7 @@ def check_relationships(m, rep, ds_names):
         elif not isinstance(trav, bool):
             rep.error("E09", where, "traversable 必须为布尔值")
         if trav is False and not r.get("note"):
-            rep.warn("E09", where, "不可遍历关系应写明原因（note），防静默弱 join")
+            rep.warn("W13", where, "不可遍历关系应写明原因（note），防静默弱 join")
 
 
 def check_concepts(m, rep, ds_index):
@@ -181,6 +188,26 @@ def check_concepts(m, rep, ds_index):
                 rep.error("E10", where, f"expand.dataset {dsn!r} 不存在")
             elif fld not in field_names(ds):
                 rep.error("E10", where, f"expand.field {fld!r} 不在 {dsn} 的字段中")
+            else:
+                _check_values_in_enum(rep, where + ".expand", ds, fld, b.get("values"))
+
+
+def _enum_of(ds, fld):
+    for f in ds.get("fields", []) or []:
+        if f.get("name") == fld and f.get("enum"):
+            return {str(v) for v in f["enum"]}
+    return None
+
+
+def _check_values_in_enum(rep, where, ds, fld, values):
+    """W16：过滤/展开取值必须在字段 enum 字典内（不在则引擎静默错过滤）。"""
+    enum = _enum_of(ds, fld)
+    if enum is None or not isinstance(values, list):
+        return
+    missing = [v for v in values if str(v) not in enum]
+    if missing:
+        rep.warn("W16", where,
+                 f"取值 {missing} 不在 {ds.get('name')}.{fld} 的 enum {sorted(enum)} 中（会静默错过滤）")
 
 
 def check_ontology(m, rep):
@@ -324,6 +351,14 @@ def check_metrics(m, rep, ds_index):
                 rep.warn("W04", where, "structured 指标缺 time_field")
             if mt.get("status") == "草案":
                 rep.warn("W05", where, "structured 指标仍为 草案 状态，验收后改 已发布")
+            for flt in mt.get("filters", []) or []:
+                if ds is not None and isinstance(flt, dict) and flt.get("field") in field_names(ds):
+                    _check_values_in_enum(rep, f"{where}.filters[{flt['field']}]",
+                                          ds, flt["field"], flt.get("values"))
+            if mt.get("type") == "ratio" and str(mt.get("unit", "")).strip() in {"%", "％", "百分比"} \
+                    and mt.get("display_scale") is None:
+                rep.warn("W15", where,
+                         "unit 为 % 的 ratio 编译值是 0–1 分数；未声明 display_scale（如 100），×100 展示责任未落地")
 
 
 def model_index(m):
@@ -429,11 +464,21 @@ def main():
     ap.add_argument("--history", help="追加一条质量记录到 JSONL（release 趋势用）")
     args = ap.parse_args()
 
-    m = yaml.safe_load(open(args.file, encoding="utf-8")) or {}
+    m = load(args.file) or {}
     rep = Reporter()
-    if not isinstance(m, dict) or not m.get("datasets"):
-        print("[ERROR E00] 模型必须包含非空 datasets")
+    from _contract import top_shape_error
+    shape_err = top_shape_error(m)
+    if shape_err:
+        print(f"[ERROR E00] {shape_err}")
         return 1
+    if not m.get("datasets"):
+        if (m.get("ontology") or {}).get("entities"):
+            rep.warn("W14", "model", "无 datasets 的纯本体草案：仅做本体结构检查，"
+                     "投影对账与合同检查不适用（先业务后物理的合法中间态）")
+        else:
+            print("[ERROR E00] 模型必须包含非空 datasets"
+                  "（或先以 ontology.entities 声明业务对象，进入纯本体草案态）")
+            return 1
     ds_index = {d.get("name"): d for d in m.get("datasets", []) or []}
 
     check_datasets(m, rep)
@@ -456,7 +501,7 @@ def main():
     else:
         print("门禁：通过")
     if args.drift:
-        baseline = yaml.safe_load(open(args.drift, encoding="utf-8")) or {}
+        baseline = load(args.drift) or {}
         drift = drift_report(m, baseline)
         print(f"\ndrift：+{len(drift['added'])} 新增 / -{len(drift['removed'])} 删除 / "
               f"~{len(drift['changed'])} 变更 / !{len(drift['breaking'])} 破坏")

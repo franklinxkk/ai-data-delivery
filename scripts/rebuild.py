@@ -73,17 +73,29 @@ def stop_service(port=None, pid_file=None):
         except (ValueError, ProcessLookupError, PermissionError) as e:
             log(f"pid 文件停止失败：{e}")
     if port:
-        # 优先 fuser，退化 lsof；两者都不可用则跳过端口停服
-        for cmd in (["fuser", "-k", f"{port}/tcp"],
-                    ["sh", "-c", f"kill $(lsof -ti:{port}) 2>/dev/null"]):
-            try:
-                r = subprocess.run(cmd, capture_output=True, text=True)
-            except FileNotFoundError:
-                continue
+        # 优先 fuser；退化 lsof 取 pid 后逐个 SIGTERM。全程 shell=False。
+        try:
+            r = subprocess.run(["fuser", "-k", f"{port}/tcp"],
+                               capture_output=True, text=True)
             if r.returncode == 0:
-                log(f"已释放端口 {port}")
+                log(f"已释放端口 {port}（fuser）")
                 killed = True
-                break
+        except FileNotFoundError:
+            pass
+        if not killed:
+            try:
+                r = subprocess.run(["lsof", "-ti", f":{port}"],
+                                   capture_output=True, text=True)
+                for line in r.stdout.splitlines():
+                    try:
+                        os.kill(int(line.strip()), signal.SIGTERM)
+                        killed = True
+                    except (ValueError, ProcessLookupError, PermissionError):
+                        continue
+                if killed:
+                    log(f"已释放端口 {port}（lsof）")
+            except FileNotFoundError:
+                log("fuser/lsof 均不可用，跳过端口停服")
     if killed:
         time.sleep(2)  # 等端口释放
     return killed

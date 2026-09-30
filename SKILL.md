@@ -1,8 +1,17 @@
 ---
 name: ai-data-delivery
-description: 为 FDE、产品经理和甲方信息中心交付数据与 AI 应用的语义资产。用于部分 DDL/数据结构与业务语义的理解补齐、semantic.yaml 本体声明层（业务对象/属性/谓词）与合同投影（数据集/指标/关系）建模、数据约束和关联风险检查、智能问数 bad case 诊断、评测与分阶段交付。已有模型可直接进入验证、可视化或巡检。不用于通用模型微调、OWL 推理或与数据无关的应用开发。
+description: "为 FDE、产品经理和甲方信息中心交付数据与 AI 应用的语义资产。用于部分 DDL/数据结构与业务语义的理解补齐、semantic.yaml 本体声明层（业务对象/属性/谓词）与合同投影（数据集/指标/关系）建模、数据约束和关联风险检查、智能问数 bad case 诊断、评测与分阶段交付。已有模型可直接进入验证、可视化或巡检。不用于通用模型微调、OWL 推理或与数据无关的应用开发。English: Delivers semantic assets (ontology declaration + contract projection) for data & AI applications — gap-filling partial DDL/business semantics, model lint, constraint checks, NL2SQL bad-case diagnosis, evaluation and staged delivery. Not for general model fine-tuning, OWL reasoning, or data-unrelated app development."
+license: MIT
+language: 中文优先（用户可用任何语言交互；文档为中文，agent 应按用户语言回复）/ Chinese-first docs; users may interact in any language and agents must reply in the user's language.
+capabilities:
+  file_read: 仅限用户显式指定的路径（模型/DDL/报告/用例文件）/ only user-specified paths
+  file_write: 仅限用户显式指定的输出路径（草案、报告、HTML 视图）/ only user-specified output paths
+  network: 仅限 --endpoint/--health-url 指定地址，默认仅本机/内网，远程需 --allow-remote / user-specified endpoints only; localhost/intranet by default, remote requires explicit flag
+  subprocess: 仅以参数数组方式执行用户显式提供的构建/启动命令（rebuild.py）与同仓库 Python 脚本，无 shell 调用 / argv-only, no shell; user-provided build/start commands or in-repo Python scripts
+  environment: 子进程使用白名单环境（不透传凭据变量）/ minimal whitelist env for subprocesses, no credential passthrough
+  sql: 仅执行模型编译的只读单表聚合查询 / read-only single-table aggregates compiled from the model
 metadata:
-  version: 0.0.7
+  version: 0.0.8
 ---
 
 # AI Data Delivery

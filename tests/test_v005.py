@@ -355,10 +355,30 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(load(self.model_path)["metrics"][0]["status"], "草案")
 
     def test_ddl_inline_composite_key_and_decimal(self):
-        tables = parse_sql('CREATE TABLE "t" (a INTEGER, b TEXT DEFAULT \'x,y\', price DECIMAL(10,2), PRIMARY KEY (a,b));', "ddl")
+        tables, failures = parse_sql('CREATE TABLE "t" (a INTEGER, b TEXT DEFAULT \'x,y\', price DECIMAL(10,2), PRIMARY KEY (a,b));', "ddl")
         self.assertEqual([c["name"] for c in tables[0]["columns"]], ["a", "b", "price"])
         self.assertEqual(tables[0]["pk_guess"], ["a", "b"])
         self.assertTrue(tables[0]["columns"][1]["pk"])
+        self.assertEqual(failures, [])
+
+    def test_ddl_type_args_comment_not_table_end(self):
+        """mysqldump 风格：VARCHAR(20) COMMENT 'x' 的 ') COMMENT' 不是表结束。"""
+        ddl = ("CREATE TABLE t1 (id INT PRIMARY KEY, phone VARCHAR(20) COMMENT '手机号', "
+               "amt DECIMAL(18,2) COMMENT '金额');\n"
+               "CREATE TABLE t2 (id INT PRIMARY KEY, name TEXT);")
+        tables, failures = parse_sql(ddl, "ddl")
+        self.assertEqual([t["name"] for t in tables], ["t1", "t2"])
+        self.assertEqual([c["name"] for c in tables[0]["columns"]], ["id", "phone", "amt"])
+        self.assertEqual(tables[0]["columns"][1]["comment"], "手机号")
+        self.assertEqual(failures, [])
+
+    def test_ddl_unbalanced_table_recorded_not_fatal(self):
+        """单表括号不平衡记台账并跳过，不拖垮整个文件。"""
+        ddl = ("CREATE TABLE broken (id INT, x VARCHAR(20;\n"
+               "CREATE TABLE ok (id INT PRIMARY KEY);")
+        tables, failures = parse_sql(ddl, "ddl")
+        self.assertTrue(any(t["name"] == "ok" for t in tables))
+        self.assertTrue(any(f["table"] == "broken" for f in failures))
 
     def test_visualizer_escapes_script_content(self):
         self.model["name"] = '</script><script>alert("x")</script>'

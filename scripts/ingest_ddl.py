@@ -62,18 +62,76 @@ def split_columns(body):
     return parts
 
 
+CREATE_RE = re.compile(
+    r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"]?(\w+)[`\"]?\s*\(", re.I)
+
+
+def extract_table_bodies(text):
+    """按平衡括号扫描提取每张 CREATE TABLE 的列定义体。
+
+    非贪婪正则会把 VARCHAR(20) COMMENT 'x' 的 `) COMMENT` 误判为表结束；
+    这里从开括号起做深度计数（尊重引号），找到真正的配对闭括号。
+    括号不平衡的尾巴返回 None，由调用方记台账。
+    """
+    pos = 0
+    while True:
+        m = CREATE_RE.search(text, pos)
+        if not m:
+            return
+        name = m.group(1)
+        index = m.end()
+        start = index
+        depth, quoted = 1, None
+        truncated = False
+        while index < len(text):
+            char = text[index]
+            if quoted:
+                if char == quoted:
+                    if index + 1 < len(text) and text[index + 1] == quoted:
+                        index += 1
+                    else:
+                        quoted = None
+            elif char in "'\"`":
+                quoted = char
+            elif char == ";" and re.match(r"\s*(?:CREATE\b|$)", text[index + 1:], re.I | re.S):
+                # 括号未闭合却到了语句结束符且后随新表/文件尾：DDL 截断，记台账并在此重新同步
+                truncated = depth > 0
+                break
+            elif char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    yield name, text[start:index]
+                    break
+            index += 1
+        else:
+            yield name, None
+            return
+        if truncated:
+            yield name, None
+        pos = index + 1
+
+
 def parse_sql(text, source_file):
-    tables = []
+    tables, failures = [], []
     # Protect SQL literals before stripping comments.
     text = re.sub(r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|--[^\n]*|\#[^\n]*|/\*.*?\*/",
                   lambda x: x.group() if x.group().startswith(("'", '"')) else " ", text, flags=re.S)
     # 去掉 -- 与 # 行注释，但保留 COMMENT 'x' 内联注释
-    for m in re.finditer(
-            r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"]?(\w+)[`\"]?\s*\((.*?)\)\s*(?:ENGINE|COMMENT|;|$)",
-            text, re.I | re.S):
-        name, body = m.group(1), m.group(2)
+    for name, body in extract_table_bodies(text):
+        if body is None:
+            failures.append({"table": name, "source_file": source_file,
+                             "reason": "括号不平衡，疑似 DDL 截断"})
+            continue
+        try:
+            raw_columns = split_columns(body)
+        except ValueError as exc:
+            failures.append({"table": name, "source_file": source_file,
+                             "reason": f"列定义解析失败：{exc}"})
+            continue
         cols, pks = [], []
-        for raw in split_columns(body):
+        for raw in raw_columns:
             line = raw.strip().rstrip(",")
             if not line:
                 continue
@@ -105,7 +163,7 @@ def parse_sql(text, source_file):
                        "column_count": len(cols), "pk_guess": pks,
                        "time_cols": [c["name"] for c in cols if c["is_time"]],
                        "columns": cols})
-    return tables
+    return tables, failures
 
 
 def main():
@@ -124,14 +182,19 @@ def main():
         print("错误：需要 --ddl 或 --ddl-dir", file=sys.stderr)
         return 2
 
-    all_tables = []
+    all_tables, all_failures = [], []
     for fp in sorted(files):
         with open(fp, encoding="utf-8-sig") as f:
-            all_tables += parse_sql(f.read(), os.path.basename(fp))
+            tables, failures = parse_sql(f.read(), os.path.basename(fp))
+        all_tables += tables
+        all_failures += failures
 
     if not all_tables:
         print("错误：未解析到任何 CREATE TABLE", file=sys.stderr)
         return 2
+    for fail in all_failures:
+        print(f"警告：跳过表 {fail['table']}（{fail['source_file']}）：{fail['reason']}",
+              file=sys.stderr)
 
     prefix_counter = Counter(re.match(r"[a-zA-Z]+_", t["name"]).group(0)
                              if re.match(r"[a-zA-Z]+_", t["name"]) else "(无前缀)"
@@ -149,6 +212,7 @@ def main():
     with open(os.path.join(args.out, "tables.yaml"), "w", encoding="utf-8") as f:
         yaml.safe_dump({"table_count": len(all_tables),
                         "prefix_clusters": dict(prefix_counter.most_common()),
+                        "parse_failures": all_failures,
                         "tables": tables_yaml}, f, allow_unicode=True, sort_keys=False)
     with open(os.path.join(args.out, "columns.yaml"), "w", encoding="utf-8") as f:
         yaml.safe_dump(columns_yaml, f, allow_unicode=True, sort_keys=False)

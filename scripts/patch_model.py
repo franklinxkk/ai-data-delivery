@@ -47,22 +47,26 @@ import sys
 
 import yaml
 
+from _contract import load as _contract_load
+
 
 # ---------- 基础读写 ----------
 
 def load(path):
-    with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    return _contract_load(path) or {}
 
 
 def dump_if_changed(path, before, after):
     if before == after:
         print("no change（已是最新，幂等跳过）")
         return False
+    import shutil
+    backup = path + ".bak"
+    shutil.copyfile(path, backup)
     with open(path, "w", encoding="utf-8") as f:
         yaml.safe_dump(after, f, allow_unicode=True, sort_keys=False,
                        default_flow_style=False, width=120)
-    print("patched ✓")
+    print(f"patched ✓（原文已备份 → {backup}）")
     return True
 
 

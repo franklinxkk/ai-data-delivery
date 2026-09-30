@@ -1,12 +1,12 @@
 # starter pack · 通用（组织/人员/地点/时间）
-# 来源：对齐 GB/T 48000.3 概念层与 schema.org 常用类型，跨领域可复用
+# 来源：参考 GB/T 48000.3 概念层与 schema.org 常用类型命名（非符合性声明），跨领域可复用
 pack:
   id: general
   name: 通用基础
   version: '0.1'
-  source: 对齐 GB/T 48000.3 概念层与 schema.org
+  source: 参考 GB/T 48000.3 概念层与 schema.org（非符合性声明）
   aligns:
-  - GB/T 48000.3 概念层可对齐
+  - 命名参考 GB/T 48000.3 概念层（结构对齐≠标准符合，见 references/standards.md）
   - schema.org/Organization
   - schema.org/Person
   - schema.org/Place

@@ -17,6 +17,7 @@ import re
 import sys
 
 import yaml
+from _contract import load
 
 REFUSE_HINTS = ("删除", "清空", "改掉", "修改", "写入", "insert", "update ", "drop ",
                 "密码", "身份证", "手机号", "个人隐私")
@@ -57,7 +58,7 @@ def main():
 
     mined = 0
     if args.from_metrics and args.model:
-        m = yaml.safe_load(open(args.model, encoding="utf-8"))
+        m = load(args.model)
         for mt in m.get("metrics", []):
             for word in [mt.get("name")] + (mt.get("synonyms") or []):
                 if word and add(f"{word}是多少？", False):

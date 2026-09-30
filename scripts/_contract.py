@@ -5,23 +5,97 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import sys
 import tempfile
 
 import yaml
 
 
+def _missing(path):
+    print(f"错误：输入文件不存在：{path}\n"
+          f"检查路径拼写；相对路径以当前工作目录为基准。", file=sys.stderr)
+    sys.exit(2)
+
+
+def top_shape_error(m):
+    """模型顶层结构校验：返回错误消息或 None。
+
+    datasets/metrics 等写错型别（映射当列表）是最高频的手写/生成错误，
+    各消费方在深入处理前先调用本函数，把堆栈变成可操作提示。
+    """
+    if not isinstance(m, dict):
+        return "模型必须是 YAML mapping"
+    for key, want, hint in (
+            ("datasets", list, "列表，每项一个数据集（含 name 字段）；若按表名写成了映射，"
+                               "请改为列表并把键名写进各项的 name 字段"),
+            ("relationships", list, "列表，每项含 from/to/join_key"),
+            ("concepts", list, "列表，每项含 name"),
+            ("metrics", list, "列表，每项含 id/name；若按指标名写成了映射，请改为列表"),
+            ("ontology", dict, "mapping（含 entities/relations 子键）")):
+        val = m.get(key)
+        if val is not None and not isinstance(val, want):
+            got = {list: "列表", dict: "mapping"}.get(want, str(want))
+            return f"模型结构错误：{key} 应为{got}，当前是 {type(val).__name__}。{hint}"
+    return None
+
+
 def load(path):
-    with open(path, encoding="utf-8-sig") as stream:
-        return yaml.safe_load(stream)
+    """读取 YAML 输入；文件缺失/非法时给可操作报错（exit 2），不抛堆栈。"""
+    p = Path(path)
+    if not p.is_file():
+        _missing(path)
+    try:
+        with open(p, encoding="utf-8-sig") as stream:
+            return yaml.safe_load(stream)
+    except yaml.YAMLError as exc:
+        print(f"错误：输入文件不是合法 YAML：{path}\n{exc}", file=sys.stderr)
+        sys.exit(2)
 
 
 def digest(path):
+    if not Path(path).is_file():
+        _missing(path)
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def object_digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
                                      default=str).encode()).hexdigest()
+
+
+def minimal_env(extra=None):
+    """白名单环境：仅保留子进程运行必需项，不透传可能含凭据的变量（CI token 等）。"""
+    keep = ("PATH", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP",
+            "HOME", "USERPROFILE", "LANG", "LC_ALL")
+    env = {k: os.environ[k] for k in keep if k in os.environ}
+    env["PYTHONIOENCODING"] = "utf-8"
+    if extra:
+        env.update(extra)
+    return env
+
+
+def guard_endpoint(url, allow_remote=False):
+    """端点守卫：默认仅允许本机回环/内网地址；其他地址需显式 --allow-remote。
+
+    防止把业务问题、用例或模型元数据误发到公网服务。
+    """
+    import ipaddress
+    from urllib.parse import urlparse
+    host = (urlparse(url).hostname or "").strip()
+    if not host:
+        raise ValueError(f"无法解析端点地址：{url}")
+    if host.lower().endswith("localhost"):
+        return
+    try:
+        ip = ipaddress.ip_address(host)
+        if ip.is_loopback or ip.is_private or ip.is_link_local:
+            return
+    except ValueError:
+        pass  # 域名：无法静态判定归属，按远程处理
+    if not allow_remote:
+        raise ValueError(
+            f"端点 {host} 不在本机/内网范围，业务问题与用例会发送到该地址。"
+            f"确认有权测试该服务、且接收方范围允许后，加 --allow-remote 重试。")
 
 
 def now():

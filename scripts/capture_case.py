@@ -13,7 +13,7 @@
 
 输出 badcases/<id>.yaml：bad case 登记卡（证据已填，symptom/layer/fix 留待归因）。
 
-安全声明：网络访问仅限 --endpoint 指定地址（预期本地/内网验证端点）；无任何其他出站请求。
+安全声明：网络访问仅限 --endpoint 指定地址，默认仅本机/内网（端点守卫，远程需 --allow-remote）；无任何其他出站请求。
 """
 import argparse
 import datetime
@@ -25,6 +25,8 @@ import urllib.parse
 import urllib.request
 
 import yaml
+
+from _contract import guard_endpoint
 
 
 def call(method, url, payload=None, timeout=30):
@@ -56,7 +58,14 @@ def main():
     ap.add_argument("--id", default=None)
     ap.add_argument("--note", default="")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--allow-remote", action="store_true",
+                    help="允许非本机/内网端点（默认拒绝，防误发业务内容到公网）")
     args = ap.parse_args()
+    try:
+        guard_endpoint(args.endpoint, args.allow_remote)
+    except ValueError as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
 
     base = args.endpoint.rstrip("/")
     case_id = args.id or "bc-" + datetime.date.today().strftime("%Y%m%d") + "-001"

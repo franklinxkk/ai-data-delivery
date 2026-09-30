@@ -15,6 +15,7 @@ import argparse
 import sys
 
 import yaml
+from _contract import load
 
 WRITE_WORDS = ("删除", "清空", "改掉", "写入")
 
@@ -36,7 +37,7 @@ def main():
     ap.add_argument("--per-group", type=int, default=3, help="每组模板每数据集最多生成几条")
     args = ap.parse_args()
 
-    m = yaml.safe_load(open(args.model, encoding="utf-8"))
+    m = load(args.model)
     cases, n = [], 0
 
     def add(group, q, table=None, reject=False):

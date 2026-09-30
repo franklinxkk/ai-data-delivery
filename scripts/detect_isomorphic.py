@@ -19,6 +19,7 @@ import sys
 from collections import defaultdict
 
 import yaml
+from _contract import load
 
 def family_key(name):
     """序号归一：名内数字段替换为 #（item1_detail→item#_detail；log_202401→log_#）。
@@ -32,11 +33,23 @@ def main():
     ap = argparse.ArgumentParser(description="同构表族检测")
     ap.add_argument("--tables", required=True)
     ap.add_argument("--columns", required=True)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", required=True, help="输出文件路径（如 isomorphic.yaml；注意：是文件不是目录）")
     args = ap.parse_args()
 
-    tables = yaml.safe_load(open(args.tables, encoding="utf-8"))["tables"]
-    cols = yaml.safe_load(open(args.columns, encoding="utf-8"))
+    if os.path.isdir(args.out):
+        print(f"错误：--out 应为输出文件路径（如 isomorphic.yaml），不是目录：{args.out}", file=sys.stderr)
+        return 2
+
+    tables_doc = load(args.tables)
+    if not isinstance(tables_doc, dict) or "tables" not in tables_doc:
+        print(f"错误：--tables 文件缺少顶层键 tables:：{args.tables}", file=sys.stderr)
+        return 2
+    cols = load(args.columns)
+    if not isinstance(cols, list):
+        print(f"错误：--columns 文件应为列清单（YAML 列表，每项含 table/name/type）：{args.columns}",
+              file=sys.stderr)
+        return 2
+    tables = tables_doc["tables"]
     sig = defaultdict(list)
     for c in cols:
         sig[c["table"]].append(f'{c["name"]}:{c["type"]}')

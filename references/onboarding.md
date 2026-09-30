@@ -38,13 +38,15 @@ python scripts/guide_model.py status --session session.json
 
 **冷启动模板包**（v0.0.7）：不从白板开始建模。`--pack` 把 `starter_packs/` 的本体声明（实体含 uid/属性/证据来源，关系含 mapping）合并进模型，已存在的对象不覆盖——你的模型永远优先。合并结果记入会话 `packs_applied` 可追溯。领域包清单与自定义写法见 `starter_packs/README.md`。
 
-**提问与采纳协议**（v0.0.7）：向用户提问时每批 3~6 个问题；每个问题给出 **AI 建议（suggestion.value）+ 依据 + 备选**，用户可直接回"按 AI 建议"——落成 decision 即 `state=confirmed、value=建议值`，actor/basis 如实填写（脚本不认证角色身份，采纳仍由人确认）。status/export 的 gap 带三态标签：`[待确认]`（无候选）、`[AI建议]`（模型推断候选）、`[候选·来自材料]`（材料里已有）、`[已确认]`/`[暂缓]`/`[已否决]`。`clearance` 是待确认清零报告：outstanding（pending+candidate）清零且无阻断项才 ready_for_validation——发布前先清零。
+**提问与采纳协议**（v0.0.7）：向用户提问时每批 3~6 个问题；每个问题给出**候选项（suggestion.value）+ 依据 + 备选**——候选项由使用本 skill 的 Agent 基于材料推断生成（脚本只存证、不调用模型），用户可直接回"按候选确认"——落成 decision 即 `state=confirmed、value=候选值`，actor/basis 如实填写（脚本不认证角色身份，采纳仍由人确认）。status/export 的 gap 带三态标签：`[待确认]`（无候选）、`[候选·推断]`（Agent 推断候选）、`[候选·来自材料]`（材料里已有）、`[已确认]`/`[暂缓]`/`[已否决]`。`clearance` 是待确认清零报告：outstanding（pending+candidate）清零且无阻断项才 ready_for_validation——发布前先清零。
 
 会话单文件包含 model、scope、revision、gaps、decisions；JSON 是权威状态，Markdown/HTML 是展示。gap ID 由 scope/object/property 生成，与问题措辞、数组顺序无关。session 是串行文件工作流，不支持多用户并发编辑/事务合并；同时编辑前先合并意见，再生成一个补丁。
 
 ## 回答与审阅补丁
 
 读取 status 返回的真实 gap_id，不手造 ID。回答必须来自用户或已授权的责任人；脚本不认证角色身份。
+
+> **answers.json 的两个易错点**：① `session_revision` 必须等于 `status` 返回的当前 `revision`（每 apply 一次 +1，过期会被拒并提示当前值）；② `decisions` 按 `gap_id` 组织——`examples/onboarding/decisions.yaml` 那种按 `对象/属性` 组织的是**回答素材**，不是 answers 文件（run_demo.py 演示了怎么把它包装成 answers）。
 
 ```json
 {

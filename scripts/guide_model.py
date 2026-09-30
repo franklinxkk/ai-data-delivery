@@ -2,7 +2,7 @@
 """Persistent, scoped semantic onboarding: init → propose → apply → export.
 
 v0.0.7：init 支持 --pack 冷启动模板包（把 starter_packs 的本体声明合并进模型再开会话）；
-gap 增加 suggestion（AI 建议+依据）与 state_label（三态标签）；status/export 输出清零报告。"""
+gap 增加 suggestion（候选项+依据，由宿主 Agent 生成、脚本存证）与 state_label（三态标签）；status/export 输出清零报告。"""
 import argparse
 import copy
 import json
@@ -88,7 +88,7 @@ def merge_packs(model, pack_paths):
     return applied
 
 
-STATE_LABELS = {"pending": "[待确认]", "candidate": "[AI建议]",
+STATE_LABELS = {"pending": "[待确认]", "candidate": "[候选·推断]",
                 "confirmed": "[已确认]", "deferred": "[暂缓]", "rejected": "[已否决]"}
 
 
@@ -198,7 +198,11 @@ def blockers(session):
 
 def proposal(session, answers):
     if answers.get("session_revision") != session["revision"]:
-        raise ValueError("stale answers: session_revision changed")
+        raise ValueError(
+            f"stale answers: answers 的 session_revision={answers.get('session_revision')!r} "
+            f"与会话当前 revision={session['revision']} 不一致。"
+            f"请先 guide_model.py status 查看当前 revision，"
+            f"将其填入 answers 的 session_revision 字段后重试（防基于过期会话做决策）。")
     updated = copy.deepcopy(session)
     gaps = {g["id"]: g for g in updated["gaps"]}
     changes, seen = [], set()
@@ -292,8 +296,19 @@ def main():
         if args.command == "init":
             if Path(args.session).exists():
                 raise ValueError("session exists; resume it or use a new path")
+            packs_dir = Path(__file__).resolve().parents[1] / "starter_packs"
+            pack_paths = []
+            for p in args.pack:
+                cand = Path(p)
+                if not cand.exists() and not cand.suffix:
+                    alt = packs_dir / (p + ".yaml")
+                    if alt.exists():
+                        cand = alt
+                if not cand.exists():
+                    raise ValueError(f"pack 不存在：{p}（也不是 starter_packs/ 下的包名）")
+                pack_paths.append(str(cand))
             session = new_session(load(args.model), load(args.scope), digest(args.model),
-                                  pack_paths=args.pack)
+                                  pack_paths=pack_paths)
             write(args.session, session)
         else:
             session = load(args.session)

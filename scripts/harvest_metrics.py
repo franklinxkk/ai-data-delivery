@@ -27,6 +27,7 @@ import re
 import sys
 
 import yaml
+from _contract import load as contract_load
 
 CJK = re.compile(r"[一-鿿]")
 FROM_RE = re.compile(r"\bFROM\s+([A-Za-z_][\w$]*|[一-鿿][\w$一-鿿]*)", re.I)
@@ -45,7 +46,7 @@ def load(path):
 
 def load_from_model(path):
     """存量场景：直接收割 semantic.yaml 里的 legacy_formula。"""
-    m = yaml.safe_load(open(path, encoding="utf-8"))
+    m = contract_load(path)
     out = []
     for mt in m.get("metrics", []):
         out.append({"id": mt.get("id"), "name": mt.get("name"),
@@ -85,7 +86,7 @@ def mapping_from_meta(meta_dir):
     import glob
     mapping = {}
     for p in sorted(glob.glob(os.path.join(meta_dir, "*.yaml"))):
-        m = yaml.safe_load(open(p, encoding="utf-8"))
+        m = contract_load(p)
         if not m or not m.get("table"):
             continue
         for s in m.get("sources") or []:
@@ -133,7 +134,7 @@ def main():
     if args.from_meta:
         mapping.update(mapping_from_meta(args.from_meta))
     if args.mapping:
-        mapping.update(yaml.safe_load(open(args.mapping, encoding="utf-8")) or {})
+        mapping.update(contract_load(args.mapping) or {})
 
     out, gaps = [], []
     for r in raw:

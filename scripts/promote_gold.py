@@ -16,6 +16,7 @@ import json
 import sys
 
 import yaml
+from _contract import load
 
 
 def load_cases(path):
@@ -79,7 +80,7 @@ def main():
     ap.add_argument("--fmt", choices=["merged", "expect"], default="merged")
     args = ap.parse_args()
 
-    card = yaml.safe_load(open(args.card, encoding="utf-8"))
+    card = load(args.card)
     try:
         case = to_case(card, args.fmt)
     except ValueError as e:

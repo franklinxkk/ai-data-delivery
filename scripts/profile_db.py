@@ -50,9 +50,17 @@ def profile_table(conn, table, enum_max):
 def main():
     ap = argparse.ArgumentParser(description="源库实测画像")
     ap.add_argument("--db", required=True)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", required=True, help="输出文件路径（如 profile.yaml；注意：是文件不是目录）")
     ap.add_argument("--enum-max", type=int, default=20, help="枚举候选列的基数上限")
     args = ap.parse_args()
+
+    if os.path.isdir(args.out):
+        print(f"错误：--out 应为输出文件路径（如 profile.yaml），不是目录：{args.out}", file=sys.stderr)
+        return 2
+    if not os.path.isfile(args.db):
+        print(f"错误：--db 数据库文件不存在：{args.db}\n"
+              f"检查路径拼写；相对路径以当前工作目录为基准。", file=sys.stderr)
+        return 2
 
     conn = sqlite3.connect(args.db)
     tables = [r[0] for r in conn.execute(

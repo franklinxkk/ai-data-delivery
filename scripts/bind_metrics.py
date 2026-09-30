@@ -17,6 +17,7 @@ import re
 import sys
 
 import yaml
+from _contract import load
 
 IDENT = re.compile(r"\b([a-zA-Z_]\w*)\b")
 SQL_KEYWORDS = {"select", "from", "where", "and", "or", "not", "in", "is", "null", "count",
@@ -59,7 +60,7 @@ def main():
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
-    raw = yaml.safe_load(open(args.metrics_raw, encoding="utf-8"))["metrics"]
+    raw = load(args.metrics_raw)["metrics"]
 
     # 来源表 → 宽表 反查表（meta sources）
     table2dws = {}
@@ -67,7 +68,7 @@ def main():
     for fn in os.listdir(args.meta):
         if not fn.endswith((".yaml", ".yml")):
             continue
-        meta = yaml.safe_load(open(os.path.join(args.meta, fn), encoding="utf-8"))
+        meta = load(os.path.join(args.meta, fn))
         for src in meta.get("sources", []) or []:
             if isinstance(src, str) and not src.startswith("【"):
                 for expanded in expand_source(src):
@@ -77,7 +78,7 @@ def main():
     # 模型字段（更权威的字段校验来源）
     model_fields, model_sources = {}, {}
     if args.model:
-        m = yaml.safe_load(open(args.model, encoding="utf-8"))
+        m = load(args.model)
         for ds in m.get("datasets", []):
             model_fields[ds["name"]] = {f["name"] for f in ds.get("fields", [])}
             model_sources[ds.get("source")] = ds["name"]

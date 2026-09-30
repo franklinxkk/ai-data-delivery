@@ -21,7 +21,6 @@
 退出码：0 = 所选领域全部通过；1 = 任一环节失败；2 = 用法错误。
 """
 import argparse
-import importlib.util
 import json
 import os
 import sqlite3
@@ -34,13 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.normpath(os.path.join(HERE, "..", "scripts"))
 sys.path.insert(0, SCRIPTS)
 
-
-def load_recon():
-    spec = importlib.util.spec_from_file_location(
-        "reconcile_paths", os.path.join(SCRIPTS, "reconcile_paths.py"))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+import reconcile_paths as recon
 
 
 def run_step(name, cmd, cwd):
@@ -117,7 +110,6 @@ def run_domain(domain_dir):
                     [os.path.join(SCRIPTS, "gold_lint.py"), "--cases", "cases.json",
                      "--model", "semantic.yaml"], domain_dir):
         return False
-    recon = load_recon()
     actual = gen_actual(domain_dir, db_path, recon)
     ok = run_step("4 G3 回归比对 run_eval（离线）",
                   [os.path.join(SCRIPTS, "run_eval.py"), "--gold", "cases.json",

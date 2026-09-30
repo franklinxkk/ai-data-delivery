@@ -23,6 +23,7 @@ import shutil
 import sys
 
 import yaml
+from _contract import load
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -56,7 +57,7 @@ def main():
     if args.session and object_digest(load(args.session)["model"]) != object_digest(load(args.model)):
         ap.error("session 与当前模型不一致")
     os.makedirs(args.out, exist_ok=True)
-    m = yaml.safe_load(open(args.model, encoding="utf-8"))
+    m = load(args.model)
     files = []
 
     dst = os.path.join(args.out, "semantic.yaml")

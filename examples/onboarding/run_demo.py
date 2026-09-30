@@ -12,14 +12,14 @@ import sys
 HERE = Path(__file__).resolve().parent
 SCRIPTS = HERE.parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from _contract import load, write
+from _contract import load, minimal_env, write
 from _sql import compile_single
 
 
 def run(script, *args):
     command = [sys.executable, str(SCRIPTS / script), *map(str, args)]
     result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
-                            env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+                            env=minimal_env())
     if result.returncode:
         raise RuntimeError(f"{script}: {result.stdout}\n{result.stderr}")
     print("PASS " + script)

@@ -36,7 +36,7 @@ def compile_single(mt, ds, names=()):
         parts = re.split(r"('(?:''|[^'])*')", str(sql))
         for index in range(0, len(parts), 2):
             code = parts[index]
-            if re.search(r";|--|/\*|\b(SELECT|FROM|JOIN|UNION|PRAGMA|ATTACH|GROUP|HAVING|ORDER|LIMIT|OFFSET|WINDOW|OVER|WITH|RETURNING|INTO)\b", code, re.I):
+            if re.search(r";|--|/\*|\b(SELECT|FROM|JOIN|UNION|PRAGMA|ATTACH|GROUP|HAVING|ORDER|LIMIT|OFFSET|WINDOW|OVER|WITH|RETURNING|INTO|LOAD_EXTENSION|READFILE|WRITEFILE)\b", code, re.I):
                 raise ValueError("不支持子查询、SQL 注释或多语句")
             def prefix(match):
                 name = match.group(1)

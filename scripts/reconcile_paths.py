@@ -15,7 +15,7 @@ RULE-METRIC-01：同一问题两条路径结果必须一致，不一致即存在
 口径编译规则（与引擎不变式一致）：expr/分子分母 + extra_where + 数据集 source 表；
 dataset./表名前缀自动剥离；仅对 single-dataset 的 count/sum/avg/ratio 编译，其余跳过并声明。
 
-安全声明：网络访问仅限 --endpoint 指定地址（预期本地/内网验证端点）；无任何其他出站请求。
+安全声明：网络访问仅限 --endpoint 指定地址，默认仅本机/内网（端点守卫，远程需 --allow-remote）；无任何其他出站请求。
 """
 import os
 import argparse
@@ -24,7 +24,7 @@ import sys
 import urllib.request
 
 import yaml
-from _contract import readonly
+from _contract import guard_endpoint, readonly, load
 from _sql import compile_single
 
 
@@ -65,7 +65,7 @@ def norm(x):
 
 
 def run_active(args):
-    m = yaml.safe_load(open(args.model, encoding="utf-8"))
+    m = load(args.model)
     ds_index = {d["name"]: d for d in m.get("datasets", [])}
     names = set(ds_index) | {d.get("source") for d in m.get("datasets", [])}
     conn = readonly(args.db)
@@ -163,7 +163,15 @@ def main():
     ap.add_argument("--out", default=None)
     ap.add_argument("--metric-path", dest="metric_path", help="指标路径结果 json（模式 B）")
     ap.add_argument("--wide-path", dest="wide_path", help="宽表路径结果 json（模式 B）")
+    ap.add_argument("--allow-remote", action="store_true",
+                    help="允许非本机/内网端点（默认拒绝，防误发业务内容到公网）")
     args = ap.parse_args()
+    if args.endpoint:
+        try:
+            guard_endpoint(args.endpoint, args.allow_remote)
+        except ValueError as exc:
+            print(f"错误：{exc}", file=sys.stderr)
+            return 2
 
     if args.model and args.db:
         return run_active(args)

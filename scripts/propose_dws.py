@@ -18,6 +18,7 @@ import sys
 from collections import defaultdict
 
 import yaml
+from _contract import load
 
 MEASURE_HINT = re.compile(r"_cnt$|_count$|_days$|_rate$|_sec$|_hours?$|_minutes$|"
                           r"_amount$|_total$|_num$|_sum$|里程|金额|学时", re.I)
@@ -31,10 +32,10 @@ def main():
     ap.add_argument("--max-tables", type=int, default=15)
     args = ap.parse_args()
 
-    tables = yaml.safe_load(open(os.path.join(args.inventory, "tables.yaml"), encoding="utf-8"))
-    metrics = yaml.safe_load(open(args.metrics_raw, encoding="utf-8"))
+    tables = load(os.path.join(args.inventory, "tables.yaml"))
+    metrics = load(args.metrics_raw)
     iso_path = os.path.join(args.inventory, "isomorphic.yaml")
-    iso = yaml.safe_load(open(iso_path, encoding="utf-8")) if os.path.exists(iso_path) else {}
+    iso = load(iso_path) if os.path.exists(iso_path) else {}
 
     metric_by_table = defaultdict(list)
     for m in metrics.get("metrics", []):

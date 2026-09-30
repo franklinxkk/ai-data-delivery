@@ -208,7 +208,7 @@ class TestGapProtocol(unittest.TestCase):
         views = [gap_view(g) for g in session["gaps"]]
         labels = {v["property"]: v["state_label"] for v in views}
         self.assertEqual(labels["grain"], "[候选·来自材料]")
-        self.assertEqual(labels["ai.instructions"], "[AI建议]")
+        self.assertEqual(labels["ai.instructions"], "[候选·推断]")
         self.assertEqual(labels["temporal.kind"], "[待确认]")
 
     def test_suggestion_present_when_candidate(self):

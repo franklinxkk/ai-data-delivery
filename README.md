@@ -1,13 +1,16 @@
-# ai-data-delivery · v0.0.7
+# ai-data-delivery · v0.0.8
 
-[![version](https://img.shields.io/badge/version-0.0.7-orange)](https://github.com/franklinxkk/ai-data-delivery/releases)
+[![version](https://img.shields.io/badge/version-0.0.8-orange)](https://github.com/franklinxkk/ai-data-delivery/releases)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-114%20passed-brightgreen)](#三分钟跑起来)
+[![tests](https://img.shields.io/badge/tests-121%20passed-brightgreen)](#三分钟跑起来)
 [![host](https://img.shields.io/badge/host-Kimi%20%C2%B7%20Claude%20Code%20%C2%B7%20Cursor%20%C2%B7%20%E4%BB%BB%E4%BD%95%20SKILL.md%20%E8%BF%90%E8%A1%8C%E6%97%B6-blueviolet)](#与任何-agent-共存)
 
-> 把零散的 DDL 和业务描述，变成有依据、可追溯、按阶段验证的语义资产——让 AI 问数答得对、错得明白。
+> 把零散的 DDL 和业务描述，变成有依据、可追溯、按阶段验证的语义合同资产。
+> 它治理的是交付过程——口径可验证、证据可追溯、变更可审计；问数引擎的自然语言理解不在它的边界内（README 结尾有明确声明）。
 >
 > *Turn partial DDLs and business descriptions into an evidence-graded semantic contract for AI-powered data Q&A. Declaration, not inference. Evidence, not claims.*
+
+**English**：ai-data-delivery is an agent skill (SKILL.md + Python scripts) that helps FDE engineers, data product managers and IT-center staff turn partial DDLs and business descriptions into a maintainable ontology declaration layer with machine-checked projection onto physical datasets — plus constraint validation, NL2SQL bad-case diagnosis, evaluation gates and staged delivery. The documentation is Chinese-first; users may interact in **any language** and agents will reply in the user's language (example packs are Chinese-domain but the workflow is language-agnostic). Security posture: no credential reads, network access is restricted to user-specified localhost/intranet endpoints (remote requires `--allow-remote`), read-only compiled SQL, no shell invocations — see [SECURITY.md](SECURITY.md).
 
 ## 如果你遇到过这些
 
@@ -22,7 +25,7 @@
 
 ## 它做什么
 
-1. **部分输入就能开始**——只有几张表的 DDL 或数据字典也行；v0.0.7 起还可以从**冷启动模板包**开始（交通安全 16 实体 18 关系真实回迁包 + 通用包 + 5 个领域包，`--pack` 合并，已有对象不覆盖）。引导式补齐会话按角色分工提问（先业务后物理），每个问题带 **AI 建议+依据+备选**，可回"按 AI 建议"；每个答案带 actor/依据/修订记录，补丁应用前必须审阅
+1. **部分输入就能开始**——只有几张表的 DDL 或数据字典也行；v0.0.7 起还可以从**冷启动模板包**开始（交通安全 16 实体 18 关系真实回迁包 + 通用包 + 5 个领域包，`--pack` 合并，已有对象不覆盖）。引导式补齐会话按角色分工提问（先业务后物理），每个问题带**候选项+依据**（候选由使用本 skill 的 Agent 生成，脚本负责存证与版本管理，本身不调用任何模型），可回"按候选确认"；每个答案带 actor/依据/修订记录，补丁应用前必须审阅
 2. **本体不是 ER 图**——`ontology` 段声明业务对象、属性、语义谓词与落地方式；业务对象可以还没有表，无键关系（管辖/参加/弱匹配）不必假装是外键。数据集只是本体在物理世界的**投影**，lint 自动做两层对账，投影损失必须显式说明
 3. **可维护性是设计出来的**——本体实体带稳定 `uid`（重命名后历史可追）、证据来源四级（用户提供/数据观测/模型推断/责任人确认）、主题域；`--drift` 与基线对比输出新增/删除/变更/**破坏**四级分类（破坏即门禁失败），`--history` 记录每次 release 的质量趋势
 4. **每个结论带证据等级**——`mock / offline / live` 三级来源标记；门禁分 `static / validated / production` 三档；缺证据、过期证据、无效豁免、拒答失败一律不过
@@ -49,16 +52,19 @@
 python -m pip install -r requirements.txt
 python examples/onboarding/run_demo.py --out tmp/demo   # 从缺粒度/口径的模型到交换包全链路
 python mocks/run_mock.py --all                          # 金融/政务/医疗/制造/零售 5 领域
-python -m unittest discover -s tests -v                 # 114 项边界测试
+python -m unittest discover -s tests -v                 # 121 项边界测试
 ```
 
 打开 `tmp/demo/model.html`：双层语义图（上本体层/下投影层）——搜索定位、边类型过滤、主题域视图、证据来源着色、点击聚焦、导出 SVG；另有补齐进度与证据面板。离线单文件、零外部依赖。示例与 Mock 的应答由模拟器生成，**不验证真实 AI 理解或拒答能力**。
 
 ## 真实项目验证过
 
-交通安全监管领域完整回迁（v0.0.6 起，v0.0.7 补齐 uid/主题域/证据分级）：16 个业务对象、18 条语义关系（16 等值键 + 2 弱关系）、94 个指标、15 张宽表——lint 0 ERROR；16 条关联的键唯一性在真实库全过；17 条数据约束（主键唯一/枚举字典/引用完整）全过。迁移还顺手抓出并修复了原合同两处异名键缺陷。测试范围与未验证项见 [验证记录](references/v0.0.7-validation.md)。
+交通安全监管领域完整回迁（v0.0.6 起，v0.0.7 补齐 uid/主题域/证据分级）：16 个业务对象、18 条语义关系（16 等值键 + 2 弱关系）、94 个指标、15 张宽表——lint 0 ERROR；16 条关联的键唯一性在真实库全过；17 条数据约束（主键唯一/枚举字典/引用完整）全过。迁移还顺手抓出并修复了原合同两处异名键缺陷；v0.0.8 的新增口径规则又在这份生产模型上抓出 7 条真实风险（比率指标缺展示刻度 ×6、筛选值越出字段枚举 ×1）——规则迭代能在存量资产上持续产生价值，这正是留痕体系的意义。结构级证据（join/约束报告与质量趋势）已脱敏入仓：[references/evidence/traffic](references/evidence/traffic/README.md)；测试范围与未验证项见 [验证记录](references/v0.0.8-validation.md)。
 
 ## 谁在什么阶段用它
+
+**按角色快速上手**（每个角色一条主干，其余命令不用看）：
+[🔧 FDE 工程师](references/quickstart-fde.md) · [📋 数据产品经理](references/quickstart-pm.md) · [🗄️ 信息中心](references/quickstart-infocenter.md)
 
 | 阶段 | 产品/业务负责人 | FDE | 信息中心 | 标准结果 |
 | --- | --- | --- | --- | --- |
@@ -78,7 +84,7 @@ python -m unittest discover -s tests -v                 # 114 项边界测试
 python scripts/guide_model.py init --model partial.yaml --scope scope.yaml --session session.json
 # 也可以从模板包冷启动（starter_packs/ 清单见该目录 README）
 python scripts/guide_model.py init --model partial.yaml --scope scope.yaml --session session.json --pack starter_packs/general.yaml
-python scripts/guide_model.py status --session session.json   # 待确认清零报告 + 每问 AI 建议
+python scripts/guide_model.py status --session session.json   # 待确认清零报告 + 每问候选项
 # 根据真实回答创建 answers.json，审阅生成的补丁后再应用
 python scripts/guide_model.py propose --session session.json --answers answers.json --patch review.json
 python scripts/guide_model.py apply --session session.json --patch review.json
@@ -111,6 +117,7 @@ python scripts/visualize_model.py --model semantic.yaml --report joins.json --re
 
 ## 文档
 
+- **快速通道**：[FDE 工程师](references/quickstart-fde.md) · [数据产品经理](references/quickstart-pm.md) · [信息中心](references/quickstart-infocenter.md)
 - [SKILL.md](SKILL.md)：Agent 入口与任务路由
 - [合同与验证](references/contract.md)：本体声明层、投影、维护（drift/质量历史）、约束、指标与评测边界
 - [补齐闭环](references/onboarding.md)：部分输入/模板包冷启动 → 可审阅合同
@@ -118,7 +125,7 @@ python scripts/visualize_model.py --model semantic.yaml --report joins.json --re
 - [诊断手册](references/diagnosis-playbook.md)：bad case 取证瀑布与工作流
 - [标准边界](references/standards.md)：GB/T 48000.3—2026、Apache Ossie 与其他规范的适用范围
 - [冷启动模板包](starter_packs/README.md)：通用/交通/金融/政务/医疗/制造/零售
-- [全部工具](references/tools.md) · [本版验证记录](references/v0.0.7-validation.md)
+- [全部工具](references/tools.md) · [本版验证记录](references/v0.0.8-validation.md)
 
 ## 它不做什么
 

@@ -18,6 +18,7 @@ import re
 import sys
 
 import yaml
+from _contract import load
 
 
 def next_id(pool):
@@ -41,7 +42,7 @@ def main():
     os.makedirs(args.pool, exist_ok=True)
     # 去重：同问句只累计次数
     for p in glob.glob(os.path.join(args.pool, "*.yaml")):
-        c = yaml.safe_load(open(p, encoding="utf-8"))
+        c = load(p)
         if c and c.get("question") == args.question:
             c["feedback_count"] = c.get("feedback_count", 1) + 1
             c.setdefault("notes_log", []).append(

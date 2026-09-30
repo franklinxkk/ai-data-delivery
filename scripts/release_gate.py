@@ -6,7 +6,7 @@ import subprocess
 import sys
 import os
 
-from _contract import binding_errors, digest, evidence, load, snapshot, write
+from _contract import binding_errors, digest, evidence, load, minimal_env, snapshot, write
 from _evaluation import valid_waiver
 from check_constraints import check_all
 from check_join_graph import analyze
@@ -18,7 +18,7 @@ HERE = Path(__file__).resolve().parent
 def run_gate(name, command):
     result = subprocess.run([sys.executable, str(HERE / command[0]), *command[1:]],
                             capture_output=True, text=True, encoding="utf-8", errors="replace",
-                            env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+                            env=minimal_env())
     return {"gate": name, "status": "pass" if result.returncode == 0 else "fail",
             "detail": "\n".join((result.stdout + result.stderr).splitlines()[-5:])}
 
@@ -86,6 +86,12 @@ def main():
         ap.error("min-acc must be (0,1], max-age-hours > 0")
     try:
         model = load(args.model)
+        from _contract import top_shape_error
+        shape_err = top_shape_error(model)
+        if shape_err:
+            print(f"gate error (not passed): {shape_err}\n"
+                  f"先运行 check_model.py -f {args.model} 按提示修正模型结构。", file=sys.stderr)
+            return 2
         gates = [run_gate("model", ["check_model.py", "-f", args.model])]
         lint_cmd = ["gold_lint.py", "--cases", args.cases, "--model", args.model]
         if args.results:
@@ -137,6 +143,20 @@ def main():
             else:
                 gates.append({"gate": "stability", "status": "not_applicable", "detail": "validated profile is not production readiness"})
         acceptable = {"pass", "waived", "not_applicable"}
+        hints = {
+            "model": "模型 lint 未过：先 check_model.py -f <模型> 逐项修 ERROR 再跑门禁",
+            "evaluation": "缺/过期/失配评测报告：先 run_eval 生成绑定当前模型+用例+快照的报告，再重跑门禁",
+            "data_constraints": "约束未通过或未声明：在模型 constraints 段补声明后重跑 check_constraints；空 records 视为未验证而非通过",
+            "join_graph": "关联键/扇出检查未过：check_join_graph 逐项看 from_key/to_key 唯一性与 fanout",
+            "data_binding": "评测报告未绑定当前数据快照：用同一 --db 重跑 run_eval 与本门禁",
+            "data": "缺 --db：validated/production 档必须给当前 SQLite 快照",
+            "live_evidence": "缺 live 证据：--endpoint 与 mode=live 的评测报告缺一不可",
+            "stability": "计划稳定性抽查未过/未跑：plan_stability 同句连跑比对 SQL 哈希",
+            "semantic_decisions": "存在未清零缺口或会话模型失配：guide_model status 看 outstanding，清零后再来",
+        }
+        for g in gates:
+            if g["status"] not in acceptable and g["gate"] in hints:
+                g["hint"] = hints[g["gate"]]
         ready = all(g["status"] in acceptable for g in gates)
         waived = any(g["status"] == "waived" for g in gates)
         decision = (("static_ready" if args.profile == "static" else args.profile + "_" + mode)
@@ -153,7 +173,10 @@ def main():
         if args.out:
             write(args.out, result)
         for gate in gates:
-            print(f"[{gate['status']}] {gate['gate']}")
+            line = f"[{gate['status']}] {gate['gate']}"
+            if gate.get("hint"):
+                line += f" —— {gate['hint']}"
+            print(line)
         print("decision: " + decision)
         return 0 if ready else 1
     except Exception as exc:

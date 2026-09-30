@@ -21,6 +21,7 @@ import re
 import sys
 
 import yaml
+from _contract import load
 
 
 def load_cases(path):
@@ -42,7 +43,7 @@ def main():
     ap.add_argument("--out", default=None, help="覆盖矩阵报告（md）")
     args = ap.parse_args()
 
-    m = yaml.safe_load(open(args.model, encoding="utf-8"))
+    m = load(args.model)
     model_metric_ids = {x.get("id") for x in m.get("metrics", [])}
     structured_ids = {x.get("id") for x in m.get("metrics", []) if x.get("structured")}
     ds_names = {d.get("name") for d in m.get("datasets", [])}
@@ -52,11 +53,11 @@ def main():
 
     # 1/2. 指标覆盖
     if args.metrics_raw:
-        raw = yaml.safe_load(open(args.metrics_raw, encoding="utf-8"))["metrics"]
+        raw = load(args.metrics_raw)["metrics"]
         gap_ids = set()
         if args.gaps:
             gap_ids = {g["metric_id"] for g in
-                       yaml.safe_load(open(args.gaps, encoding="utf-8"))["gaps"]}
+                       load(args.gaps)["gaps"]}
         n_in = n_struct = 0
         for r in raw:
             rid = r.get("id")

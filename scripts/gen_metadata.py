@@ -19,6 +19,7 @@ import sys
 from collections import defaultdict
 
 import yaml
+from _contract import load
 
 MEASURE_HINT = re.compile(r"_cnt$|_count$|_days$|_rate$|_sec$|_hours$|_minutes$|"
                           r"_amount$|_total$|_num$|_years$|mileage|duration", re.I)
@@ -58,11 +59,11 @@ def main():
     ap.add_argument("--out", required=True, help="输出目录（meta/）")
     args = ap.parse_args()
 
-    tables = yaml.safe_load(open(args.tables, encoding="utf-8"))["tables"]
-    columns = yaml.safe_load(open(args.columns, encoding="utf-8"))
+    tables = load(args.tables)["tables"]
+    columns = load(args.columns)
     profile = {}
     if args.profile:
-        p = yaml.safe_load(open(args.profile, encoding="utf-8"))
+        p = load(args.profile)
         profile = {t["name"]: {c["name"]: c for c in t["columns"]} for t in p["tables"]}
 
     by_table = defaultdict(list)

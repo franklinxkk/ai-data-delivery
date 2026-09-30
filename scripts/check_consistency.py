@@ -20,6 +20,7 @@ import sqlite3
 import sys
 
 import yaml
+from _contract import load
 
 TYPE_CLASSES = {
     "int": "num", "integer": "num", "bigint": "num", "smallint": "num",
@@ -50,12 +51,12 @@ def load_expectations(args):
     exp = {}
     if args.meta:
         for p in sorted(glob.glob(os.path.join(args.meta, "*.yaml"))):
-            m = yaml.safe_load(open(p, encoding="utf-8"))
+            m = load(p)
             if not m or not m.get("table"):
                 continue
             exp[m["table"]] = {c["name"]: c.get("type", "") for c in m.get("columns", [])}
     elif args.model:
-        m = yaml.safe_load(open(args.model, encoding="utf-8"))
+        m = load(args.model)
         for ds in m.get("datasets", []):
             tbl = ds.get("source") or ds.get("name")
             exp[tbl] = {f["name"]: f.get("type", "") for f in ds.get("fields", [])}

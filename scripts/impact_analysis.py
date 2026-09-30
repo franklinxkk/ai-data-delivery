@@ -15,6 +15,7 @@ import re
 import sys
 
 import yaml
+from _contract import load
 
 
 def mentions(text, name):
@@ -36,7 +37,7 @@ def main():
     ap.add_argument("--cases", default=None, help="gold 用例集（可选，评估回归面）")
     args = ap.parse_args()
 
-    m = yaml.safe_load(open(args.model, encoding="utf-8"))
+    m = load(args.model)
     t = args.target
     ds_list = m.get("datasets", [])
     ds_by_name = {d["name"]: d for d in ds_list}
@@ -61,7 +62,15 @@ def main():
             hit_concepts.append(c)
 
     if not (hit_datasets or hit_fields or hit_metrics or hit_concepts):
-        print(f"未找到 target：{t}（既不是数据集/物理表/字段/指标/概念）", file=sys.stderr)
+        ds_names = [d.get("name") for d in m.get("datasets", []) or []]
+        mt_ids = [x.get("id") for x in m.get("metrics", []) or []]
+        terms = [c.get("term") for c in m.get("concepts", []) or []]
+        print(f"未找到 target：{t}（既不是数据集/物理表/字段/指标/概念）\n"
+              f"  target 直接写名字，不带前缀：如 {ds_names[0] if ds_names else 'dataset_name'}、"
+              f"{mt_ids[0] if mt_ids else 'metric_id'}\n"
+              f"  可用数据集：{ds_names}\n"
+              f"  可用指标：{mt_ids[:10]}{'…' if len(mt_ids) > 10 else ''}\n"
+              f"  可用概念：{terms}", file=sys.stderr)
         return 2
 
     # ---- 由命中面扩散 ----

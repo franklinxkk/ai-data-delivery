@@ -21,7 +21,7 @@ ontology:
     - {from: 担保人, to: 贷款, predicate: 担保, mapping: weak, note: 依赖人工台账}
 ```
 
-- 实体：`name` 唯一；`uid` 是稳定身份（建议 `ent_xxx`，重命名不改 uid）；`is_a` 只能指向已声明实体且不得成环（环检测是结构检查，不是推理）；`attributes` 是业务属性（name/value_type/unit/values/note），不依赖具体表。
+- 实体：`name` 唯一；`uid` 是稳定身份（建议 `ent_xxx`，重命名不改 uid）；`is_a` 只能指向已声明实体且不得成环（环检测是结构检查，不是推理）。**`is_a` 仅做分类声明：无属性继承、无类型推导**——子类需要的属性必须显式写全，需要"子类必有父类属性"这类结论时请逐条声明，不要假设系统会继承；`attributes` 是业务属性（name/value_type/unit/values/note），不依赖具体表。
 - 关系：`predicate`（语义谓词）是核心，`mapping ∈ equi_key/weak/derived/semantic_only` 是落地方式；**键只是落地方式之一**，`mapping≠equi_key` 必须写 `note`。建议显式 `id`（`rel_xxx`）使重命名后引用稳定。无键关系留在本体里，不得因为"没有外键"被移出。
 - 投影：datasets/relationships 是本体在物理来源上的**合同投影**，用 `ontology_ref` 回指；回指关系时用其稳定 `id`。合同只承载 `equi_key` 关系；`ontology_ref` 指向无键关系是 ERROR（E15）。投影损失（本体有而合同表达不了的）必须留在本体侧并说明，不得静默丢弃。
 - 兼容：无 `ontology` 段的模型不受新规则约束；声明了 `ontology_ref` 却无 `ontology` 段是 ERROR（E14）。

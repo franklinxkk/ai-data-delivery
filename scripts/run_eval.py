@@ -33,6 +33,8 @@ import urllib.request
 
 import yaml
 
+from _contract import guard_endpoint
+
 
 # ---------- 载入 ----------
 
@@ -368,9 +370,16 @@ def main():
     ap.add_argument("--model", help="绑定当前模型文件哈希；缺失时报告不能用于验证门禁")
     ap.add_argument("--db", help="绑定 SQLite 数据快照；不证明端点使用了此快照")
     ap.add_argument("--mode", choices=["mock"], help="显式标记合成模拟证据")
+    ap.add_argument("--allow-remote", action="store_true",
+                    help="允许非本机/内网端点（默认拒绝，防误发业务内容到公网）")
     args = ap.parse_args()
 
     if args.endpoint:
+        try:
+            guard_endpoint(args.endpoint, args.allow_remote)
+        except ValueError as exc:
+            print(f"错误：{exc}", file=sys.stderr)
+            return 2
         if not args.cases:
             print("错误：模式 A 需要 --cases", file=sys.stderr)
             return 2

@@ -2,6 +2,17 @@
 
 以下命令在仓库根目录执行，完整参数用 `python scripts/<name>.py --help` 查看。除特别说明外不自动访问外部系统；带 endpoint 的工具会访问指定服务。`_*.py` 是内部共享模块，不是 CLI。
 
+## 按角色找工具（先看这个，别从 31 个命令开始读）
+
+| 角色 | 你的主干 | 快速通道 | 其余命令 |
+| --- | --- | --- | --- |
+| FDE 工程师 | ingest_ddl → guide_model → check_model / check_join_graph / check_constraints → reconcile_paths → release_gate | [quickstart-fde](quickstart-fde.md) | 用到再查 |
+| 数据产品经理 | guide_model（回答问题）→ gen_dictionary / visualize_model（看产出）→ ingest_feedback（登记反馈） | [quickstart-pm](quickstart-pm.md) | 不用看 |
+| 信息中心 | profile_db → check_consistency → check_constraints → gaps.yaml 闭环 | [quickstart-infocenter](quickstart-infocenter.md) | 不用看 |
+
+> 注意 `--out` 语义：多数命令是**目录**；`detect_isomorphic.py` / `profile_db.py` 是**文件路径**。
+> `impact_analysis --target` 写裸名（不带 `dataset:` 前缀）。端点类工具默认仅本机/内网，远程加 `--allow-remote`。
+
 | 阶段 | 命令 | 作用与边界 |
 | --- | --- | --- |
 | S0 | ingest_ddl | DDL 台账；可选 --model-out 部分草案，需核对解析范围 |

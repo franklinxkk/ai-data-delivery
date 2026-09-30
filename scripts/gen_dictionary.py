@@ -12,6 +12,7 @@ import argparse
 import sys
 
 import yaml
+from _contract import load
 
 
 def fmt_metric(m):
@@ -33,7 +34,7 @@ def main(argv=None):
     ap.add_argument("--out", required=True)
     args = ap.parse_args(argv)
 
-    m = yaml.safe_load(open(args.model, encoding="utf-8"))
+    m = load(args.model)
     ds_list = m.get("datasets", [])
     metrics = m.get("metrics", [])
     concepts = m.get("concepts", [])

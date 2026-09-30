@@ -14,7 +14,7 @@ readiness 通过不代表是新实例。本工具直接核对运行时模型与�
 
 退出码：0 = 一致（或未给 --model 仅报告）；1 = 不一致；2 = 端点不可达/返回无法解析。
 
-安全声明：网络访问仅限 --endpoint 指定地址（预期本地/内网验证端点）；无任何其他出站请求。
+安全声明：网络访问仅限 --endpoint 指定地址，默认仅本机/内网（端点守卫，远程需 --allow-remote）；无任何其他出站请求。
 """
 import argparse
 import json
@@ -22,6 +22,8 @@ import sys
 import urllib.request
 
 import yaml
+
+from _contract import guard_endpoint, load
 
 
 def get(url, timeout=15):
@@ -33,7 +35,7 @@ def get(url, timeout=15):
 
 
 def local_stats(path):
-    m = yaml.safe_load(open(path, encoding="utf-8"))
+    m = load(path)
     metrics = m.get("metrics", [])
     return {
         "version": m.get("version"),
@@ -77,7 +79,14 @@ def main():
     ap = argparse.ArgumentParser(description="运行时模型快照核对")
     ap.add_argument("--endpoint", required=True)
     ap.add_argument("--model", default=None, help="本地权威源 semantic.yaml（可选，给则比对）")
+    ap.add_argument("--allow-remote", action="store_true",
+                    help="允许非本机/内网端点（默认拒绝，防误发业务内容到公网）")
     args = ap.parse_args()
+    try:
+        guard_endpoint(args.endpoint, args.allow_remote)
+    except ValueError as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
 
     rstats, source, err = remote_stats(args.endpoint)
     if err:

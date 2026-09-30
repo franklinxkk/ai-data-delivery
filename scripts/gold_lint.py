@@ -34,6 +34,7 @@ import re
 import sys
 
 import yaml
+from _contract import load
 
 
 def load_cases(path):
@@ -116,7 +117,7 @@ def main():
     results = load_results(args.results) if args.results else None
     model_tables = None
     if args.model:
-        m = yaml.safe_load(open(args.model, encoding="utf-8"))
+        m = load(args.model)
         model_tables = {d.get("source") for d in m.get("datasets", []) or []}
 
     errors, warnings = [], []

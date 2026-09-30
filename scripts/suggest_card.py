@@ -19,6 +19,7 @@ import argparse
 import sys
 
 import yaml
+from _contract import load
 
 LAYER_ACTIONS = {
     "词表层": [
@@ -72,7 +73,7 @@ def main():
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
-    c = yaml.safe_load(open(args.card, encoding="utf-8"))
+    c = load(args.card)
     ev = c.get("evidence") or {}
 
     # 证据归一：retrieval 兼容 list / dict{hits}；reasoning 兼容 list / str

@@ -132,6 +132,7 @@ metrics:
     expr: COUNT(*)
   time_field: apply_date
   unit: '%'
+  display_scale: 100
   caliber:
     note: 逾期笔数占总笔数（SUM/SUM 加权）
     basis: 风控评审纪要2026-09-15
