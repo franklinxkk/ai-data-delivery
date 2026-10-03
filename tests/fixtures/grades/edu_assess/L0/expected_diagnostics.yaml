@@ -1,0 +1,21 @@
+grade: L0
+title: 不全——只有部分 DDL 到货，口径靠口头描述
+scenario: >
+  信息中心只交付了教学状态宽表的 DDL，毕业生明细表未到货；
+  模型没确认粒度、主键、使用边界，指标同义词和比率策略都没补。
+  数据本身干净，问题全在结构完备度轴。
+check_model:
+  exit: 1
+  errors: [E01, E02]          # 缺 grain / 缺 primary_key（子集断言）
+  warns: [W01, W11, W15, W17] # 缺边界说明 / 除零策略 / 展示刻度 / 同义词不足（子集断言）
+check_constraints:
+  status: not_ready           # 无约束声明：数据正确性尚未被证明（不是"通过"）
+  failed_ids: []
+reconcile: skip               # 结构未立，还不到算指标的阶段
+guidance:
+  - E01/E02 是阻断项：先确认每张表"一行代表什么"（grain）与去重依据（primary_key），可用 guide_model 开补齐会话（先业务后物理）
+  - 指标同义词补到 3 个以上（W17），否则用户问法路由不上，会掉进慢速 NL2SQL
+  - "比率指标显式声明 on_zero_denominator（W11）；unit 为 % 的比率声明 display_scale=100（W15）"
+  - 数据集补 ai.instructions：能答什么、不能答什么、必带的时间围栏（W01）
+  - graduates 表 DDL 到货后补第二数据集，再谈学位授予率/落实率
+next_grade: 结构补齐后进 L2；若到手数据未经核验，先进 L1 流程跑约束

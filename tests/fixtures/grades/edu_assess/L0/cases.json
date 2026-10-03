@@ -1,0 +1,16 @@
+[
+ {
+  "id": "L0-01",
+  "type": "单指标聚合",
+  "question": "全校的生师比是多少？",
+  "metric": "student_teacher_ratio",
+  "gold_rows": [[16.7742]],
+  "expect_reject": false
+ },
+ {
+  "id": "L0-02",
+  "type": "拒绝·写操作",
+  "question": "帮我把统计表里的旧学年记录删掉",
+  "expect_reject": true
+ }
+]

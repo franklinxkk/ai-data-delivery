@@ -1,0 +1,143 @@
+version: mock-diag-reform-1.0-L0
+domain: 高等职业教育·内部质量保证体系诊改
+datasets:
+- name: diag_tasks
+  source: diag_tasks
+  cn: 诊改任务明细表
+  fields:
+  - name: task_id
+    role: pk
+    cn: 任务编号
+  - name: level
+    role: dim
+    cn: 诊改层面
+    enum:
+    - 学校
+    - 专业
+    - 课程
+    - 教师
+    - 学生
+  - name: plan_group
+    role: dim
+    cn: 规划分组
+    enum:
+    - 学校发展规划
+    - 专业建设规划
+    - 课程建设规划
+    - 教师队伍建设规划
+    - 学生综合素质发展规划
+  - name: source
+    role: dim
+    cn: 指标来源
+    enum:
+    - 双高任务
+    - 职教本科
+    - ISO质量管理
+    - 校内自定义
+  - name: indicator_name
+    role: dim
+    cn: 指标名称
+  - name: unit
+    role: dim
+    cn: 数据单位
+    enum:
+    - 个
+    - 人
+    - '%'
+    - 万元
+    - 门
+    - 天
+  - name: strategy
+    role: dim
+    cn: 达标策略
+    enum:
+    - ≥
+    - ≤
+  - name: target_value
+    role: measure
+    cn: 目标值
+  - name: actual_value
+    role: measure
+    cn: 实际值
+  - name: status
+    role: dim
+    cn: 任务状态
+    enum:
+    - 未提交
+    - 已达标
+    - 未达标
+    - 已逾期
+  - name: dept
+    role: dim
+    cn: 责任部门
+    enum:
+    - 教务处
+    - 人事处
+    - 学工部
+    - 质管办
+    - 信息中心
+  - name: system_name
+    role: dim
+    cn: 执行体系
+    enum:
+    - 2025年度诊改
+    - 2026年度诊改
+  - name: end_date
+    role: time
+    cn: 执行截止日
+  - name: weight
+    role: measure
+    cn: 指标权重
+relationships: []
+metrics:
+- id: pass_rate
+  name: 诊改指标达标率
+  synonyms:
+  - 达标率
+  type: ratio
+  dataset: diag_tasks
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(CASE WHEN status = '已达标' THEN 1 ELSE 0 END)
+  denominator:
+    expr: SUM(CASE WHEN status IN ('已达标','未达标','已逾期') THEN 1 ELSE 0 END)
+  time_field: end_date
+  unit: '%'
+  caliber:
+    note: 已达标任务数 ÷ 已办结任务数（已办结=已达标+未达标+已逾期，不含未提交；SUM/COUNT 加权，禁行级平均）
+    basis: 《高等职业院校内部质量保证体系诊断与改进指导方案（试行）》（教职成司函〔2015〕168号）诊断口径；目标管理与诊改平台需求说明书V3.0 任务状态流转
+- id: completion_rate
+  name: 诊改任务完成率
+  synonyms:
+  - 任务完成率
+  type: ratio
+  dataset: diag_tasks
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(CASE WHEN status IN ('已达标','未达标') THEN 1 ELSE 0 END)
+  denominator:
+    expr: COUNT(*)
+  time_field: end_date
+  unit: '%'
+  caliber:
+    note: 已提交且出结论的任务数（已达标+未达标）÷ 任务总数；逾期与未提交计入分母，体现执行鞭策导向
+    basis: 目标管理与诊改平台需求说明书V3.0 任务状态流转口径；《高等职业院校内部质量保证体系诊断与改进指导方案（试行）》（教职成司函〔2015〕168号）
+- id: overdue_ratio
+  name: 逾期任务占比
+  synonyms:
+  - 逾期率
+  type: ratio
+  dataset: diag_tasks
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(CASE WHEN status = '已逾期' THEN 1 ELSE 0 END)
+  denominator:
+    expr: COUNT(*)
+  time_field: end_date
+  unit: '%'
+  caliber:
+    note: 已逾期任务数 ÷ 任务总数；逾期判定以执行体系结束时间为准，mock 用状态列直接承载
+    basis: 目标管理与诊改平台需求说明书V3.0 预警信息配置（倒计时/逾期）

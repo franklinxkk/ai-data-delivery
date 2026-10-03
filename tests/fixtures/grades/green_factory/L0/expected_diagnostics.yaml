@@ -1,0 +1,24 @@
+grade: L0
+title: 不全——只有部分 DDL 到货，口径靠口头描述
+scenario: 绿色制造·绿色工厂评价 领域的 L0 档（由 degrade.py 从 mocks/green_factory 确定性生成）。
+check_model:
+  exit: 1
+  errors:
+  - E01
+  - E02
+  warns:
+  - W01
+  - W11
+  - W15
+  - W17
+check_constraints:
+  status: not_ready
+  failed_ids: []
+reconcile: skip
+guidance:
+- E01/E02 是阻断项：先确认每张表「一行代表什么」（grain）与去重依据（primary_key），可用 guide_model 开补齐会话（先业务后物理）
+- 指标同义词补到 3 个以上（W17），否则用户问法路由不上，会掉进慢速 NL2SQL
+- 比率指标显式声明 on_zero_denominator（W11）；unit 为 % 的比率声明 display_scale=100（W15）
+- 数据集补 ai.instructions：能答什么、不能答什么、必带的时间围栏（W01）
+- 第二张明细表 DDL 到货后补第二数据集，再谈其上的指标
+next_grade: 结构补齐后进 L2；若到手数据未经核验，先进 L1 流程跑约束

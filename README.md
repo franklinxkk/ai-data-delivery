@@ -1,8 +1,8 @@
-# ai-data-delivery · v0.0.9
+# ai-data-delivery · v0.0.10
 
-[![version](https://img.shields.io/badge/version-0.0.9-orange)](https://github.com/franklinxkk/ai-data-delivery/releases)
+[![version](https://img.shields.io/badge/version-0.0.10-orange)](https://github.com/franklinxkk/ai-data-delivery/releases)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-140%20passed-brightgreen)](#三分钟跑起来)
+[![tests](https://img.shields.io/badge/tests-153%20passed-brightgreen)](#三分钟跑起来)
 [![host](https://img.shields.io/badge/host-Kimi%20%C2%B7%20Claude%20Code%20%C2%B7%20Cursor%20%C2%B7%20%E4%BB%BB%E4%BD%95%20SKILL.md%20%E8%BF%90%E8%A1%8C%E6%97%B6-blueviolet)](#与任何-agent-共存)
 
 > 把零散的 DDL 和业务描述，变成有依据、可追溯、按阶段验证的语义合同资产。
@@ -12,7 +12,7 @@
 >
 > ⭐ 如果这个 skill 帮到了你，欢迎到 [GitHub 项目](https://github.com/franklinxkk/ai-data-delivery)点个 Star——这是让它持续迭代的直接动力。*If this skill helps you, a star on GitHub means a lot.*
 
-**English**：ai-data-delivery is an agent skill (SKILL.md + Python scripts) that helps FDE engineers, data product managers and IT-center staff turn partial DDLs and business descriptions into a maintainable ontology declaration layer with machine-checked projection onto physical datasets — plus constraint validation, NL2SQL bad-case diagnosis, evaluation gates and staged delivery. The documentation is Chinese-first; users may interact in **any language** and agents will reply in the user's language (example packs are Chinese-domain but the workflow is language-agnostic). Security posture: no credential reads, network access is restricted to user-specified localhost/intranet endpoints (remote requires `--allow-remote`), read-only compiled SQL, no shell invocations — see [SECURITY.md](SECURITY.md).
+**English**: ai-data-delivery is an agent skill with an optional local single-user visual workbench. It helps FDE engineers, data product managers and IT-center staff import partial DDL/models, edit ontology-to-data mappings, fill semantic gaps with evidence, test declared constraints and relationships, check bounded metric results, and export versioned handoffs. The docs are Chinese-first; users may interact in any language. The workbench is a local editor and evidence organizer, not an action execution service or policy/decision engine. See [SECURITY.md](SECURITY.md) and [the workbench guide](workbench/README.md).
 
 ## 如果你遇到过这些
 
@@ -53,11 +53,21 @@
 ```bash
 python -m pip install -r requirements.txt
 python examples/onboarding/run_demo.py --out tmp/demo   # 从缺粒度/口径的模型到交换包全链路
-python mocks/run_mock.py --all                          # 金融/政务/医疗/制造/零售/CRM/OA/教育 8 领域
-python -m unittest discover -s tests -v                 # 140 项边界测试
+python -m workbench.serve --project ./workbench-projects/my-project  # 打开本机可视化工作台
+python mocks/run_mock.py --all                          # 13 个合成领域的端到端回归
+python tests/fixtures/grades/verify_grades.py            # 5 个领域 × 4 档成熟度案例
+python -m unittest discover -s tests -v                 # 153 项测试
 ```
 
 打开 `tmp/demo/model.html`：双层语义图（上本体层/下投影层）——搜索定位、边类型过滤、主题域视图、证据来源着色、点击聚焦、导出 SVG；另有补齐进度与证据面板。离线单文件、零外部依赖。示例与 Mock 的应答由模拟器生成，**不验证真实 AI 理解或拒答能力**。
+
+### 可视化工作台
+
+v0.0.10 增加本地单人工作台：导入已有 YAML/DDL 和 SQLite 快照，编辑本体与映射、拖动布局并连线；从当前模型生成具体缺口问题，补齐时记录责任角色、确认人和依据；分别运行模型 lint、已声明约束全量扫描、关联键检查和单表指标试算。只有输入完整的独立预期后，结果才会标为核对通过。项目历史、原始资料和证据保存在 `--project` 指定目录的 SQLite 文件中。
+
+工作台可保存一句话办事、指标问数、NL2SQL、政策适用、分析决策五类场景及其验收条件。当前可以执行指标单表试算和对接明确指定的本机 Java `/api/model`、`/api/ask`；办事流程、政策裁决、自由 NL2SQL 与分析优化尚需各自的真实运行引擎。工作台把未落实的条件显示为待办，不将场景声明误作可运行能力。完整范围见 [工作台使用说明](workbench/README.md)。
+
+测试素材新增高职诊改、普通高校审核评估、医院国考、养老机构等级评定、绿色工厂 5 个领域与 20 个确定性成熟度案例。这些合成数据用于检验工具诊断行为，不代表高校原始项目数据或生产验收。高职诊改起步包提供待审阅的业务对象和关系，标准的适用范围与版本仍由项目方核实。
 
 ## 真实项目验证过
 
@@ -152,8 +162,8 @@ python scripts/visualize_model.py --model semantic.yaml --report joins.json --re
 - [交付及迁移](references/delivery-playbook.md)：阶段门禁、旧版报告/豁免迁移
 - [诊断手册](references/diagnosis-playbook.md)：bad case 取证瀑布与工作流
 - [标准边界](references/standards.md)：GB/T 48000.3—2026、Apache Ossie 与其他规范的适用范围
-- [冷启动模板包](starter_packs/README.md)：通用/交通/金融/政务/医疗/制造/零售
-- [全部工具](references/tools.md) · [本版验证记录](references/v0.0.9-validation.md)
+- [冷启动模板包](starter_packs/README.md)：通用/交通/金融/政务/医疗/制造/零售/高职诊改草案
+- [本地语义工作台](workbench/README.md) · [全部工具](references/tools.md) · [v0.0.10 验证记录](references/v0.0.10-validation.md)
 
 ## 它不做什么
 

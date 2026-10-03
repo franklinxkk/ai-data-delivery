@@ -1,0 +1,191 @@
+version: mock-elderly-care-1.0-L2
+domain: 养老·机构等级评定
+datasets:
+- name: dws_facility_monthly
+  source: dws_facility_monthly
+  cn: 机构月度运营宽表
+  grain: 一行一机构一月
+  primary_key:
+  - facility
+  - month
+  ai:
+    instructions: 能答入住率/护理员配比/持证占比/康复服务覆盖率/月均投诉等机构运营指标；必带月份围栏（stat_date）；汇总粒度无老人明细，个体问题去
+      residents
+  fields:
+  - name: facility
+    role: dim
+    cn: 养老机构
+    enum: &id001
+    - 康宁养老院
+    - 颐年养老院
+    - 安泰养老院
+  - name: month
+    role: dim
+    cn: 月份
+    enum:
+    - 2026-06
+    - 2026-07
+    - 2026-08
+  - name: bed_count
+    role: measure
+    cn: 床位数
+  - name: resident_count
+    role: measure
+    cn: 入住老人数
+  - name: caregiver_count
+    role: measure
+    cn: 护理员数
+  - name: certified_caregiver_count
+    role: measure
+    cn: 持证护理员数
+  - name: rehab_service_cnt
+    role: measure
+    cn: 康复服务人次数
+  - name: complaint_cnt
+    role: measure
+    cn: 投诉件数
+  - name: stat_date
+    role: time
+    cn: 统计截止日
+- name: residents
+  source: residents
+  cn: 入住老人明细表
+  grain: 一行一名入住老人
+  primary_key: resident_id
+  ai:
+    instructions: 能答能力等级构成/照护等级分布/失能老人名单；必带时间围栏（admit_date）；身份证号/联系方式等隐私字段不存在于本表
+  fields:
+  - name: resident_id
+    role: pk
+    cn: 老人编号
+  - name: facility
+    role: dim
+    cn: 入住机构
+    enum: *id001
+  - name: ability_level
+    role: dim
+    cn: 能力等级
+    enum:
+    - 自理
+    - 半失能
+    - 失能
+  - name: care_level
+    role: dim
+    cn: 照护等级
+    enum:
+    - 一级
+    - 二级
+    - 三级
+  - name: admit_date
+    role: time
+    cn: 入住日期
+relationships: []
+metrics:
+- id: occupancy_rate
+  name: 机构入住率
+  synonyms:
+  - 入住率
+  - 床位入住率
+  type: ratio
+  dataset: dws_facility_monthly
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(resident_count)
+  denominator:
+    expr: SUM(bed_count)
+  time_field: stat_date
+  unit: '%'
+  caliber:
+    note: 入住老年人总数 ÷ 总床位数（多月份为 SUM/SUM 加权的月均口径；等级评定以评定时点值为准，mock 用月均近似）
+    basis: GB/T 37276-2018《养老机构等级划分与评定》术语定义与等级门槛
+- id: caregiver_ratio
+  name: 护理员配比
+  synonyms:
+  - 护理员老人比
+  - 护理员配置比
+  type: ratio
+  dataset: dws_facility_monthly
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(resident_count)
+  denominator:
+    expr: SUM(caregiver_count)
+  time_field: stat_date
+  unit: ∶1
+  caliber:
+    note: 入住老人数 ÷ 护理员数（SUM/SUM 加权月均口径；各等级对配比有差异性门槛要求）
+    basis: GB/T 37276-2018《养老机构等级划分与评定》人员配比门槛
+- id: certified_caregiver_rate
+  name: 持证护理员占比
+  synonyms:
+  - 护理员持证率
+  - 持证率
+  type: ratio
+  dataset: dws_facility_monthly
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(certified_caregiver_count)
+  denominator:
+    expr: SUM(caregiver_count)
+  time_field: stat_date
+  unit: '%'
+  caliber:
+    note: 持证护理员数 ÷ 护理员总数（养老护理员职业技能等级证书口径）
+    basis: GB/T 37276-2018《养老机构等级划分与评定》人员资质要求
+- id: rehab_coverage_rate
+  name: 康复服务覆盖率
+  synonyms:
+  - 康复覆盖率
+  - 康复服务占比
+  type: ratio
+  dataset: dws_facility_monthly
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(rehab_service_cnt)
+  denominator:
+    expr: SUM(resident_count)
+  time_field: stat_date
+  unit: '%'
+  caliber:
+    note: 康复服务人次数 ÷ 入住老人数（>100% 说明有老人多次接受服务；mock 以服务人次近似覆盖口径）
+    basis: GB/T 37276-2018《养老机构等级划分与评定》服务提供要求（康复服务定义见术语）
+- id: monthly_complaints
+  name: 月均投诉件数
+  synonyms:
+  - 平均每月投诉
+  - 每月投诉量
+  type: ratio
+  dataset: dws_facility_monthly
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(complaint_cnt)
+  denominator:
+    expr: COUNT(*)
+  time_field: stat_date
+  unit: 件
+  caliber:
+    note: 投诉件数合计 ÷ 机构月数（服务质量追溯的反向指标）
+    basis: GB/T 37276-2018《养老机构等级划分与评定》运营管理要求
+- id: disabled_ratio
+  name: 失能半失能老人占比
+  synonyms:
+  - 失能老人比例
+  - 失能半失能比例
+  type: ratio
+  dataset: residents
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(CASE WHEN ability_level IN ('失能', '半失能') THEN 1 ELSE 0 END)
+  denominator:
+    expr: COUNT(*)
+  time_field: admit_date
+  unit: '%'
+  caliber:
+    note: 能力等级为失能或半失能的老人 ÷ 入住老人总数（能力评估口径见 GB/T 42195-2022）
+    basis: GB/T 37276-2018 引用 MZ/T 039；GB/T 42195-2022《老年人能力评估规范》

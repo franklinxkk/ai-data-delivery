@@ -1,0 +1,28 @@
+grade: L2
+title: 中等——结构干净、数据干净，但语义薄
+scenario: >
+  粒度/主键/边界都声明了，数据也干净，指标能算（reconcile 全通）；
+  但同义词不足、比率缺除零策略与展示刻度，没有明细模板、本体声明和数据约束。
+  能跑，但跑不稳：用户问法稍微一变就路由不上，展示层责任没人认领。
+check_model:
+  exit: 0                     # 门禁通过但带 16 条 WARN：可交付草案，不可交付生产
+  errors: []
+  warns: [W11, W15, W17]      # 三类语义厚度警告（子集断言）
+check_constraints:
+  status: not_ready           # 未声明约束：数据正确性仍未被证明
+  failed_ids: []
+reconcile:                    # 语义薄不妨碍直算，6 个指标值必须与 L3 一致
+  metrics:
+    student_teacher_ratio: 16.7742
+    senior_title_ratio: 0.4194
+    professor_course_ratio: 0.5256
+    teach_fund_per_student: 1564.1026
+    degree_grant_rate: 0.96
+    destination_rate: 0.9
+guidance:
+  - W17：每个指标同义词补到 3 个以上（盘点真实用户问法，含口语变体如"教授给本科生上课的比例"）
+  - W11/W15：比率指标补 on_zero_denominator 与 display_scale，把除零与 ×100 展示责任显式落地
+  - 补 constraints 段（主键唯一/枚举字典/非空/范围/引用完整），把数据正确性从假设变成证明
+  - 补 templates 明细模板（如未落实名单）与 ontology 声明层，明细查询和实体语义成为一等资产
+  - 指标口径 basis 从"mock 内部约定"换成真实文件依据
+next_grade: 语义加厚 + 约束声明后进 L3

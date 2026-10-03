@@ -1,0 +1,26 @@
+grade: L3
+title: 完整——结构、数据、语义三轴齐备，可供 AI 使用
+scenario: >
+  目标态：lint 零 ERROR 零 WARN，11 条数据约束全量快照 pass，
+  6 个指标口径可编译直算且与 gold 一致，明细模板/本体声明/证据分级齐备。
+check_model:
+  exit: 0
+  errors: []
+  warns: []
+check_constraints:
+  status: pass                # 唯一允许进入交付的状态
+  failed_ids: []
+reconcile:
+  metrics:
+    student_teacher_ratio: 16.7742
+    senior_title_ratio: 0.4194
+    professor_course_ratio: 0.5256
+    teach_fund_per_student: 1564.1026
+    degree_grant_rate: 0.96
+    destination_rate: 0.9
+guidance:
+  - 进本体建模评审：实体/关系/投影对账已齐，可出语义图供业务评审
+  - S4 交付：export_exchange 出交换包（模型/用例/证据/视图 + 哈希清单）
+  - 供 AI 使用：结构化指标走口径编译直答，明细走模板，越界与写操作走拒答守卫
+  - 交付后转 S5 巡检：check_model --drift 盯演进，--history 记质量趋势
+next_grade: 已是目标态；持续巡检与漂移管理

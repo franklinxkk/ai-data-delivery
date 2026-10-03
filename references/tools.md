@@ -48,4 +48,16 @@
 | S5 | probe_model | 检查目标服务当前模型信息 |
 | S5 | rebuild | 触发目标服务重建，需在用户授权的范围内运行 |
 
+## 本地可视化工作台（v0.0.10）
+
+适合 FDE 和数据产品从结构与业务问题开始、不希望手写 YAML 的日常建模：
+
+```bash
+python -m workbench.serve --project ./workbench-projects/my-project
+```
+
+工作台绑定本机回环地址。打开终端打印的网址后，可导入 DDL/模型/SQLite 快照，编辑图上的本体对象、关系、数据集、字段、指标、模板和约束，记录补齐答案与依据，运行检查和单表试算，查看版本并导出交付包或完整项目备份。拖动画布只改布局，不产生语义模型版本。
+
+它复用 `check_model`、`check_join_graph`、`check_constraints`、`_sql.compile_single` 和 DDL 解析器。消费者检查只对接明确指定的已知本机 Java JSON 接口。当前不执行自由 NL2SQL、办事写操作、政策裁决或决策优化；场景编辑页会呈现所需条件与尚未接入的运行能力。细节见 [workbench README](../workbench/README.md)。
+
 维护命令：`python -m unittest discover -s tests -v`、`python mocks/run_mock.py --all`、`python examples/onboarding/run_demo.py --out tmp/demo`、`python maintainer/build_skill.py --out dist`。验证强度不同，不能用一个命令的成功代替全部阶段。

@@ -11,7 +11,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = {"SKILL.md", "README.md", "LICENSE", "SECURITY.md", "requirements.txt"}
-DIRECTORIES = {"scripts", "references", "mocks", "examples", "starter_packs"}
+DIRECTORIES = {"scripts", "references", "mocks", "examples", "starter_packs", "workbench"}
 
 
 def git(*args):
@@ -31,7 +31,7 @@ def main():
     paths = sorted(p for p in tracked if p and (p in FILES or p.split("/")[0] in DIRECTORIES))
     if not FILES <= set(paths):
         ap.error("missing tracked runtime entry files")
-    if any(p.endswith((".db", ".pyc")) or "__pycache__" in p or p.endswith(("actual.jsonl", "report.json")) for p in paths):
+    if any(p.endswith((".db", ".sqlite", ".sqlite3", ".pyc")) or "__pycache__" in p or p.endswith(("actual.jsonl", "report.json", "server.json")) for p in paths):
         ap.error("generated database/report/cache found in tracked runtime assets")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

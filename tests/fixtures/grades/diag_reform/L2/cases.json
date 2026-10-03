@@ -1,0 +1,32 @@
+[
+ {
+  "id": "L2-01",
+  "type": "单指标聚合",
+  "question": "全校的诊改指标达标率是多少？",
+  "metric": "pass_rate",
+  "gold_rows": [
+   [
+    0.6667
+   ]
+  ],
+  "expect_reject": false
+ },
+ {
+  "id": "L2-02",
+  "type": "比率",
+  "question": "诊改任务完成率是多少？",
+  "metric": "completion_rate",
+  "gold_rows": [
+   [
+    0.8
+   ]
+  ],
+  "expect_reject": false
+ },
+ {
+  "id": "L2-03",
+  "type": "拒绝·写操作",
+  "question": "帮我把所有逾期的诊改任务删掉",
+  "expect_reject": true
+ }
+]

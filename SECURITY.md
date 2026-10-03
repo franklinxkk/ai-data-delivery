@@ -9,17 +9,18 @@ SKILL.md frontmatter 中的 `capabilities` 段是本清单的机器可读版本�
 
 | 能力 | 范围 | 说明 |
 | --- | --- | --- |
-| 文件读/写 | 仅限用户通过命令行参数显式指定的路径（如 `--model semantic.yaml`、`--db physical.db`、`--out dir/`） | 不扫描、不递归读取用户未指定的目录（唯一例外：`rebuild.py` 为做产物新鲜度校验，在用户指定的 `--project-dir` 内遍历源码文件 mtime，只读时间戳不读内容） |
-| 网络访问 | 仅限用户通过 `--endpoint` / `--health-url` 显式指定的地址 | **端点守卫**：默认仅允许本机回环/内网地址，其他地址必须显式 `--allow-remote` 才放行（`_contract.guard_endpoint`）。没有任何硬编码的外部 URL，不向任何第三方服务器发送数据 |
+| 文件读/写 | CLI 限于参数指定路径；工作台只读写用户指定的 `--project` 目录及用户选中的导入文件 | 工作台不递归发现其他资料。私人项目备份可能含导入资料与 SQLite 快照；交付 ZIP 不含这些附件 |
+| 网络访问 | CLI 仅限显式端点；工作台仅绑定 `127.0.0.1`，消费者适配器强制 IPv4 回环 | 不联系外网，不发送第三方数据；消费者端点不接受重定向，不走 HTTP 代理 |
 | 子进程执行 | `rebuild.py` 执行用户显式传入的 `--build-cmd` / `--start-cmd`；门禁/演示脚本调用同仓库 Python 脚本 | **全部参数数组方式，无任何 shell 调用**（不含 `sh -c`）；命令完全由用户自己提供 |
 | 环境变量 | 子进程仅继承**白名单环境**（`_contract.minimal_env`：PATH/SystemRoot/TEMP/HOME 等运行必需项 + PYTHONIOENCODING） | 不透传 CI token、云凭据等敏感变量 |
 | SQL 执行 | 通过 SQLite/用户数据库连接执行**由语义模型编译出的只读单表聚合查询**（SELECT COUNT/SUM/AVG ... WHERE ...） | 不执行 INSERT/UPDATE/DELETE/DDL；`reconcile_paths.py` 的连接经 `readonly` 约束。注意：`extra_where` 的关键字黑名单是**模型可信前提下的过滤器**（防误注入子查询/多语句/ATTACH/load_extension/readfile 等），不是不可信用户 SQL 的沙箱 |
+| 工作台快照 | 只读打开用户导入的 SQLite 文件 | `query_only`、SQLite 受信任 schema 关闭、已编译单表查询与 15 秒查询截止；不接受自由 SQL 输入 |
 
 ## 本 Skill 明确不做的事
 
 - 不读取任何环境变量中的凭据、token、密钥
 - 不访问 `~/.ssh`、`~/.aws`、`~/.config` 等敏感目录
-- 不上传用户的模型文件、数据、SQL 或日志到任何远程服务器（端点守卫默认拦截非内网地址）
+- 不上传用户的模型文件、数据、SQL 或日志到任何远程服务器
 - 不包含混淆代码、编码隐藏载荷、安装钩子、动态代码执行（无 eval/exec/importlib 动态加载）或持久化机制
 - 不修改自身代码、不自我复制
 
@@ -44,8 +45,8 @@ SKILL.md frontmatter 中的 `capabilities` 段是本清单的机器可读版本�
 
 ## 审计建议
 
-本 Skill 全部代码为纯 Python + Markdown，无构建产物、无二进制。
-建议审查顺序：`scripts/_contract.py`（SQL 编译、只读约束、端点守卫、环境白名单）→ `scripts/rebuild.py`（部署辅助，唯一的用户命令执行入口）→ 其余脚本均可独立阅读，每个文件头部有用途与安全声明。
+本 Skill 包含 Python + Markdown + 工作台静态 HTML/CSS/JavaScript；无打包二进制依赖或第三方前端资源。
+建议审查顺序：`scripts/_contract.py`（共享模型/SQL工具）→ `workbench/service.py` 与 `workbench/serve.py`（项目操作、本机服务器、回环消费者连接、只读 SQL）→ `workbench/static/`（浏览器界面）→ `scripts/rebuild.py`（CLI 构建/启动入口）。
 
 ---
 

@@ -1,0 +1,21 @@
+grade: L1
+title: 质量差——结构完整，但数据没人审过
+scenario: 医疗·三级公立医院绩效考核 领域的 L1 档（由 degrade.py 从 mocks/med_kpi 确定性生成）。
+check_model:
+  exit: 0
+  errors: []
+  warns: []
+check_constraints:
+  status: not_ready
+  failed_ids:
+  - dws_rev_nonnegative
+  - ip_dept_ref
+  - ip_pk
+  - ip_way_values
+reconcile: skip
+guidance:
+- 按 fail 规则逐条修复：ip_pk 主键重复（P0001 两条）/ ip_way_values 枚举越界（急诊离院）/ dws_rev_nonnegative 负收入（骨科 2026-08）/ ip_dept_ref 引用悬空（整形美容科）
+- 修复完成前阻塞 S3 交付与指标发布——脏数据上算的指标是负资产
+- 修复后重跑 check_constraints，全 pass 才进 L2/L3 流程
+- 建议源头侧加物理主键约束，防止脏数据再次流入
+next_grade: 数据修复、约束全 pass 后进 L3

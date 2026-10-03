@@ -1,0 +1,205 @@
+version: mock-edu-assess-L2
+domain: 高等教育·本科教学审核评估
+datasets:
+- name: dws_teaching_stats
+  source: dws_teaching_stats
+  cn: 教学基本状态宽表
+  grain: 一行一学院一学年
+  primary_key:
+  - college
+  - year
+  ai:
+    instructions: 能答生师比/高级职称占比/教授授课比例/生均教学经费等审核评估定量指标；必带学年围栏（stat_date）；汇总粒度无个体明细，个体问题去 graduates
+  fields:
+  - name: college
+    role: dim
+    cn: 学院
+    enum: &l2_college
+    - 信息学院
+    - 机电学院
+    - 经管学院
+  - name: year
+    role: dim
+    cn: 学年
+    enum:
+    - 2023-2024
+    - 2024-2025
+    - 2025-2026
+  - name: student_cnt
+    role: measure
+    cn: 在校生数
+  - name: teacher_cnt
+    role: measure
+    cn: 专任教师数
+  - name: senior_title_cnt
+    role: measure
+    cn: 高级职称教师数
+  - name: professor_cnt
+    role: measure
+    cn: 教授数
+  - name: course_offered_cnt
+    role: measure
+    cn: 开设课程门数
+  - name: professor_taught_cnt
+    role: measure
+    cn: 教授主讲课程门数
+  - name: teach_fund_amount
+    role: measure
+    cn: 本科教学日常运行支出
+  - name: stat_date
+    role: time
+    cn: 统计截止日
+- name: graduates
+  source: graduates
+  cn: 毕业生明细表
+  grain: 一行一名毕业生
+  primary_key: student_id
+  ai:
+    instructions: 能答学位授予率/毕业去向落实率统计；必带时间围栏（grad_date）；隐私字段不存在于本表
+  fields:
+  - name: student_id
+    role: pk
+    cn: 学号
+  - name: college
+    role: dim
+    cn: 学院
+    enum: *l2_college
+  - name: grad_year
+    role: dim
+    cn: 毕业届别
+    enum:
+    - '2025'
+    - '2026'
+  - name: degree_granted
+    role: dim
+    cn: 是否授予学位
+    enum:
+    - 是
+    - 否
+  - name: destination
+    role: dim
+    cn: 毕业去向
+    enum:
+    - 协议就业
+    - 升学
+    - 灵活就业
+    - 未落实
+  - name: fitness_pass
+    role: dim
+    cn: 体质测试是否达标
+    enum:
+    - 是
+    - 否
+  - name: grad_date
+    role: time
+    cn: 毕业日期
+relationships: []
+metrics:
+- id: student_teacher_ratio
+  name: 生师比
+  synonyms:
+  - 师生比
+  - 学生教师比
+  type: ratio
+  dataset: dws_teaching_stats
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(student_cnt)
+  denominator:
+    expr: SUM(teacher_cnt)
+  time_field: stat_date
+  unit: '∶1'
+  caliber:
+    note: 在校生÷专任教师
+    basis: mock 内部约定
+- id: senior_title_ratio
+  name: 高级职称教师占比
+  synonyms:
+  - 高级职称占比
+  - 高级职称教师比例
+  type: ratio
+  dataset: dws_teaching_stats
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(senior_title_cnt)
+  denominator:
+    expr: SUM(teacher_cnt)
+  time_field: stat_date
+  unit: '%'
+  caliber:
+    note: 高级职称教师÷专任教师
+    basis: mock 内部约定
+- id: professor_course_ratio
+  name: 教授授课比例
+  synonyms:
+  - 教授上课比例
+  - 教授主讲课程占比
+  type: ratio
+  dataset: dws_teaching_stats
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(professor_taught_cnt)
+  denominator:
+    expr: SUM(course_offered_cnt)
+  time_field: stat_date
+  unit: '%'
+  caliber:
+    note: 教授主讲门数÷开设总门数
+    basis: mock 内部约定
+- id: teach_fund_per_student
+  name: 生均本科教学日常运行支出
+  synonyms:
+  - 生均教学经费
+  - 生均教学日常运行支出
+  type: ratio
+  dataset: dws_teaching_stats
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(teach_fund_amount)
+  denominator:
+    expr: SUM(student_cnt)
+  time_field: stat_date
+  unit: 元
+  caliber:
+    note: 教学日常运行支出÷在校生数
+    basis: mock 内部约定
+- id: degree_grant_rate
+  name: 学位授予率
+  synonyms:
+  - 学位授予比例
+  - 拿到学位的比例
+  type: ratio
+  dataset: graduates
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(CASE WHEN degree_granted = '是' THEN 1 ELSE 0 END)
+  denominator:
+    expr: COUNT(*)
+  time_field: grad_date
+  unit: '%'
+  caliber:
+    note: 授予学位毕业生÷毕业生总数
+    basis: mock 内部约定
+- id: destination_rate
+  name: 毕业去向落实率
+  synonyms:
+  - 去向落实率
+  - 毕业落实率
+  type: ratio
+  dataset: graduates
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(CASE WHEN destination != '未落实' THEN 1 ELSE 0 END)
+  denominator:
+    expr: COUNT(*)
+  time_field: grad_date
+  unit: '%'
+  caliber:
+    note: 落实去向毕业生÷毕业生总数
+    basis: mock 内部约定

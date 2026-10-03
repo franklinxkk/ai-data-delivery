@@ -1,0 +1,24 @@
+grade: L1
+title: 质量差——结构完整，但数据没人审过
+scenario: >
+  模型建模完成（check_model 全绿），但源库数据脏：
+  主键重复、枚举越界、经费负值、学院引用悬空，物理表连 PK 约束都没有。
+  问题全在数据质量轴——结构好不等于数据对。
+check_model:
+  exit: 0                     # 模型本身无缺陷：脏的是数据，不是结构
+  errors: []
+  warns: []
+check_constraints:
+  status: not_ready           # 存在 fail 记录即整体不可交付
+  failed_ids:                 # 精确集合断言：四类脏数据必须各被对应规则抓到
+  - dws_fund_nonnegative      # 负经费
+  - grad_pk                   # 主键重复
+  - grad_destination_values   # 枚举越界
+  - grad_college_ref          # 引用悬空
+reconcile: skip               # 数据不可信，算出来的指标没有交付价值
+guidance:
+  - 按 fail 规则逐条修复：grad_pk 去重（保留哪条需业务确认）、grad_destination_values 枚举回归口径字典、grad_college_ref 补学院主数据或纠正拼写、dws_fund_nonnegative 核查负经费来源
+  - 修复完成前阻塞 S3 交付与指标发布——脏数据上算的指标是负资产
+  - 修复后重跑 check_constraints，全 pass 才进 L2/L3 流程
+  - 建议源头侧加物理主键约束，防止脏数据再次流入
+next_grade: 数据修复、约束全 pass 后进 L3

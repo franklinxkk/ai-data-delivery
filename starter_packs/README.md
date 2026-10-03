@@ -25,6 +25,9 @@ python scripts/guide_model.py init --model partial.yaml --scope scope.yaml \
 | `government.yaml` | 政务民生服务 | 2 实体 1 关系 | mocks/government 合成场景 |
 | `healthcare.yaml` | 医疗门诊运营 | 2 实体 1 关系 | mocks/healthcare 合成场景 |
 | `manufacturing.yaml` | 制造设备与生产 | 2 实体 1 关系 | mocks/manufacturing 合成场景 |
+| `higher_vocational_diagnostic.yaml` | 高职质量诊改 | 7 实体 5 语义关系 | 脱敏抽象的演示形态；状态机/政策/统计口径由项目方确认 |
+
+高职质量诊改与本科审核评估属于不同的业务范围，应从分别核实适用要求开始，不合并其规则或评价口径。领域 starter pack 仅提供可审阅的候选实体和关系；没有键的关系默认 `semantic_only`，不会自动变成查询关联。
 
 ## 写自己的包
 

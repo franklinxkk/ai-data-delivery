@@ -1,0 +1,81 @@
+version: mock-edu-assess-L0
+domain: 高等教育·本科教学审核评估
+datasets:
+- name: dws_teaching_stats
+  source: dws_teaching_stats
+  cn: 教学基本状态宽表
+  fields:
+  - name: college
+    role: dim
+    cn: 学院
+    enum: &l0_college
+    - 信息学院
+    - 机电学院
+    - 经管学院
+  - name: year
+    role: dim
+    cn: 学年
+    enum:
+    - 2023-2024
+    - 2024-2025
+    - 2025-2026
+  - name: student_cnt
+    role: measure
+    cn: 在校生数
+  - name: teacher_cnt
+    role: measure
+    cn: 专任教师数
+  - name: senior_title_cnt
+    role: measure
+    cn: 高级职称教师数
+  - name: professor_cnt
+    role: measure
+    cn: 教授数
+  - name: course_offered_cnt
+    role: measure
+    cn: 开设课程门数
+  - name: professor_taught_cnt
+    role: measure
+    cn: 教授主讲课程门数
+  - name: teach_fund_amount
+    role: measure
+    cn: 本科教学日常运行支出
+  - name: stat_date
+    role: time
+    cn: 统计截止日
+relationships: []
+metrics:
+- id: student_teacher_ratio
+  name: 生师比
+  synonyms:
+  - 师生比
+  type: ratio
+  dataset: dws_teaching_stats
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(student_cnt)
+  denominator:
+    expr: SUM(teacher_cnt)
+  time_field: stat_date
+  unit: '∶1'
+  caliber:
+    note: 在校生÷专任教师
+    basis: mock 内部约定
+- id: senior_title_ratio
+  name: 高级职称教师占比
+  synonyms:
+  - 高级职称占比
+  type: ratio
+  dataset: dws_teaching_stats
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(senior_title_cnt)
+  denominator:
+    expr: SUM(teacher_cnt)
+  time_field: stat_date
+  unit: '%'
+  caliber:
+    note: 高级职称教师÷专任教师
+    basis: mock 内部约定

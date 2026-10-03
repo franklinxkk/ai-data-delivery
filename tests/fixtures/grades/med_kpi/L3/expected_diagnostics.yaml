@@ -1,0 +1,24 @@
+grade: L3
+title: 完整——结构、数据、语义三轴齐备，可供 AI 使用
+scenario: 医疗·三级公立医院绩效考核 领域的 L3 档（由 degrade.py 从 mocks/med_kpi 确定性生成）。
+check_model:
+  exit: 0
+  errors: []
+  warns: []
+check_constraints:
+  status: pass
+  failed_ids: []
+reconcile:
+  metrics:
+    avg_stay_days: 9.2
+    bed_occupancy_rate: 0.87
+    drug_ratio: 0.2898
+    level4_surgery_ratio: 0.2407
+    med_service_rev_ratio: 0.2613
+    outpatient_avg_fee: 321.8519
+guidance:
+- 进本体建模评审：实体/关系/投影对账已齐，可出语义图供业务评审
+- S4 交付：export_exchange 出交换包（模型/用例/证据/视图 + 哈希清单）
+- 供 AI 使用：结构化指标走口径编译直答，明细走模板，越界与写操作走拒答守卫
+- 交付后转 S5 巡检：check_model --drift 盯演进，--history 记质量趋势
+next_grade: 已是目标态；持续巡检与漂移管理

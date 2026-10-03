@@ -94,6 +94,8 @@ def main():
                     t = t.strip()
                     if t and t not in ds_sources:
                         errors.append(f"用例 {c.get('id')} 的 expect_table {t!r} 无数据集认领")
+            if c.get("expect_reject") or (c.get("expect") or {}).get("type") == "refusal":
+                continue  # Refusal cases probe the guard boundary, not term-vocabulary coverage.
             q = c.get("question", "")
             if q and not any(v and v in q for v in vocab):
                 uncovered.append(c.get("id"))

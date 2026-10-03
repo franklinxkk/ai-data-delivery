@@ -163,8 +163,13 @@ def keys(value):
 
 
 def relation_keys(rel):
-    left = keys(rel.get("from_columns", rel.get("join_key")))
-    right = keys(rel.get("to_columns", rel.get("join_key")))
+    # Existing consumers use join_key_from/join_key_to for asymmetric keys.
+    # Retain those declarations instead of falling back to a same-name key.
+    for canonical, legacy in (("from_columns", "join_key_from"), ("to_columns", "join_key_to")):
+        if canonical in rel and legacy in rel and keys(rel[canonical]) != keys(rel[legacy]):
+            raise ValueError(f"conflicting {canonical}/{legacy}; confirm the intended mapping")
+    left = keys(rel.get("from_columns", rel.get("join_key_from", rel.get("join_key"))))
+    right = keys(rel.get("to_columns", rel.get("join_key_to", rel.get("join_key"))))
     if not left or len(left) != len(right) or len(set(left)) != len(left) or len(set(right)) != len(right):
         raise ValueError("关系需等长、不重复的 from_columns/to_columns（或同名 join_key）")
     return left, right

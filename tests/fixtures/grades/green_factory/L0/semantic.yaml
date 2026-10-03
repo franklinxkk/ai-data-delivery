@@ -1,0 +1,132 @@
+version: mock-green-factory-1.0-L0
+domain: 绿色制造·绿色工厂评价
+datasets:
+- name: dws_workshop_monthly
+  source: dws_workshop_monthly
+  cn: 车间月度能耗与产出宽表
+  fields:
+  - name: workshop
+    role: dim
+    cn: 车间
+    enum:
+    - 冲压车间
+    - 焊装车间
+    - 涂装车间
+  - name: month
+    role: dim
+    cn: 月份
+    enum:
+    - 2026-06
+    - 2026-07
+    - 2026-08
+  - name: energy_tce
+    role: measure
+    cn: 综合能耗（吨标煤）
+  - name: renewable_tce
+    role: measure
+    cn: 可再生能源消耗（吨标煤）
+  - name: output_units
+    role: measure
+    cn: 合格品产量（件）
+  - name: water_intake_t
+    role: measure
+    cn: 取用新水量（吨）
+  - name: water_reuse_t
+    role: measure
+    cn: 重复利用水量（吨）
+  - name: waste_gen_t
+    role: measure
+    cn: 固废产生量（吨）
+  - name: waste_reused_t
+    role: measure
+    cn: 固废综合利用量（吨）
+  - name: stat_date
+    role: time
+    cn: 统计截止日
+relationships: []
+metrics:
+- id: energy_per_unit
+  name: 单位产品综合能耗
+  synonyms:
+  - 单位产品能耗
+  type: ratio
+  dataset: dws_workshop_monthly
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(energy_tce)
+  denominator:
+    expr: SUM(output_units)
+  time_field: stat_date
+  unit: 吨标煤/件
+  caliber:
+    note: E_ui = E_i / Q_i（综合能耗 ÷ 合格产品产量；SUM/SUM 加权）
+    basis: GB/T 36132-2025《绿色工厂评价通则》能源低碳化关键定量指标
+- id: renewable_rate
+  name: 可再生能源利用率
+  synonyms:
+  - 可再生能源占比
+  type: ratio
+  dataset: dws_workshop_monthly
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(renewable_tce)
+  denominator:
+    expr: SUM(energy_tce)
+  time_field: stat_date
+  unit: '%'
+  caliber:
+    note: R_re = E_re / E × 100%（可再生能源消耗量 ÷ 综合能耗）
+    basis: GB/T 36132-2025《绿色工厂评价通则》能源低碳化关键定量指标
+- id: water_reuse_rate
+  name: 工业用水重复利用率
+  synonyms:
+  - 用水重复利用率
+  type: ratio
+  dataset: dws_workshop_monthly
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(water_reuse_t)
+  denominator:
+    expr: SUM(water_intake_t) + SUM(water_reuse_t)
+  time_field: stat_date
+  unit: '%'
+  caliber:
+    note: R_w = V_r / (V + V_r) × 100%（重复利用水量 ÷ 总用水量，分母含取用新水与重复利用水两部分）
+    basis: GB/T 36132-2025《绿色工厂评价通则》资源高效化关键定量指标（基准值 ≥90%）
+- id: waste_reuse_rate
+  name: 一般工业固废综合利用率
+  synonyms:
+  - 固废综合利用率
+  type: ratio
+  dataset: dws_workshop_monthly
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(waste_reused_t)
+  denominator:
+    expr: SUM(waste_gen_t)
+  time_field: stat_date
+  unit: '%'
+  caliber:
+    note: K_r = Z_r / (Z + Z_m) × 100%（综合利用量 ÷ 产生量；mock 简化分母为产生量口径）
+    basis: GB/T 36132-2025《绿色工厂评价通则》资源高效化关键定量指标
+- id: water_per_unit
+  name: 单位产品取水量
+  synonyms:
+  - 单件取水量
+  type: ratio
+  dataset: dws_workshop_monthly
+  structured: true
+  status: 已发布
+  numerator:
+    expr: SUM(water_intake_t)
+  denominator:
+    expr: SUM(output_units)
+  time_field: stat_date
+  unit: 吨/件
+  caliber:
+    note: 取用新水量合计 ÷ 合格品产量合计（SUM/SUM 加权）
+    basis: GB/T 36132-2025《绿色工厂评价通则》资源高效化指标（取水定额口径）

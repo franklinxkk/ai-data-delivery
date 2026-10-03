@@ -1,6 +1,6 @@
 ---
 name: ai-data-delivery
-description: "为 FDE、产品经理和甲方信息中心交付数据与 AI 应用的语义资产。用于部分 DDL/数据结构与业务语义的理解补齐、semantic.yaml 本体声明层（业务对象/属性/谓词）与合同投影（数据集/指标/关系）建模、数据约束和关联风险检查、智能问数 bad case 诊断、评测与分阶段交付。已有模型可直接进入验证、可视化或巡检。不用于通用模型微调、OWL 推理或与数据无关的应用开发。English: Delivers semantic assets (ontology declaration + contract projection) for data & AI applications — gap-filling partial DDL/business semantics, model lint, constraint checks, NL2SQL bad-case diagnosis, evaluation and staged delivery. Not for general model fine-tuning, OWL reasoning, or data-unrelated app development."
+description: "为 FDE、数据产品经理与甲方信息中心将结构与业务语义转成可验证、可追溯的语义资产。可从 DDL/已有模型进入本地 SQLite 单人工作台，通过可视化编辑、缺口引导、约束和关联检查、单表指标试算及版本化交付协同；也可继续用原有 CLI 完成 NL2SQL 案例诊断与分阶段交付。办事、政策适用与决策场景可建模和记录依据，本工作台不代办、裁决政策或执行优化。English: A local visual semantic workbench and CLI for data/AI delivery: imports DDL and models, edits ontology mappings, guides semantic gaps, validates declared constraints/relationships, checks single-table metric results, and exports versioned evidence. Scenario contracts do not themselves execute actions, adjudicate policies, or optimize decisions."
 license: MIT
 language: 中文优先（用户可用任何语言交互；文档为中文，agent 应按用户语言回复）/ Chinese-first docs; users may interact in any language and agents must reply in the user's language.
 capabilities:
@@ -11,7 +11,7 @@ capabilities:
   environment: 子进程使用白名单环境（不透传凭据变量）/ minimal whitelist env for subprocesses, no credential passthrough
   sql: 仅执行模型编译的只读单表聚合查询 / read-only single-table aggregates compiled from the model
 metadata:
-  version: 0.0.9
+  version: 0.0.10
 ---
 
 # AI Data Delivery
@@ -32,6 +32,7 @@ metadata:
 | 交付、验收、阶段规划、巡检 | 明确阶段、证据与责任；按所需 profile 执行门禁 | [交付手册](references/delivery-playbook.md) |
 | 要看模型、缺口与来源 | 从当前模型和同版本报告生成可搜索的离线只读视图 | [工具清单](references/tools.md) |
 | 需要国标或跨平台适配 | 先核对适用范围、目标版本和消费者，记录不能表达的内容 | [标准边界](references/standards.md) |
+| 要用可视化界面导入 DDL、编辑关系、核对数据与保存项目 | 启动本地单人工作台；保留本机 SQLite 项目，导出语义和证据 | [工作台](workbench/README.md) |
 
 ## 理解、补齐、确认
 
