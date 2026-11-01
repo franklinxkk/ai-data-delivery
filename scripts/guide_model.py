@@ -25,7 +25,8 @@ def target(model, scope, ref):
         return model
     kind, name = ref.split(":", 1)
     collection, key = COLLECTIONS[kind]
-    matches = [obj for obj in get_path(model, collection) if obj.get(key) == name]
+    matches = [obj for obj in get_path(model, collection)
+               if obj.get(key) == name or (kind == 'ontology_entity' and obj.get('uid') == name)]
     if len(matches) != 1:
         raise ValueError(f"missing or ambiguous object {ref}")
     return matches[0]
@@ -159,6 +160,8 @@ def new_session(model, scope, source_hash, pack_paths=()):
             ("caliber.note", "business_owner", "计算范围、包含/排除、时间和单位口径是什么？"),
             ("unit", "business_owner", "结果单位是什么？百分比以小数还是百分数呈现？"),
             ("time_field", "business_owner", "指标使用哪个业务时间字段？")]:
+            if prop == 'time_field' and (scope.get('time_requirement') or metric.get('time_requirement')) == 'current':
+                continue  # 已明确只问当前状态；不能为了填表而制造时间字段。
             if not get_value(metric, prop):
                 requirements.append({"object": ref, "property": prop, "owner_role": role, "question": question})
         if not metric.get("expr") and not (metric.get("numerator") and metric.get("denominator")):

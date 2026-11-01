@@ -13,3 +13,4 @@ report.json
 tmp*/
 release_log.yaml
 dist/
+.venv/

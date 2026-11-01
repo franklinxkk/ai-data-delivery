@@ -19,17 +19,18 @@ readiness 通过不代表是新实例。本工具直接核对运行时模型与�
 import argparse
 import json
 import sys
-import urllib.request
 
 import yaml
 
 from _contract import guard_endpoint, load
+from _network import safe_json, response_error
 
 
-def get(url, timeout=15):
+def get(url, timeout=15, allow_remote=False):
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
-            return json.load(r), None
+        result = safe_json(url, timeout=timeout, allow_remote=allow_remote)
+        error = response_error(result)
+        return (None, error) if error else (result, None)
     except Exception as e:
         return None, str(e)
 
@@ -47,11 +48,17 @@ def local_stats(path):
     }
 
 
-def remote_stats(endpoint):
+def remote_stats(endpoint, allow_remote=False):
     """返回 (stats, source, error)。"""
     base = endpoint.rstrip("/")
-    prog, err1 = get(base + "/api/metrics/progress")
-    full, err2 = get(base + "/api/model")
+    prog, err1 = get(base + "/api/metrics/progress", allow_remote=allow_remote)
+    full, err2 = get(base + "/api/model", allow_remote=allow_remote)
+    if prog is not None and not any(prog.get(k) is not None for k in ("modelVersion", "total", "structured")):
+        prog, err1 = None, "进度响应没有版本或计数字段"
+    if full is not None and not (full.get("version") is not None or any(k in full for k in ("datasets", "metrics", "concepts", "relationships"))):
+        full, err2 = None, "模型响应没有可核对字段"
+    if full is not None and any(k in full and not isinstance(full[k], list) for k in ("datasets", "metrics", "concepts", "relationships")):
+        full, err2 = None, "模型集合字段必须是列表"
     if prog is None and full is None:
         return None, None, f"两个端点都不可达：/api/metrics/progress={err1}；/api/model={err2}"
     stats = {}
@@ -59,12 +66,12 @@ def remote_stats(endpoint):
         metrics = full.get("metrics", [])
         stats = {
             "version": full.get("version"),
-            "datasets": len(full.get("datasets", [])) or None,
-            "concepts": len(full.get("concepts", [])) or None,
-            "relationships": len(full.get("relationships", [])) or None,
-            "metrics": len(metrics) or None,
+            "datasets": len(full["datasets"]) if "datasets" in full else None,
+            "concepts": len(full["concepts"]) if "concepts" in full else None,
+            "relationships": len(full["relationships"]) if "relationships" in full else None,
+            "metrics": len(metrics) if "metrics" in full else None,
             "structured": sum(1 for x in metrics
-                              if isinstance(x, dict) and x.get("structured")) or None,
+                              if isinstance(x, dict) and x.get("structured")) if "metrics" in full else None,
         }
         source = "/api/model"
     else:
@@ -88,7 +95,7 @@ def main():
         print(f"错误：{exc}", file=sys.stderr)
         return 2
 
-    rstats, source, err = remote_stats(args.endpoint)
+    rstats, source, err = remote_stats(args.endpoint, allow_remote=args.allow_remote)
     if err:
         print(f"错误：{err}", file=sys.stderr)
         return 2
@@ -118,7 +125,7 @@ def main():
             print(f"  {k:14s} 本地={lv}  运行时={rv}")
         print("处置：rebuild.py 重建（新鲜度校验防旧包）→ 确认端口无旧实例 → 重跑本探针")
         return 1
-    print("\n✓ 运行时模型与本地权威源一致")
+    print("\n✓ 已返回的模型版本/计数字段与本地一致；未返回字段未验证")
     return 0
 
 

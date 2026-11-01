@@ -1,37 +1,43 @@
-# FDE 工程师 · 快速通道
+# FDE：先打通一个业务问题
 
-你负责把语义合同落地并验证。你的主干只有 5 步，其余命令用到再查。
+先给 Agent 具体问题和已有资料，不必预先建 scope.yaml、cases.json 或评测报告：
 
-## 你的一天（5 条命令）
+> 使用 ai-data-delivery。我需要回答【问题】，现有DDL/模型在【路径】，样本或快照在【路径，可缺】，目标消费者是【应用/Agent/报表，可待定】。请保存到【目录】，先给我当前问题的映射、可读口径、结果证据和未决项，不跑无关门禁。
+
+## 首次体验
+
+在skill目录执行（先安装 requirements.txt）：
 
 ```bash
-# 1. S0 盘点：DDL → 台账（mysqldump 风格 COMMENT 也吃得下；解析失败的表记台账不拖垮文件）
-python scripts/ingest_ddl.py --ddl source.sql --out inventory/ --model-out draft.yaml
-
-# 2. S1/S2 建模：开补齐会话（可从模板包冷启动），agent 会按角色分工提问
-python scripts/guide_model.py init --model draft.yaml --scope scope.yaml --session session.yaml --pack general
-python scripts/guide_model.py status --session session.yaml   # 看 outstanding 清零报告
-
-# 3. S3 验证：lint + 关联键 + 全量约束（lint 过了才谈数据）
-python scripts/check_model.py -f exported/semantic.yaml
-python scripts/check_join_graph.py --model exported/semantic.yaml --db physical.db --out joins.json
-python scripts/check_constraints.py --model exported/semantic.yaml --db physical.db --out constraints.json
-
-# 4. S3 口径实证：指标编译 SQL 直算，与问数路径对账（有活引擎才加 --endpoint）
-python scripts/reconcile_paths.py --model exported/semantic.yaml --db physical.db --out reconcile.json
-
-# 5. S4 门禁：按当前阶段选档（static 只 lint；validated 要评测报告+快照）
-python scripts/release_gate.py --model exported/semantic.yaml --cases cases.json \
-    --profile validated --db physical.db --eval-report eval_report.json --out gate.json
+python scripts/start.py --project ./work/fde-demo --demo
 ```
 
-## 边界提醒
+打开本机网址 → 首页“开始数值与明细练习” → 执行 → 换三种计数 → 预览上下文 → 导出。结果为合成演示，不是客户数据。
 
-- `--out` 多数是**目录**，但 `detect_isomorphic.py`/`profile_db.py` 是**文件路径**（给目录会报明确错误）。
-- `impact_analysis --target` 写裸名（如 `hazard`），不带 `dataset:` 前缀。
-- live 工具（capture_case / plan_stability / probe_model / rebuild）需要活引擎；没有引擎时 S0–S4 合同侧照常闭环。
-- 端点默认仅本机/内网，远程加 `--allow-remote`。
+## 用自己的资料
 
-## 出问题时去哪
+```bash
+python scripts/start.py --project ./work/customer --model ./semantic.yaml --sample ./snapshot.sqlite --provenance deidentified
+```
 
-bad case 诊断 → [诊断手册](diagnosis-playbook.md)；全量工具表 → [工具清单](tools.md)；模型字段语义 → [合同与验证](contract.md)。
+只有SQLite/MySQL DDL：用 `--ddl ./source.sql` 替代 `--model`，可不带快照。没有数据库也可整理草案。仅准备不启动加 `--prepare-only`；已有项目去掉导入参数重开，导入新版本在工作台“数据与资料”完成并保留历史。
+
+按当前问题依次完成：
+
+| 你做什么 | Agent/工具帮你做什么 | 你检查的结果 |
+| --- | --- | --- |
+| 指出问题所需表与可信来源 | 复用表、字段和显式关系，生成语义候选 | 不猜同名关联；稳定ID保留；缺口有具体问题 |
+| 与有权负责人确认范围、粒度、NULL/重复及时间含义 | 保存确认依据，补齐指标和映射 | 文字口径与执行公式/过滤一致 |
+| 提供独立样本与预期，运行“指标与明细核对” | 同一快照计算数值、匹配行数与明细 | 数值对且记录范围也对；失败不复用旧成功结果 |
+| 明确交给文件还是已有服务 | 选择上下文包或受控联调；保存模型/快照证据 | 文件不冒充API，范围选择不冒充授权 |
+| 更改定义后重新核对 | 漂移、失效引用和旧证据提示 | 旧包消费前检查；新报告绑定当前输入 |
+
+不用先清空全库所有问题。只处理影响本次用例的业务决定、执行依赖和验收；其他缺口保留。多表查询需要明确来源粒度和目标引擎，当前工具不生成通用多表SQL。
+
+## 需要自动化时再用CLI
+
+与人交接时先用“可视化验收页”的FDE入口，从数据与映射查看粒度、主键、字段和关系，再看执行证据；原始定义可展开。PM可切回业务入口，两者读同一模型。见[人工核验方法](human-review.md)。
+
+可复制并含真实输入准备过程的[指标—明细—上下文示例](metric-context.md)；[工具清单](tools.md)按任务检索。不要从一个尚未export的会话直接引用不存在的exported文件；引导会话的完整 init/propose/apply/export 见[补齐路径](onboarding.md)。
+
+远端调用会发送所选问题/元数据，必须是本任务明确指定且获准的目标。默认不走代理、不跟重定向；公网或域名端点需显式开启。服务重建是高级选项，不是正常语义交付的前置条件，见[安全边界](../SECURITY.md)。

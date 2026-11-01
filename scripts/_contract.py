@@ -75,27 +75,9 @@ def minimal_env(extra=None):
 
 
 def guard_endpoint(url, allow_remote=False):
-    """端点守卫：默认仅允许本机回环/内网地址；其他地址需显式 --allow-remote。
-
-    防止把业务问题、用例或模型元数据误发到公网服务。
-    """
-    import ipaddress
-    from urllib.parse import urlparse
-    host = (urlparse(url).hostname or "").strip()
-    if not host:
-        raise ValueError(f"无法解析端点地址：{url}")
-    if host.lower().endswith("localhost"):
-        return
-    try:
-        ip = ipaddress.ip_address(host)
-        if ip.is_loopback or ip.is_private or ip.is_link_local:
-            return
-    except ValueError:
-        pass  # 域名：无法静态判定归属，按远程处理
-    if not allow_remote:
-        raise ValueError(
-            f"端点 {host} 不在本机/内网范围，业务问题与用例会发送到该地址。"
-            f"确认有权测试该服务、且接收方范围允许后，加 --allow-remote 重试。")
+    """无网络策略检查；实际传输仍须经 _network 校验解析结果并固定连接 IP。"""
+    from _network import validate_url
+    validate_url(url, allow_remote)
 
 
 def now():
@@ -225,6 +207,8 @@ def get_path(obj, dotted):
 
 
 def binding_errors(report, model, cases=None, max_age_hours=24):
+    if not isinstance(report, dict) or not isinstance(report.get('evidence'), dict):
+        return ['report must be an object with evidence bindings; raw reconcile_paths lists are not evidence reports. Use a model-bound run_eval report for acceptance.']
     ev = report.get("evidence", {})
     errors = []
     if ev.get("model_sha256") != digest(model):

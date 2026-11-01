@@ -34,11 +34,12 @@ SCRIPTS = os.path.normpath(os.path.join(HERE, "..", "scripts"))
 sys.path.insert(0, SCRIPTS)
 
 import reconcile_paths as recon
+from _contract import minimal_env
 
 
 def run_step(name, cmd, cwd):
     p = subprocess.run([sys.executable] + cmd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", cwd=cwd)
+                       encoding="utf-8", errors="replace", cwd=cwd, env=minimal_env())
     ok = p.returncode == 0
     print(f"[{'PASS' if ok else 'FAIL'}] {name}")
     if not ok:

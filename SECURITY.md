@@ -1,53 +1,53 @@
-# 安全声明 / Security Policy
+# 安全边界 / Security Policy · v0.1.2
 
-本 Skill 面向 FDE 工程师、数据产品经理与信息中心人员，在**用户自己的项目环境**中执行本体建模与验证。
-我们理解平台安全扫描（如 VirusTotal Code Insight、ClawScan）会对某些代码模式（网络请求、子进程执行）给出风险提示，
-因此在此完整、明确地声明本 Skill 的全部能力边界，供用户与审查者核对。
-SKILL.md frontmatter 中的 `capabilities` 段是本清单的机器可读版本。
+ai-data-delivery在用户指定的本机项目中整理、编辑和验证语义。它有文件操作、网络验证与可选子进程能力；这些能力按下列范围实现，不能只凭安全声明判断可信。SKILL.md的capabilities是入口摘要，本页与实际代码共同供审查。
 
-## 能力清单（本 Skill 会做什么）
+## 文件、数据与工作台
 
-| 能力 | 范围 | 说明 |
-| --- | --- | --- |
-| 文件读/写 | CLI 限于参数指定路径；工作台只读写用户指定的 `--project` 目录及用户选中的导入文件 | 工作台不递归发现其他资料。私人项目备份可能含导入资料与 SQLite 快照；交付 ZIP 不含这些附件 |
-| 网络访问 | CLI 仅限显式端点；工作台仅绑定 `127.0.0.1`，消费者适配器强制 IPv4 回环 | 不联系外网，不发送第三方数据；消费者端点不接受重定向，不走 HTTP 代理 |
-| 子进程执行 | `rebuild.py` 执行用户显式传入的 `--build-cmd` / `--start-cmd`；门禁/演示脚本调用同仓库 Python 脚本 | **全部参数数组方式，无任何 shell 调用**（不含 `sh -c`）；命令完全由用户自己提供 |
-| 环境变量 | 子进程仅继承**白名单环境**（`_contract.minimal_env`：PATH/SystemRoot/TEMP/HOME 等运行必需项 + PYTHONIOENCODING） | 不透传 CI token、云凭据等敏感变量 |
-| SQL 执行 | 通过 SQLite/用户数据库连接执行**由语义模型编译出的只读单表聚合查询**（SELECT COUNT/SUM/AVG ... WHERE ...） | 不执行 INSERT/UPDATE/DELETE/DDL；`reconcile_paths.py` 的连接经 `readonly` 约束。注意：`extra_where` 的关键字黑名单是**模型可信前提下的过滤器**（防误注入子查询/多语句/ATTACH/load_extension/readfile 等），不是不可信用户 SQL 的沙箱 |
-| 工作台快照 | 只读打开用户导入的 SQLite 文件 | `query_only`、SQLite 受信任 schema 关闭、已编译单表查询与 15 秒查询截止；不接受自由 SQL 输入 |
+- CLI按输入/输出参数读写文件；这不是操作系统沙箱。不要把不可信文档中的路径或命令当成用户授权。
+- 工作台仅绑定127.0.0.1，同源检查和临时会话令牌用于限制网页请求；不是多人身份认证服务，也不隔离同一系统账号下的恶意程序。
+- 项目SQLite保存模型、历史和导入附件。私人备份含原始附件；交付ZIP不包含附件，但模型、问题与报告仍可能含业务敏感信息，分享前按接收者范围核对。
+- 导入DDL只解析，模型用安全YAML解析。数据快照只读打开、query_only、关闭trusted_schema并限制查询时间。业务查询由有界编译器生成单表聚合及同范围明细；不提供任意SQL执行器、通用跨表SQL或生产写接口。
+- 演示/测试在自身临时SQLite创建表和模拟记录；项目编辑写本机项目库。因此“业务快照只读”不等于整个工具从不写数据库。
 
-## 本 Skill 明确不做的事
+## HTTP请求
 
-- 不读取任何环境变量中的凭据、token、密钥
-- 不访问 `~/.ssh`、`~/.aws`、`~/.config` 等敏感目录
-- 不上传用户的模型文件、数据、SQL 或日志到任何远程服务器
-- 不包含混淆代码、编码隐藏载荷、安装钩子、动态代码执行（无 eval/exec/importlib 动态加载）或持久化机制
-- 不修改自身代码、不自我复制
+网络请求只来自明确指定的endpoint/health-url。CLI可发送问题等验证请求、读取服务模型或结果；启用远端目标后会把请求内容发送给该目标，不能宣称绝不出网。
 
-## 威胁模型
+共享实现位于 `scripts/_network.py`：
 
-本 Skill 的威胁模型是：**脚本被用户在知情的情况下、在自己的项目环境里、对着自己有权测试的服务端点运行**。
-所有副作用（写文件、发请求、起进程）都源自用户显式传入的参数，脚本本身没有任何自主的隐蔽行为。
-含业务敏感信息的提示词、SQL、推理链与报告，在对外分享前应由用户按接收方范围裁剪（SKILL.md 正文亦有此要求）。
+- 仅HTTP(S)，不接受URL内用户名/密码、控制字符、片段或IPv6 scope。
+- 默认允许精确localhost、回环及RFC1918/ULA私有IP。其他域名和公网IP需要显式 `--allow-remote`；不是一个“批准所有外部请求”的开关，仍须属于用户任务授权的目的地。
+- 拒绝链路本地、未指定、多播、不可路由地址及已列出的云元数据IP/主机；即使allow-remote也不放行。
+- DNS仅解析一次，检查全部答案，固定IP连接；HTTPS仍按原主机校验证书。不能通过第一次查安全IP、第二次换IP绕过。
+- 不读取系统HTTP代理，不跟随重定向。重定向须由用户明确配置最终合法地址后重试。
+- 响应最大4MB，请求受整体截止时间约束，包含慢速响应读取。HTTP失败、错误/拒绝/未知/等待状态不能凭相同数值被判为对账通过。
 
-## 已知误报模式说明
+工作台已有消费者适配器的范围更窄：只允许本机IPv4回环，不使用上述远端开关。
 
-平台启发式扫描可能命中以下模式，均为上述正当用途：
+## 子进程和环境
 
-1. `urllib.request.urlopen(endpoint)` —— 打用户指定的本机/内网验证端点（健康检查/问数 API 复现），有端点守卫
-2. `subprocess`（参数数组）—— 执行用户自己提供的构建/启动命令（`rebuild.py`）或同仓库 Python 脚本（门禁/演示）
-3. `os.walk` —— `rebuild.py` 的构建产物新鲜度校验（防止用旧包起服）
+门禁、演示和mock只调用仓库内明确脚本，使用参数数组和最小环境。`scripts/rebuild.py`是可选的高级服务重建辅助工具，正常建模与首次体验不需要它。
 
-## 报告安全问题 / 申诉
+- 默认环境由 `_contract.minimal_env`保留PATH、系统目录、临时目录、用户目录、语言等运行项，不整包继承CI/cloud/token变量。保留PATH/HOME仍不构成隔离沙箱。
+- rebuild额外变量须逐一 `--pass-env NAME`，仅传指定名称，不打印值。用户指定程序仍可能读取自身配置或主动打印秘密，因此工具不会自动回显构建/服务日志；日志留在指定项目。
+- 构建和启动使用argv、shell=False；直接shell解释器及.cmd/.bat入口被拒绝。建议JSON参数数组 `--build-argv` / `--start-argv` 避免路径解析歧义。显式指定的程序本身仍需可信，本工具不限制其全部行为。
+- 先构建并核对产物，再替换旧实例；构建失败不停止旧实例。`--port`只检查占用，从不按端口杀进程。
+- 仅停止本工具记录的进程：核对项目、可执行路径、创建时刻，用Windows原生handle或Linux pidfd操作同一实例。整数PID、过期或身份不符的记录拒绝处理。其他平台没有安全能力时拒绝，不降级为kill数字PID。
+- 启动/就绪失败会清理本次创建的前台主进程；清理失败明确报错并保留身份记录供排查。启动命令必须持续前台运行，不可daemonize；不承诺通用进程树管理、生产部署或旧实例自动回滚。
+- 就绪检查确认指定健康端点返回HTTP 2xx、被管理进程仍运行，不代表应用业务功能已验收。
+- 默认记录为项目的 `.rebuild-process.json`；单独停止使用 `python scripts/rebuild.py --project-dir ./my-service --stop`。记录防误停与PID复用，不抵御同一系统账号恶意篡改记录。
 
-- 发现真实安全问题：请通过 GitHub Issues 反馈（见 README 仓库链接），或直接联系维护者
-- 认为平台风险标记为误报：欢迎向平台申诉渠道提交本文件作为依据；每次版本发布都会触发重新扫描
+## 对平台审计的处理
 
-## 审计建议
+ClawHub公开报告针对平台0.1.1，展示的历史SKILL内部仍为0.0.7；不能直接当成本包扫描结论。历史动态模块加载和shell拼接已从相关路径移除。本版另修复遗漏的环境继承、端点判定/代理/重定向、健康检查及按端口停服务问题，并保留可复验测试。
 
-本 Skill 包含 Python + Markdown + 工作台静态 HTML/CSS/JavaScript；无打包二进制依赖或第三方前端资源。
-建议审查顺序：`scripts/_contract.py`（共享模型/SQL工具）→ `workbench/service.py` 与 `workbench/serve.py`（项目操作、本机服务器、回环消费者连接、只读 SQL）→ `workbench/static/`（浏览器界面）→ `scripts/rebuild.py`（CLI 构建/启动入口）。
+中文内容本身不是恶意行为证据；网络和子进程也不能仅因用途正常就忽略实现风险。逐项以当前代码及负例判断，不把整个报告笼统称为误报。此版本尚未取得新的ClawHub审计结果。
 
----
+## 审查与问题反馈
 
-**English summary**: ai-data-delivery runs entirely in the user's own project environment. File I/O is limited to user-specified paths; network access is limited to user-specified endpoints and guarded to loopback/private addresses unless `--allow-remote` is given; subprocesses use argv-only execution with a whitelist environment (no shell, no credential passthrough); SQL is read-only single-table aggregation compiled from the declared model. There are no hardcoded external URLs, no credential reads, no obfuscation, no dynamic code execution, and no persistence mechanisms. All side effects originate from explicit user-supplied arguments.
+建议查看 `_network.py`、`_process.py`、`rebuild.py`，再看工作台service/serve与调用它们的入口；本次证据范围见[验证记录](references/v0.1.2-validation.md)。源码仓库的tests保留自动回归，纯净运行包不携带测试与本地记录。
+
+安全问题可到[项目Issues](https://github.com/franklinxkk/ai-data-delivery/issues)反馈，请避免贴真实密钥、客户数据或未脱敏日志。
+
+**English:** This is a local toolkit, not a sandbox. CLI HTTP targets are explicit; public IPs/other hostnames require opt-in, with DNS pinning, TLS verification, bounded responses/deadlines and no proxy or redirects. Child processes use argv and a minimal environment, with optional named passthrough. Rebuild manages only identity-checked foreground processes, never kills by port. Local tests do not constitute a new platform security audit or production certification.

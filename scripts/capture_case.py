@@ -22,20 +22,18 @@ import os
 import re
 import sys
 import urllib.parse
-import urllib.request
 
 import yaml
 
 from _contract import guard_endpoint
+from _network import safe_json
 
 
-def call(method, url, payload=None, timeout=30):
+def call(method, url, payload=None, timeout=30, allow_remote=False):
     try:
-        data = json.dumps(payload).encode("utf-8") if payload is not None else None
-        req = urllib.request.Request(url, data=data,
-                                     headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.load(r), None
+        if method not in {"GET", "POST"}:
+            raise ValueError("取证调用仅支持 GET/POST")
+        return safe_json(url, payload=payload, timeout=timeout, allow_remote=allow_remote), None
     except Exception as e:
         return None, str(e)
 
@@ -70,15 +68,18 @@ def main():
     base = args.endpoint.rstrip("/")
     case_id = args.id or "bc-" + datetime.date.today().strftime("%Y%m%d") + "-001"
 
-    ask, e1 = call("POST", base + "/api/ask", {"question": args.question})
-    search, e2 = call("GET", base + "/api/search?q=" + urllib.parse.quote(args.question))
-    prog, e3 = call("GET", base + "/api/metrics/progress")
+    ask, e1 = call("POST", base + "/api/ask", {"question": args.question}, allow_remote=args.allow_remote)
+    search, e2 = call("GET", base + "/api/search?q=" + urllib.parse.quote(args.question), allow_remote=args.allow_remote)
+    prog, e3 = call("GET", base + "/api/metrics/progress", allow_remote=args.allow_remote)
     if prog is None:
-        prog, e3b = call("GET", base + "/api/model")
+        prog, e3b = call("GET", base + "/api/model", allow_remote=args.allow_remote)
         if prog:
             prog = {"modelVersion": prog.get("version"), "total": len(prog.get("metrics", []))}
     if e1:
         print(f"错误：/api/ask 不可达：{e1}", file=sys.stderr)
+        return 2
+    if not isinstance(ask, dict):
+        print("错误：/api/ask 必须返回 JSON 对象", file=sys.stderr)
         return 2
 
     hits_norm = norm_search(search, e2)
@@ -91,7 +92,7 @@ def main():
             "model_snapshot": prog or {"error": e3},
             "retrieval": hits_norm,
             "answer": {k: ask.get(k) for k in
-                       ("value", "rows", "rejected", "reason", "sql", "reasoning")
+                       ("value", "rows", "rejected", "refused", "error", "status", "success", "reason", "sql", "reasoning")
                        if k in ask},
         },
         # 以下由归因填写（模板与 diagnosis-playbook 对齐）

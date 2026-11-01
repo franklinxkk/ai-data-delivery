@@ -1,0 +1,16 @@
+const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),assert=require('assert/strict');
+(async()=>{const out='tmp-human-review/browser';fs.mkdirSync(out,{recursive:true});const browser=await chromium.launch({executablePath:process.env.BROWSER_PATH,headless:true});
+try{const page=await browser.newPage({viewport:{width:1500,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(String(e)));const ready=JSON.parse(fs.readFileSync('tmp-human-review/preview/ready.json','utf8'));
+await page.goto(ready.url,{waitUntil:'networkidle'});await page.locator('#human-review').waitFor();const map=page.locator('#human-review');
+await map.getByRole('button',{name:'开业危货记录行数',exact:true}).click();assert.match(await page.locator('#detail').innerText(),/记录行数：每条符合条件/);assert.match(await page.locator('#detail').innerText(),/经营状态/);assert.equal(await page.locator('.review-raw').getAttribute('open'),null);
+await page.screenshot({path:path.join(out,'pm-definition.png'),fullPage:false});
+await page.locator('#detail').getByRole('button').filter({hasText:'与填写的预期一致'}).first().click();assert.match(await page.locator('#detail').innerText(),/与填写的预期一致/);assert.match(await page.locator('#detail').innerText(),/NULL（无值）/);
+await page.screenshot({path:path.join(out,'pm-result.png'),fullPage:false});
+await map.locator('summary').filter({hasText:'结果与证据'}).click();const reportButtons=map.locator('.mind-branch').filter({has:page.locator('summary').filter({hasText:'结果与证据'})}).getByRole('button');
+let foundFail=false,foundStale=false;for(let i=0;i<await reportButtons.count();i++){await reportButtons.nth(i).click();const text=await page.locator('#detail').innerText();if(text.includes('与填写的预期不一致')){foundFail=true;assert.match(text,/4/)}if(text.includes('历史或未绑定证据')){foundStale=true;assert.equal(await page.locator('#detail .review-status.matched').count(),0)}}assert(foundFail&&foundStale);
+await map.getByRole('button',{name:'FDE / 实施工程师',exact:true}).click();const ds=map.locator('.mind-branch').filter({has:page.locator('summary').filter({hasText:'数据与映射'})});await ds.getByRole('button',{name:'企业记录',exact:true}).click();assert.match(await page.locator('#detail').innerText(),/企业标识/);assert.match(await page.locator('#detail').innerText(),/company_id/);assert.notEqual(await page.locator('.review-raw').getAttribute('open'),null);
+await page.screenshot({path:path.join(out,'fde-mapping.png'),fullPage:false});
+await page.locator('#search').fill('有企业标识');assert.equal(await map.getByRole('button',{name:'有企业标识的记录数',exact:true}).count(),1);await page.locator('#search').fill('');
+await map.locator('summary').filter({hasText:'问题与使用范围'}).click();await map.getByRole('button').filter({hasText:'T1主体当前开业危货记录'}).click();await page.locator('#detail').getByRole('button',{name:'开业危货记录行数（rows）',exact:true}).click();assert.match(await page.locator('#detail').innerText(),/记录行数：每条符合条件/);
+assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'evidence.json'),JSON.stringify({browser:await browser.version(),steps:['PM查看业务定义和范围','点击当前报告核对数值与NULL明细','错误预期与过期报告可区分','FDE查看字段映射和原始定义','思维导图搜索'],errors},null,2));console.log('human review browser passed');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+from _review import STYLE as REVIEW_STYLE, SCRIPT as REVIEW_SCRIPT
 from _contract import (binding_errors, digest, load, object_digest,
                        ont_entities, ont_relations, ont_relation_id)
 
@@ -48,7 +49,13 @@ def build_data(model_path, report_paths=(), session_path=None, history_path=None
     return {"model": model, "sha256": digest(model_path), "reports": reports,
             "ontology": ontology_view(model), "history": history,
             "gaps": session.get("gaps", []) if session else [],
-            "decisions": session.get("decisions", []) if session else []}
+            "decisions": session.get("decisions", []) if session else [],
+            "scenarios": session.get("scenarios", []) if session else []}
+
+
+def render_html(data):
+    payload = json.dumps(data, ensure_ascii=False, default=str).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    return PAGE.replace('__REVIEW_STYLE__', REVIEW_STYLE).replace('__REVIEW_SCRIPT__', REVIEW_SCRIPT).replace('__PAYLOAD__', payload)
 
 
 PAGE = r'''<!doctype html>
@@ -109,7 +116,8 @@ g[data-node]:hover rect.card{stroke:var(--accent);stroke-width:2.2}
 g[data-node]:focus-visible{outline:none}
 g[data-node]:focus-visible rect.card{stroke:var(--accent);stroke-width:2.4}
 @media(max-width:850px){.layout{grid-template-columns:1fr}header{padding:26px 20px}.panel{padding:16px}main{padding:16px}}
-</style></head><body><header><h1>语义交付 · 模型与证据</h1><p>查看语义关系、物理映射和补齐进度；每个验证结论保留适用范围。图为静态快照，不代表运行血缘。</p></header>
+__REVIEW_STYLE__
+</style></head><body><header><h1>语义交付 · 人工核验</h1><p>从业务问题进入，核对定义、关系、映射与预期结果。此页是可离线阅读的交付快照；图不代表运行血缘或自动验收。</p></header>
 <main><div class="bar"><label for="search">搜索</label><input id="search" placeholder="数据集、字段、指标或缺口"><label for="filter">显示</label><select id="filter"><option value="all">全部内容</option><option value="gaps">待补齐内容</option><option value="evidence">验证证据</option></select><span id="counts" class="muted"></span></div>
 <div class="layout"><section><div class="panel" id="semantic"><h2>数据集与物理映射</h2><p class="muted">模型声明的 source 与 fields。未观测实际运行链路。</p><div id="datasets" class="cards"></div><h2 style="margin-top:24px">语义关系</h2><div id="relations"></div><h2 style="margin-top:24px">指标</h2><div id="metrics"></div></div><div class="panel" id="gapPanel"><h2>补齐与决策</h2><div id="gaps"></div></div><div class="panel" id="evidencePanel"><h2>验证证据</h2><div id="reports"></div></div></section><aside><div class="panel"><h2 id="detailTitle">选择对象查看详情</h2><p class="muted">来源、计算口径、确认依据和完整属性在此显示。</p><div id="detail"></div></div></aside></div>
 <footer id="footer"></footer></main><script id="payload" type="application/json">__PAYLOAD__</script><script>
@@ -118,7 +126,7 @@ const data=JSON.parse(document.getElementById('payload').textContent), m=data.mo
 const $=id=>document.getElementById(id);
 function element(tag,text,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=String(text);if(cls)e.className=cls;return e}
 document.head.append(element('style','aside .panel{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto}@media(max-width:850px){aside .panel{position:static;max-height:none}}'));
-function inspect(title,obj){$('detailTitle').textContent=title;$('detail').replaceChildren(element('pre',JSON.stringify(obj,null,2)));if(window.innerWidth<=850)$('detailTitle').scrollIntoView({block:'start'})}
+function inspect(title,obj){renderHumanDetails(title,obj)}
 function matches(obj,q){return JSON.stringify(obj).toLowerCase().includes(q)}
 function badge(text,ok){return element('span',text,'badge '+(ok?'good':'bad'))}
 const graphPanel=element('div',undefined,'panel'),graphTitle=element('h2','语义图 · 本体层与合同投影'),graphNote=element('p','本体层（上，业务对象与谓词）与投影层（下，物理数据集）。实线=等值键，虚线=弱匹配，点线=纯语义，灰虚线=投影；节点描边=证据来源（绿粗=责任人确认，灰=数据观测，橙虚=模型推断）。点击节点聚焦邻接，双击空白复位，滚轮缩放、拖拽平移。','muted');
@@ -330,13 +338,14 @@ function render(){const q=$('search').value.toLowerCase(), filter=$('filter').va
  for(const metric of m.metrics||[]){if(!matches(metric,q))continue;const row=element('div',undefined,'item'),b=element('button',(metric.name||metric.id)+' · '+metric.id);b.addEventListener('click',()=>inspect('指标 · '+metric.id,metric));row.append(b);$('metrics').append(row)}
  for(const g of data.gaps){if(!matches(g,q)||(filter==='gaps'&&g.state==='confirmed'))continue;const row=element('div',undefined,'item'),b=element('button',g.question);row.append(badge(g.state,g.state==='confirmed'),b,element('div',g.object+' · '+g.owner_role,'muted'));b.addEventListener('click',()=>inspect('补齐 · '+g.id,{...g,decisions:data.decisions.filter(d=>d.gap_id===g.id)}));$('gaps').append(row)}
  if(!$('gaps').children.length)$('gaps').append(element('p',data.gaps.length?'当前筛选无缺口。':'未提供补齐会话；不能据此判断语义完整。','muted'));
- for(const r of data.reports){if(!matches(r,q))continue;const row=element('div',undefined,'item'),b=element('button',r.name),valid=!r.binding_errors.length;row.append(badge(valid?(r.report.decision||r.report.status||'查看报告'):'证据失效 / 未绑定',valid&&r.report.status==='pass'),b,element('div',valid?('来源：'+(r.report.evidence?.mode||'未声明')+' · '+(r.report.scope||'')) :r.binding_errors.join('；'),'muted'));b.addEventListener('click',()=>inspect('证据 · '+r.name,r));$('reports').append(row)}
+ for(const r of data.reports){if(!matches(r,q))continue;const row=element('div',undefined,'item'),b=element('button',r.name),valid=!r.binding_errors.length;row.append(badge(valid?(r.report.decision||reviewStatus(r.report)):'证据失效 / 未绑定',valid&&r.report.status==='pass'),b,element('div',valid?('来源：'+reportSource(r.report)+(r.report.scope?' · 统计范围见详情':'')) :r.binding_errors.join('；'),'muted'));b.addEventListener('click',()=>inspect('证据 · '+r.name,r));$('reports').append(row)}
  if(!data.reports.length)$('reports').append(element('p','未提供验证报告；图形展示不代表数据验证通过。','muted'));
  $('semantic').hidden=filter!=='all';$('gapPanel').hidden=filter==='evidence';$('evidencePanel').hidden=filter==='gaps';
- $('counts').textContent=shown+' 个匹配数据集 · '+data.gaps.filter(g=>g.state!=='confirmed').length+' 个待确认项';
+ $('counts').textContent=shown+' 个匹配数据集 · '+data.gaps.filter(g=>g.state!=='confirmed').length+' 个已登记待确认项';
  graphPanel.hidden=filter!=='all';drawGraph(q);
 }
-$('search').addEventListener('input',render);$('filter').addEventListener('change',render);$('footer').textContent='模型版本 '+(m.version||'未声明')+' · SHA256 '+data.sha256+' · 本地只读快照；不代表国标符合性、运行血缘或生产验收。';render();
+$('search').addEventListener('input',render);$('filter').addEventListener('change',render);$('footer').textContent='模型版本 '+(m.version||'未声明')+' · '+(data.fingerprint_kind||'模型文件SHA256')+' '+data.sha256+' · 本地只读快照；不代表国标符合性、运行血缘或生产验收。';render();
+__REVIEW_SCRIPT__
 </script></body></html>'''
 
 
@@ -350,13 +359,12 @@ def main():
     args = ap.parse_args()
     try:
         data = build_data(args.model, args.report, args.session, args.history)
-        payload = json.dumps(data, ensure_ascii=False, default=str).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
         output = Path(args.out)
         inputs = [args.model, args.session, *args.report]
         if output.resolve() in {Path(p).resolve() for p in inputs if p}:
             raise ValueError("output must not overwrite an input")
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(PAGE.replace("__PAYLOAD__", payload), encoding="utf-8")
+        output.write_text(render_html(data), encoding="utf-8")
         print(output)
         return 0
     except (ValueError, OSError, KeyError) as exc:

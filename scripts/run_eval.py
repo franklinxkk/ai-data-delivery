@@ -29,11 +29,11 @@ import argparse
 import json
 import math
 import sys
-import urllib.request
 
 import yaml
 
 from _contract import guard_endpoint
+from _network import safe_json, response_error
 
 
 # ---------- 载入 ----------
@@ -155,14 +155,10 @@ def unify_expect(case, gold_results):
 
 # ---------- 模式 A：活引擎 ----------
 
-def ask(endpoint, question, timeout=30):
-    req = urllib.request.Request(
-        endpoint.rstrip("/") + "/api/ask",
-        data=json.dumps({"question": question}).encode("utf-8"),
-        headers={"Content-Type": "application/json"})
+def ask(endpoint, question, timeout=30, allow_remote=False):
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.load(r)
+        result = safe_json(endpoint.rstrip("/") + "/api/ask", {"question": question}, timeout=timeout, allow_remote=allow_remote)
+        return result if isinstance(result, dict) else {"error": "接口响应必须是 JSON 对象"}
     except Exception as e:
         return {"error": str(e)}
 
@@ -178,9 +174,10 @@ def check_forbidden(case, *payloads):
 
 def judge_live(resp, expect, case=None):
     """活引擎响应 × 统一期望 → (pass|None, detail)。pass=None 表示无法判定。"""
-    if "error" in resp:
-        return False, f"http_error: {resp['error']}"
-    refused = bool(resp.get("rejected") or resp.get("refused"))
+    error = response_error(resp, allow_refusal=True, require_result=expect["kind"] in {"scalar", "rows"})
+    if error:
+        return False, error
+    refused = bool(resp.get("rejected") or resp.get("refused") or str(resp.get("status", "")).lower() in {"rejected", "refused"})
     kind = expect["kind"]
     if kind == "none":
         # 期望不明绝不臆断：无论引擎应答还是拒答，都只能 skip 并汇总告警
@@ -191,7 +188,7 @@ def judge_live(resp, expect, case=None):
         return False, "引擎拒绝了，但期望给出答案"
     if kind == "scalar":
         ok, why = cmp_scalar(expect["value"], resp.get("value"), expect.get("tolerance", 1e-6)) \
-            if resp.get("value") is not None else \
+            if resp.get("value") is not None or ("value" in resp and resp.get("rows") is None) else \
             cmp_rows([[expect["value"]]], resp.get("rows"))
     elif kind == "rows":
         ok, why = cmp_rows(expect["rows"], resp.get("rows"))
@@ -236,7 +233,7 @@ def run_live(args):
     for label, suite in suites:
         for c in suite:
             expect = unify_expect(c, gold_results)
-            resp = ask(args.endpoint, c["question"])
+            resp = ask(args.endpoint, c["question"], allow_remote=getattr(args, "allow_remote", False))
             ok, why = judge_live(resp, expect, c)
             declared, why = apply_declared(c, ok, why)
             records.append({
@@ -300,15 +297,18 @@ def judge_file(case, actual):
         return None, "无期望定义（跳过判定）"
     if actual is None:
         return False, "无实际输出（引擎未返回该用例）"
-    if actual.get("error"):
-        return False, "执行错误：" + str(actual["error"])
-    refused = bool(actual.get("refused") or actual.get("rejected"))
+    error = response_error(actual, allow_refusal=True, require_result=kind in {"scalar", "rows"})
+    if error:
+        return False, error
+    refused = bool(actual.get("refused") or actual.get("rejected") or str(actual.get("status", "")).lower() in {"rejected", "refused"})
     if kind == "refusal":
         return (True, "") if refused else (False, "期望拒绝，但引擎给出了答案")
     if refused:
         return False, "引擎拒绝了，但期望给出答案"
     if kind == "scalar":
-        ok, why = cmp_scalar(expect["value"], actual.get("value"), expect.get("tolerance", 1e-6))
+        ok, why = cmp_scalar(expect["value"], actual.get("value"), expect.get("tolerance", 1e-6)) \
+            if actual.get("value") is not None or ("value" in actual and actual.get("rows") is None) else \
+            cmp_rows([[expect["value"]]], actual.get("rows"))
     elif kind == "rows":
         ok, why = cmp_rows(expect["rows"], actual.get("rows"))
     else:

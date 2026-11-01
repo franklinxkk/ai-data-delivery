@@ -10,6 +10,7 @@ RULE-CONSUME-01：模型只有沉淀为"人能读的口径字典"，信息中心
 import os
 import argparse
 import sys
+import json
 
 import yaml
 from _contract import load
@@ -23,9 +24,14 @@ def fmt_metric(m):
         parts.append(f"`{m['numerator'].get('expr')}` / `{m['denominator'].get('expr')}`")
     else:
         parts.append("（未结构化）")
-    if m.get("extra_where"):
-        parts.append(f"WHERE `{m['extra_where']}`")
-    return " ".join(parts)
+    scopes = []
+    for f in m.get('filters') or []:
+        scopes.append(f"{f.get('field', '字段待定')} IN {json.dumps(f.get('values', []), ensure_ascii=False)}")
+    if m.get('extra_where'):
+        scopes.append(m['extra_where'])
+    if scopes:
+        parts.append('WHERE ' + ' AND '.join('(' + item + ')' for item in scopes))
+    return ' '.join(parts).replace('|', '&#124;').replace('\n', '<br>')
 
 
 def main(argv=None):
@@ -80,8 +86,9 @@ def main(argv=None):
         basis = cal.get("basis", "—")
         note = cal.get("note", "")
         basis_cell = basis + (f"（{note}）" if note else "")
+        time_label = '当前状态' if x.get('time_requirement') == 'current' else (x.get('time_field') or '待明确')
         L.append(f"| {x.get('id')} | {x.get('name')} | {x.get('dataset', '—')} "
-                 f"| {fmt_metric(x)} | {x.get('time_field', '—')} | {basis_cell} "
+                 f"| {fmt_metric(x)} | {time_label} | {basis_cell} "
                  f"| {x.get('status', '?')} |")
     L.append("")
 

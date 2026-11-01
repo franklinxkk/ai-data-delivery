@@ -17,38 +17,35 @@ import argparse
 import hashlib
 import json
 import sys
-import urllib.request
 
 import yaml
 
 from _contract import guard_endpoint
+from _network import safe_json, response_error
 
 
-def ask(endpoint, q, timeout=30):
-    req = urllib.request.Request(endpoint.rstrip("/") + "/api/ask",
-                                 data=json.dumps({"question": q}).encode("utf-8"),
-                                 headers={"Content-Type": "application/json"})
+def ask(endpoint, q, timeout=30, allow_remote=False):
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.load(r)
+        return safe_json(endpoint.rstrip("/") + "/api/ask", {"question": q}, timeout=timeout, allow_remote=allow_remote)
     except Exception as e:
         return {"error": str(e)}
 
 
 def fingerprint(resp):
-    if "error" in resp:
-        return "ERROR:" + resp["error"]
+    error = response_error(resp, require_result=True, allow_sql=True)
+    if error:
+        return "ERROR:" + error
     plan = resp.get("sql")
-    if plan:
+    if isinstance(plan, str) and plan.strip():
         return "SQL:" + str(plan).strip()
     return "DATA:" + json.dumps([resp.get("value"), resp.get("rows"), resp.get("rejected")],
                                 ensure_ascii=False, sort_keys=True)
 
 
-def check_one(endpoint, question, times):
+def check_one(endpoint, question, times, allow_remote=False):
     fps = []
     for _ in range(times):
-        fps.append(fingerprint(ask(endpoint, question)))
+        fps.append(fingerprint(ask(endpoint, question, allow_remote=allow_remote)))
     uniq = sorted(set(fps))
     errored = all(u.startswith("ERROR:") for u in uniq)  # 全失败≠稳定，属服务不可用
     return len(uniq) == 1 and not errored, uniq, errored
@@ -85,7 +82,7 @@ def main():
 
     drift = 0
     for q in questions:
-        stable, uniq, errored = check_one(args.endpoint, q, args.times)
+        stable, uniq, errored = check_one(args.endpoint, q, args.times, allow_remote=args.allow_remote)
         mark = "异常" if errored else ("稳定" if stable else "漂移")
         print(f"[{mark}] {q[:40]}（{args.times} 次，{len(uniq)} 种指纹）")
         if not stable:

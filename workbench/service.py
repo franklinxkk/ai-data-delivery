@@ -24,9 +24,13 @@ import check_model
 import check_constraints
 import check_join_graph
 import guide_model
-from _contract import top_shape_error, quote
+from _contract import top_shape_error, quote, relation_keys
 from _sql import compile_single
 from ingest_ddl import parse_sql
+from derive_ontology import derive
+from select_context import select_context
+from query_bundle import run_bundle
+from gen_dictionary import fmt_metric
 from workbench.store import Store, digest, encode, edit_asset, collection, identity, now
 
 PROFILES = {
@@ -108,6 +112,8 @@ def gaps(document):
     for metric in model.get("metrics", []):
         for prop, question in (("caliber.note", "明确包含、排除及统计范围。"), ("unit", "结果使用什么单位？"),
                                ("time_field", "按哪个业务时间字段统计？")):
+            if prop == 'time_field' and metric.get('time_requirement') == 'current':
+                continue
             if not guide_model.get_value(metric, prop):
                 add("metrics", metric["id"], prop, question, "business_owner")
         if metric.get("type") == "ratio":
@@ -180,25 +186,50 @@ def consumer_projection(model):
     """Supported projection of the existing Java demo API, not a universal adapter."""
     aliases = {"displayName": "display_name", "primaryKey": "primary_key", "tenantField": "tenant_field",
                "knownDefect": "known_defect", "timeField": "time_field", "extraWhere": "extra_where",
-               "joinKey": "join_key", "joinKeyFrom": "join_key_from", "joinKeyTo": "join_key_to"}
+               "joinKey": "join_key", "joinKeyFrom": "join_key_from", "joinKeyTo": "join_key_to",
+               "fromColumns": "from_columns", "toColumns": "to_columns"}
     allowed = {
         "datasets": {"name", "source", "grain", "primary_key", "tenant_field", "fields"},
-        "relationships": {"from", "to", "join_key", "join_key_from", "join_key_to", "cardinality", "traversable"},
+        "relationships": {"from", "to", "from_columns", "to_columns", "join_key", "join_key_from", "join_key_to", "cardinality", "traversable"},
         "metrics": {"id", "name", "type", "structured", "dataset", "time_field", "unit", "expr", "extra_where", "synonyms", "numerator", "denominator", "filters"},
         "concepts": {"term", "synonyms", "expand"},
     }
-    def clean(value):
+    def clean(value, preserve_empty=False):
         if isinstance(value, dict):
-            return {aliases.get(k, k): clean(v) for k, v in value.items() if v is not None and v != [] and v != {}}
+            result = {}
+            for k, v in value.items():
+                if not preserve_empty and (v is None or v == [] or v == {}):
+                    continue
+                key, val = aliases.get(k, k), clean(v, preserve_empty)
+                if key in result and result[key] != val:
+                    raise ValueError(f"消费者模型同义字段冲突：{key}")
+                result[key] = val
+            return result
         if isinstance(value, list):
-            return [clean(v) for v in value]
+            return [clean(v, preserve_empty) for v in value]
         return value
     out = {}
     for section, keys in allowed.items():
+        if section == 'relationships':
+            normalized = []
+            for item in model.get(section, []):
+                raw = clean(item, True)
+                has_keys = any(k in raw for k in ('from_columns', 'to_columns', 'join_key', 'join_key_from', 'join_key_to'))
+                if not has_keys and raw.get('traversable') is False:
+                    normalized.append({k: v for k, v in clean(item).items() if k in keys})
+                    continue
+                left, right = relation_keys(raw)
+                row = {k: v for k, v in clean(item).items() if k in keys and k not in {'join_key', 'join_key_from', 'join_key_to'}}
+                row.update(from_columns=left, to_columns=right)
+                normalized.append(row)
+            out[section] = sorted(normalized, key=encode)
+            continue
         rows = [{k: v for k, v in clean(x).items() if k in keys} for x in model.get(section, [])]
         if section == "datasets":
             for row in rows:
                 row["fields"] = [{k: v for k, v in f.items() if k in {"name", "type", "role", "enum"}} for f in row.get("fields", [])]
+                if isinstance(row.get('primary_key'), str):
+                    row['primary_key'] = [row['primary_key']]
         out[section] = sorted(rows, key=encode)
     return out
 
@@ -245,7 +276,12 @@ class Service:
         attachment = {"kind": kind, "filename": name, "sha256": hashlib.sha256(raw).hexdigest()}
         model, extra = None, {}
         if kind == "model":
-            model = yaml.safe_load(raw.decode("utf-8-sig"))
+            try:
+                model = yaml.safe_load(raw.decode("utf-8-sig"))
+            except (yaml.YAMLError, UnicodeError) as exc:
+                mark = getattr(exc, 'problem_mark', None)
+                location = f'（第 {mark.line+1} 行、第 {mark.column+1} 列）' if mark else ''
+                raise ValueError('模型文件不是有效的 UTF-8 YAML/JSON'+location+'；请检查格式后重新导入。') from exc
             validate_document(model)
         elif kind == "ddl":
             tables, failures = parse_sql(raw.decode("utf-8-sig"), name)
@@ -287,6 +323,9 @@ class Service:
                 if occupied and not req.get("replace"):
                     raise ValueError("当前已有模型；导入替换需勾选确认，历史版本会保留。资料清单不会替换模型。")
                 doc["model"] = copy.deepcopy(model)
+            if kind in {'model', 'ddl', 'sample'} and doc.get('tutorial'):
+                doc.pop('tutorial', None)
+                doc['name'] = '语义项目（已更换资料）'
             attachment = {**saved, **extra}
             doc["sources"].append(attachment)
             if kind == "sample":
@@ -295,6 +334,14 @@ class Service:
         # Attach before revision transaction to avoid nested SQLite write locks.
         saved = self.store.attach(name, kind, raw)
         return self.change(req, f"导入 {name}", mutate)
+
+    def derive(self, req):
+        def mutate(doc):
+            model, summary = derive(doc['model'])
+            validate_document(model)
+            doc['model'] = model
+            return summary
+        return self.change(req, '从元数据补充语义候选（待业务核对）', mutate)
 
     def edit(self, req):
         def mutate(doc):
@@ -409,6 +456,33 @@ class Service:
         rid = self.store.add_run(state, "query", report, doc.get("sample", {}).get("sha256"))
         return {"id": rid, **report}
 
+    def context(self, req):
+        state = self.store.read()
+        result = select_context(state['document']['model'], req.get('metric'), req.get('columns', []))
+        return {**result, 'source_revision': state['revision']}
+
+    def bundle(self, req):
+        state = self.store.read(); doc = state['document']
+        with sample_db(self.store, doc) as conn:
+            if conn is None:
+                result = {'status': 'not_ready', 'error': {'code': 'SNAPSHOT_REQUIRED', 'message': '先导入 SQLite 快照'}}
+            else:
+                result = run_bundle(doc['model'], conn, req.get('metric'), req.get('columns'),
+                                    limit=req.get('limit', 50), offset=req.get('offset', 0))
+        if result['status'] == 'computed_only' and 'expected' in req:
+            expected = req['expected']
+            if not isinstance(expected, dict) or not {'metric_value', 'matched_row_count', 'detail_rows'} <= set(expected):
+                raise ValueError('预期需要 metric_value、matched_row_count、detail_rows 三项；分页预期对应当前页')
+            matched = (compare_rows([[result['metric_value'], result['matched_row_count']]],
+                                    [[expected['metric_value'], expected['matched_row_count']]]) and
+                       compare_rows(result['detail_rows'], expected['detail_rows']))
+            result.update(status='pass' if matched else 'fail', expected=expected,
+                          detail='指标、符合条件记录数和当前页明细分别与输入的独立预期核对')
+        result.update(provenance=doc.get('sample', {}).get('provenance', 'unknown'),
+                      boundary='同一模型与本地快照内的指标/明细核对；不是身份认证、生产接口联调或自然语言理解验收。')
+        rid = self.store.add_run(state, 'bundle', result, doc.get('sample', {}).get('sha256'))
+        return {'id': rid, **result}
+
     def feedback(self, req):
         if not req.get("text"):
             raise ValueError("填写问题、影响和需要谁处理")
@@ -437,31 +511,69 @@ class Service:
         current = consumer_projection(state["document"]["model"])
         observed = consumer_projection(loaded)
         mismatch = [s for s in current if current[s] != observed[s]]
+        if mismatch:
+            result = {'status': 'model_mismatch', 'model_match': False,
+                      'mismatch_sections': mismatch, 'consumer_model_sha256': digest(observed),
+                      'question': req['question'], 'endpoint': endpoint, 'query_sent': False,
+                      'boundary': '消费者模型不匹配，尚未发送问数请求；修复映射并重新检查。'}
+            rid = self.store.add_run(state, 'consumer', result)
+            return {'id': rid, **result}
         actual = local_json(endpoint, "/api/ask", {"question": req["question"]})
+        if not isinstance(actual, dict):
+            raise ValueError("消费者回执必须是对象；未获得可核对结果")
         rows = actual.get("rows")
-        if rows is None and "value" in actual and actual["value"] is not None:
+        if rows is None and "value" in actual:
             rows = [[actual["value"]]]
         result = {"endpoint": endpoint, "question": req["question"], "actual": actual, "rows": rows,
                   "model_match": not mismatch, "mismatch_sections": mismatch,
-                  "consumer_model_sha256": digest(observed), "status": "executed_only",
+                  "consumer_model_sha256": digest(observed), "status": "executed_only", "query_sent": True,
                   "boundary": "现有 Java 问数接口适配；投影匹配仅核对其已知字段。ontology、templates、constraints、除零与展示策略等扩展字段未证明被引擎消费。"}
-        if "expected" in req:
+        failed = (actual.get("rejected") is True or actual.get("success") is False or
+                  bool(actual.get("error")) or ('status' in actual and str(actual['status']).lower() not in
+                  {'ok', 'success', 'completed', 'done'}))
+        if failed:
+            result.update(status="consumer_not_completed", detail="消费者拒绝、报错或尚未完成；随回执携带的数值不能当作成功结果。")
+        elif "expected" in req:
             result.update(expected=req["expected"], status="pass" if compare_rows(rows, req["expected"]) else "fail")
-        if mismatch:
-            result["status"] = "model_mismatch"
         rid = self.store.add_run(state, "consumer", result)
         return {"id": rid, **result}
 
+    def review_data(self, state=None, runs=None):
+        from visualize_model import ontology_view
+        state = state or self.store.read()
+        doc = state['document']
+        runs = self.store.runs() if runs is None else runs
+        names = {'bundle': '指标与明细核对', 'query': '指标直算', 'consumer': '消费者核对', 'check': '模型与数据检查'}
+        return {'model': doc['model'], 'sha256': digest(doc['model']), 'ontology': ontology_view(doc['model']),
+                'scenarios': doc['scenarios'], 'decisions': doc['decisions'], 'issues': doc['feedback'],
+                'fingerprint_kind': '规范化模型内容SHA256',
+                'gaps': gaps(doc), 'history': None,
+                'reports': [{'name': names.get(r['kind'], r['kind'])+' · '+str(r['report'].get('metric', r['id']))+' · '+r['created'][:19],
+                             'binding_errors': ['模型、快照或适用条件已变更'] if r['stale'] else [],
+                             'stale': r['stale'], 'report': r['report']} for r in runs]}
+
+    def review_html(self):
+        from visualize_model import render_html
+        return render_html(self.review_data()).encode('utf-8')
+
     def export(self, snapshot=False):
+        from visualize_model import render_html
         state = self.store.read(); doc = state["document"]
+        runs = self.store.runs()
         out = io.BytesIO()
         entries = {"semantic.yaml": yaml.safe_dump(doc["model"], allow_unicode=True, sort_keys=False).encode(),
                    "scenarios.json": encode(doc["scenarios"]).encode(), "decisions.json": encode(doc["decisions"]).encode(),
-                   "issues.json": encode(doc["feedback"]).encode(), "evidence.json": encode(self.store.runs()).encode()}
+                   "issues.json": encode(doc["feedback"]).encode(), "evidence.json": encode(runs).encode(),
+                   "00-human-review.html": render_html(self.review_data(state, runs)).encode('utf-8')}
         lines = ["# 语义字典", "", "此字典来自同版本模型。业务口径与标准适用性仍需责任人复核。", ""]
         for ds in doc["model"].get("datasets", []):
             lines += ["## " + ds.get("cn", ds["name"]), f"来源：{ds.get('source','未定')}；粒度：{ds.get('grain','未定')}", ""]
             lines += [f"- {f['name']}：{f.get('cn', '待补含义')}（{f.get('role','attr')}）" for f in ds.get("fields", [])]
+        for metric in doc['model'].get('metrics', []):
+            lines += ['', '## 指标：' + str(metric.get('name') or metric['id']),
+                      f"挂载数据集：{metric.get('dataset', '未定')}；单位：{metric.get('unit', '未定')}",
+                      '口径：' + fmt_metric(metric),
+                      '说明：' + str((metric.get('caliber') or {}).get('note', '未定'))]
         entries["dictionary.md"] = "\n".join(lines).encode()
         if snapshot:
             with tempfile.TemporaryDirectory() as td:

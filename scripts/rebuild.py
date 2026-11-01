@@ -1,184 +1,285 @@
 #!/usr/bin/env python3
-"""rebuild.py — 停服 → 新鲜度校验 → 构建 → 起服 → 就绪校验。
+"""Build first, then replace only a service recorded by this tool.
 
-防旧包铁律：构建产物（artifact）的 mtime 必须新于全部源码文件，
-否则视为旧包，强制重新构建（除非显式 --skip-build 且产物新鲜）。
-
-用法示例：
-    python3 rebuild.py \
-        --project-dir /path/to/fde \
-        --artifact /path/to/fde/target/fde-server.jar \
-        --build-cmd "mvn -q package -DskipTests" \
-        --start-cmd "java -jar target/fde-server.jar" \
-        --health-url http://127.0.0.1:8080/health \
-        --port 8080
-
-退出码：0 = 服务已就绪；1 = 任一环节失败。
-
-安全声明：网络访问仅限 --health-url 指定地址（预期本地/内网就绪端点），
-无任何其他出站请求；--build-cmd / --start-cmd 以 shell=False 参数数组方式执行。
+--port diagnoses occupancy; it never selects a process to terminate. Commands
+must keep the managed service in the foreground, not daemonize or launch and
+exit. Records prevent stale-PID accidents, not malicious same-user rewriting.
+Build/start run argv with shell=False and a minimal environment. Logs stay in
+files and are never echoed automatically. This is not a general process-tree
+supervisor, production deployment system, or proof of application correctness.
 """
 import argparse
+import ipaddress
+import math
 import os
-import shlex
-import signal
+from pathlib import Path
+import socket
 import subprocess
 import sys
 import time
-import urllib.request
-import urllib.error
+from urllib.parse import urlsplit
 
-SOURCE_EXTS = {".java", ".kt", ".scala", ".xml", ".yaml", ".yml", ".properties",
-               ".py", ".sql", ".json", ".gradle"}
+from _contract import guard_endpoint
+from _process import (OwnedProcess, canonical, child_env, parse_argv, process_lock,
+                      read_record, remove_record, require_process_support,
+                      validate_argv, write_record)
+
+SOURCE_EXTS = {'.java', '.kt', '.scala', '.xml', '.yaml', '.yml', '.properties',
+               '.py', '.sql', '.json', '.gradle'}
+_CHILDREN = {}  # Keep local Popen handles until the owned process is stopped.
 
 
-def log(msg):
-    print(f"[rebuild] {msg}", flush=True)
+def log(message):
+    print('[rebuild] ' + message, flush=True)
 
 
-def newest_source_mtime(project_dir):
-    """返回项目目录内最新源码文件的 mtime（无源码则返回 0）。"""
+def newest_source_mtime(project_dir, exclude=()):
+    ignored = {canonical(p) for p in exclude}
     newest = 0.0
     for root, dirs, files in os.walk(project_dir):
         dirs[:] = [d for d in dirs if d not in
-                   ("target", "build", "dist", ".git", "node_modules", "__pycache__")]
-        for f in files:
-            if os.path.splitext(f)[1] in SOURCE_EXTS:
-                p = os.path.join(root, f)
-                newest = max(newest, os.path.getmtime(p))
+                   ('target', 'build', 'dist', '.git', '.venv', 'node_modules', '__pycache__')]
+        for name in files:
+            path = os.path.join(root, name)
+            if os.path.splitext(name)[1] in SOURCE_EXTS and canonical(path) not in ignored:
+                newest = max(newest, os.path.getmtime(path))
     return newest
 
 
-def artifact_fresh(artifact, project_dir):
-    """产物存在且不旧于任何源码 → True。"""
+def artifact_fresh(artifact, project_dir, exclude=()):
     if not os.path.isfile(artifact):
-        return False, "产物不存在"
-    art_mtime = os.path.getmtime(artifact)
-    src_mtime = newest_source_mtime(project_dir)
-    if src_mtime > art_mtime:
-        return False, (f"产物旧于源码（artifact={time.ctime(art_mtime)}，"
-                       f"最新源码={time.ctime(src_mtime)}）——旧包风险")
-    return True, "产物新鲜"
+        return False, 'artifact is absent'
+    if newest_source_mtime(project_dir, exclude) > os.path.getmtime(artifact):
+        return False, 'artifact is older than project sources'
+    return True, 'artifact is current'
 
 
-def stop_service(port=None, pid_file=None):
-    """按 pid 文件或端口停掉旧服务，返回是否停掉了进程。"""
-    killed = False
-    if pid_file and os.path.isfile(pid_file):
+def port_occupied(port, host='127.0.0.1'):
+    if port is None:
+        return False
+    family = socket.AF_INET6 if ':' in host else socket.AF_INET
+    with socket.socket(family, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.3)
+        return sock.connect_ex((host, port)) == 0
+
+
+def _loopback_host(host):
+    if host == 'localhost':
+        return '127.0.0.1'
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return None
+    effective = getattr(ip, 'ipv4_mapped', None) or ip
+    return str(ip) if effective.is_loopback else None
+
+
+def stop_service(port=None, pid_file=None, project_dir=None):
+    """Compatibility helper: a port never authorizes stopping its listener."""
+    if not pid_file or not project_dir:
+        if port is not None:
+            log('port occupancy: ' + ('occupied' if port_occupied(port) else 'no listener detected'))
+        raise ValueError('stopping requires a managed record and project directory')
+    record = read_record(pid_file, project_dir)
+    if record is None:
+        return False
+    with OwnedProcess(record['pid']) as process:
+        process.verify(record, project_dir)
+        process.stop()
+    local_child = _CHILDREN.pop(record['pid'], None)
+    if local_child is not None:
+        local_child.wait(timeout=6)
+    remove_record(pid_file, record)
+    return True
+
+
+def wait_ready(health_url, timeout, allow_remote=False, process=None):
+    from _network import safe_health
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process is not None and not process.alive():
+            return False
         try:
-            pid = int(open(pid_file).read().strip())
-            os.kill(pid, signal.SIGTERM)
-            log(f"按 pid 文件停止进程 {pid}")
-            killed = True
-        except (ValueError, ProcessLookupError, PermissionError) as e:
-            log(f"pid 文件停止失败：{e}")
-    if port:
-        # 优先 fuser；退化 lsof 取 pid 后逐个 SIGTERM。全程 shell=False。
-        try:
-            r = subprocess.run(["fuser", "-k", f"{port}/tcp"],
-                               capture_output=True, text=True)
-            if r.returncode == 0:
-                log(f"已释放端口 {port}（fuser）")
-                killed = True
-        except FileNotFoundError:
+            remaining = deadline - time.monotonic()
+            if safe_health(health_url, timeout=max(0.05, min(3, remaining)), allow_remote=allow_remote):
+                return process is None or process.alive()
+        except ValueError as exc:
+            raise ValueError('health check refused: ' + str(exc)) from exc
+        except OSError:
             pass
-        if not killed:
-            try:
-                r = subprocess.run(["lsof", "-ti", f":{port}"],
-                                   capture_output=True, text=True)
-                for line in r.stdout.splitlines():
-                    try:
-                        os.kill(int(line.strip()), signal.SIGTERM)
-                        killed = True
-                    except (ValueError, ProcessLookupError, PermissionError):
-                        continue
-                if killed:
-                    log(f"已释放端口 {port}（lsof）")
-            except FileNotFoundError:
-                log("fuser/lsof 均不可用，跳过端口停服")
-    if killed:
-        time.sleep(2)  # 等端口释放
-    return killed
-
-
-def wait_ready(health_url, timeout):
-    """轮询就绪端点直到 200 或超时。"""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with urllib.request.urlopen(health_url, timeout=3) as resp:
-                if resp.status == 200:
-                    return True
-        except (urllib.error.URLError, ConnectionError, OSError):
-            pass
-        time.sleep(1)
+        time.sleep(min(0.1, max(0, deadline - time.monotonic())))
     return False
 
 
-def main():
-    ap = argparse.ArgumentParser(description="停服→构建→起服→就绪校验，防旧包")
-    ap.add_argument("--project-dir", required=True, help="源码项目根目录")
-    ap.add_argument("--artifact", required=True, help="构建产物路径（如 jar）")
-    ap.add_argument("--build-cmd", required=True, help="构建命令（在项目目录下执行）")
-    ap.add_argument("--start-cmd", required=True, help="启动命令（在项目目录下执行）")
-    ap.add_argument("--health-url", required=True, help="就绪校验 URL，返回 200 视为就绪")
-    ap.add_argument("--port", type=int, default=None, help="服务端口（用于停旧服）")
-    ap.add_argument("--pid-file", default=None, help="服务 pid 文件（优先于端口停服）")
-    ap.add_argument("--timeout", type=int, default=120, help="就绪等待秒数")
-    ap.add_argument("--skip-build", action="store_true",
-                    help="跳过构建——仅在产物新鲜时允许，否则报错退出")
-    ap.add_argument("--log-file", default=None, help="服务 stdout/stderr 日志路径")
-    args = ap.parse_args()
+def _launch_options():
+    if os.name == 'nt':
+        return {'creationflags': subprocess.CREATE_NO_WINDOW}
+    return {'start_new_session': True}
 
-    project_dir = os.path.abspath(args.project_dir)
-    artifact = args.artifact if os.path.isabs(args.artifact) \
-        else os.path.join(project_dir, args.artifact)
 
-    # 1) 新鲜度校验（防旧包）
-    fresh, reason = artifact_fresh(artifact, project_dir)
-    log(f"产物新鲜度校验：{reason}")
-    if args.skip_build and not fresh:
-        log("错误：--skip-build 但产物不新鲜，拒绝使用旧包。去掉 --skip-build 重新构建。")
+def _cleanup_new(proc, process):
+    if process is not None:
+        process.stop()
+    elif proc is not None and proc.poll() is None:
+        # Popen keeps the Windows process handle; on Linux the unreaped child
+        # cannot have its PID reused while we acquire the pidfd.
+        if os.name == 'nt':
+            proc.kill()
+        else:
+            with OwnedProcess(proc.pid) as child:
+                child.stop()
+    if proc is not None:
+        proc.wait(timeout=6)
+
+
+def _path(value, project):
+    p = Path(value)
+    return p.resolve() if p.is_absolute() else (project / p).resolve()
+
+
+def execute(args):
+    require_process_support()
+    project = Path(args.project_dir).resolve()
+    if not project.is_dir():
+        raise ValueError('project directory does not exist')
+    pid_file = _path(args.pid_file or '.rebuild-process.json', project)
+    if not pid_file.parent.is_dir():
+        raise ValueError('process record directory does not exist')
+    if args.port is not None and not 1 <= args.port <= 65535:
+        raise ValueError('port must be between 1 and 65535')
+    with process_lock(pid_file):
+        if args.stop:
+            stopped = stop_service(args.port, pid_file, project)
+            log('owned service stopped' if stopped else 'no managed record; no process stopped')
+            return 0
+        if not args.artifact or not args.health_url:
+            raise ValueError('start requires artifact and health-url')
+        if not all(math.isfinite(value) and value > 0 for value in (args.timeout, args.build_timeout)):
+            raise ValueError('timeouts must be positive')
+        guard_endpoint(args.health_url, args.allow_remote)
+        from _network import safe_health  # Import before building or touching the old service.
+        env = child_env(args.pass_env)
+        start = validate_argv(parse_argv(args.start_cmd, args.start_argv), project, env)
+        build = None if args.skip_build else validate_argv(parse_argv(args.build_cmd, args.build_argv), project, env)
+        artifact = _path(args.artifact, project)
+        log_path = _path(args.log_file or 'service.log', project)
+        build_log = _path(args.build_log_file or 'build.log', project)
+        if any(not p.parent.is_dir() for p in (log_path, build_log)):
+            raise ValueError('log directory does not exist')
+        if any(canonical(p) in {canonical(artifact), canonical(pid_file)} for p in (log_path, build_log)):
+            raise ValueError('logs must not overwrite the artifact or identity record')
+        port = args.port
+        parsed = urlsplit(args.health_url)
+        loopback = _loopback_host(parsed.hostname)
+        diagnostic_host = loopback or '127.0.0.1'
+        if port is None and loopback:
+            port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+        record = read_record(pid_file, project)
+        old = None
+        try:
+            if record is not None:
+                old = OwnedProcess(record['pid'])
+                old.verify(record, project)
+                if port_occupied(port, diagnostic_host) and (record.get('local_port'), record.get('local_host')) != (port, diagnostic_host):
+                    raise ValueError('requested port is occupied outside the recorded service port; existing service retained')
+            elif port_occupied(port, diagnostic_host):
+                raise ValueError('port is occupied without a matching owned record; no process stopped')
+            excluded = (pid_file, log_path, build_log)
+            fresh, reason = artifact_fresh(artifact, project, excluded)
+            if args.skip_build and not fresh:
+                raise ValueError('skip-build refused: ' + reason)
+            with log_path.open('ab') as output, build_log.open('ab') as build_output:
+                if build is not None:
+                    log('building; output remains in the build log')
+                    completed = subprocess.run(build, cwd=project, env=env, shell=False,
+                                               stdin=subprocess.DEVNULL, stdout=build_output,
+                                               stderr=subprocess.STDOUT, timeout=args.build_timeout,
+                                               **_launch_options())
+                    if completed.returncode:
+                        raise ValueError('build failed; existing owned service was not stopped')
+                    fresh, reason = artifact_fresh(artifact, project, excluded)
+                    if not fresh:
+                        raise ValueError('build did not produce a current artifact; existing service retained: ' + reason)
+                if old is not None:
+                    old.verify(record, project)
+                    old.stop()
+                    local_child = _CHILDREN.pop(record['pid'], None)
+                    if local_child is not None:
+                        local_child.wait(timeout=6)
+                    remove_record(pid_file, record)
+                    log('previous owned instance stopped after successful build validation')
+                deadline = time.monotonic() + 3
+                while port_occupied(port, diagnostic_host) and time.monotonic() < deadline:
+                    time.sleep(0.1)
+                if port_occupied(port, diagnostic_host):
+                    raise ValueError('port remains occupied; no other listener will be stopped')
+                proc, process, new_record = None, None, None
+                try:
+                    proc = subprocess.Popen(start, cwd=project, env=env, shell=False,
+                                            stdin=subprocess.DEVNULL, stdout=output,
+                                            stderr=subprocess.STDOUT, close_fds=True,
+                                            **_launch_options())
+                    process = OwnedProcess(proc.pid)
+                    new_record = process.record(project, start[0])
+                    new_record['local_port'] = port
+                    new_record['local_host'] = diagnostic_host
+                    write_record(pid_file, new_record)
+                    if not wait_ready(args.health_url, args.timeout, args.allow_remote, process):
+                        raise ValueError('new service exited or readiness timed out')
+                    _CHILDREN[proc.pid] = proc
+                    log('service ready; managed identity record saved')
+                    return 0
+                except (Exception, KeyboardInterrupt):
+                    try:
+                        _cleanup_new(proc, process)
+                        if new_record is not None:
+                            remove_record(pid_file, new_record)
+                        log('newly launched process cleaned up; logs were not displayed')
+                    except (OSError, ValueError, subprocess.TimeoutExpired):
+                        log('cleanup failed; retain the identity record and inspect the owned instance')
+                        raise RuntimeError('new process cleanup incomplete') from None
+                    raise
+                finally:
+                    if process is not None:
+                        process.close()
+        finally:
+            if old is not None:
+                old.close()
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--project-dir', required=True)
+    p.add_argument('--artifact')
+    builds = p.add_mutually_exclusive_group()
+    builds.add_argument('--build-cmd', help='legacy command text; no shell interpretation')
+    builds.add_argument('--build-argv', help='JSON string array, recommended for paths/arguments')
+    starts = p.add_mutually_exclusive_group()
+    starts.add_argument('--start-cmd', help='foreground executable command; no shell interpretation')
+    starts.add_argument('--start-argv', help='JSON string array for a foreground service')
+    p.add_argument('--health-url')
+    p.add_argument('--allow-remote', action='store_true')
+    p.add_argument('--port', type=int, help='local occupancy diagnostic only; never kills by port')
+    p.add_argument('--pid-file', help='managed JSON identity record; integer PID files are refused')
+    p.add_argument('--stop', action='store_true', help='stop only the matching recorded owned process')
+    p.add_argument('--timeout', type=float, default=120)
+    p.add_argument('--build-timeout', type=float, default=300)
+    p.add_argument('--skip-build', action='store_true')
+    p.add_argument('--log-file')
+    p.add_argument('--build-log-file')
+    p.add_argument('--pass-env', action='append', default=[], metavar='NAME', help='explicitly pass one named environment variable; repeat as needed')
+    args = p.parse_args(argv)
+    try:
+        return execute(args)
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, KeyboardInterrupt) as exc:
+        if isinstance(exc, subprocess.SubprocessError):
+            log('failed: build/start subprocess did not complete; logs retained locally')
+        elif isinstance(exc, KeyboardInterrupt):
+            log('interrupted; completed cleanup of any newly managed process')
+        else:
+            log('failed: ' + str(exc))
         return 1
 
-    # 2) 停旧服
-    stop_service(port=args.port, pid_file=args.pid_file)
 
-    # 3) 构建
-    if not args.skip_build:
-        log(f"构建：{args.build_cmd}")
-        r = subprocess.run(shlex.split(args.build_cmd), cwd=project_dir)
-        if r.returncode != 0:
-            log(f"构建失败（exit={r.returncode}）")
-            return 1
-        if not os.path.isfile(artifact):
-            log(f"构建成功但未找到产物：{artifact}")
-            return 1
-        log(f"构建完成：{artifact}")
-
-    # 4) 起服（ detached ，日志落盘）
-    log_path = args.log_file or os.path.join(project_dir, "service.log")
-    log(f"启动：{args.start_cmd}（日志 → {log_path}）")
-    logf = open(log_path, "ab")
-    proc = subprocess.Popen(shlex.split(args.start_cmd), cwd=project_dir,
-                            stdout=logf, stderr=subprocess.STDOUT,
-                            start_new_session=True)
-    log(f"服务进程 pid={proc.pid}")
-
-    # 5) 就绪校验
-    log(f"等待就绪：{args.health_url}（最长 {args.timeout}s）")
-    if wait_ready(args.health_url, args.timeout):
-        log("服务已就绪 ✓")
-        return 0
-    log("就绪超时，服务日志末尾：")
-    try:
-        lines = open(log_path, errors="replace").read().splitlines()
-        for line in lines[-20:]:
-            print(f"    {line}")
-    except OSError:
-        pass
-    return 1
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())

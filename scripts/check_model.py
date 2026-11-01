@@ -33,6 +33,7 @@
   E16 概念禁用词与自身 term/synonyms 冲突（禁用词是被禁止的说法，不能同时是别名）
   E17 指标 on_zero_denominator 非法（∈ null/zero/error；缺省为 null）
   E18 明细模板 id 重复 / 挂载数据集不存在 / columns、time_field 引用数据集没有的字段
+  E19 受支持的 structured 单表指标引用未声明字段，或混用聚合与逐行语义
   W01 数据集缺 ai.instructions（表描述是给模型的路由+边界指令，不是给人看的说明书）
   W02 维度字段缺 enum（若该字段是状态/枚举类，缺字典则模型写错过滤条件且不报错）
   W03 数据集无 time 角色字段（时间围栏无法落地，"今天/本月"必错）
@@ -50,6 +51,7 @@
   W16 指标 filters / 概念 expand 的取值不在字段 enum 字典中（会静默错过滤）
   W17 structured 指标同义词 <3 个（同义词是指标命中路由的生命线，命中不了就掉进慢速 NL2SQL）
   W18 明细模板缺 time_field（明细也必须时间围栏）或同义词 <3 个
+  W19 本地编译器未覆盖该 structured 指标，表达式依赖未验证（不等于业务定义非法）
   W12 本体实体缺 uid（缺省以 name 为身份，重命名后 drift/历史不可追踪；建议 ent_xxx 稳定 ID）
 
 本体段是声明式事实清单：本工具只做静态结构检查与两层对账，不做任何跨声明推导
@@ -317,6 +319,7 @@ def check_ontology(m, rep):
 
 
 def check_metrics(m, rep, ds_index):
+    from _sql import metric_dependencies
     seen = set()
     for mt in m.get("metrics", []) or []:
         mid = mt.get("id", "?")
@@ -353,8 +356,16 @@ def check_metrics(m, rep, ds_index):
                     rep.error("E17", where, f"on_zero_denominator 非法：{policy!r}（∈ null/zero/error）")
             if not (expr or num):
                 rep.error("E07", where, "structured 指标缺 expr 且缺分子分母（口径未自含）")
-            if not tf:
-                rep.warn("W04", where, "structured 指标缺 time_field")
+            if ds is not None and (expr or num):
+                dependencies = metric_dependencies(mt, ds)
+                if dependencies.get("error"):
+                    if dependencies.get("error_kind") in {"unknown_field", "invalid_aggregate"}:
+                        rep.error("E19", where, dependencies["error"])
+                    else:
+                        rep.warn("W19", where,
+                                 "本地单表依赖校验未完成，不据此判定业务口径非法：" + dependencies["error"])
+            if not tf and mt.get('time_requirement') != 'current':
+                rep.warn("W04", where, "尚未明确当前状态或统计时间字段；当前状态可声明 time_requirement: current")
             if mt.get("status") == "草案":
                 rep.warn("W05", where, "structured 指标仍为 草案 状态，验收后改 已发布")
             for flt in mt.get("filters", []) or []:
@@ -392,8 +403,8 @@ def check_templates(m, rep, ds_index):
             tf = t.get("time_field")
             if tf and tf not in fnames:
                 rep.error("E18", where, f"time_field {tf!r} 不在数据集字段中")
-            if not tf:
-                rep.warn("W18", where, "缺 time_field（明细查询也必须时间围栏）")
+            if not tf and t.get('time_requirement') != 'current':
+                rep.warn("W18", where, "尚未明确当前状态或统计时间字段；当前状态可声明 time_requirement: current")
         if t.get("status") != "停用" and len(t.get("synonyms") or []) < 3:
             rep.warn("W18", where, "同义词 <3 个（明细模板同样靠同义词命中路由）")
 
@@ -423,6 +434,7 @@ def model_index(m):
 def drift_report(current, baseline):
     """四级 drift 分类。breaking = 会破坏现有消费者的变更（删除被引用对象、改主键/粒度/映射）。"""
     from _contract import keys, object_digest
+    from _sql import metric_dependencies
     cur, base = model_index(current), model_index(baseline)
     added = sorted(k for k in cur if k not in base)
     removed = sorted(k for k in base if k not in cur)
@@ -466,8 +478,24 @@ def drift_report(current, baseline):
             lost = {f.get("name") for f in before.get("fields", []) or []} - \
                    {f.get("name") for f in after.get("fields", []) or []}
             for mt in current.get("metrics", []) or []:
-                if mt.get("dataset") == key and mt.get("time_field") in lost:
+                if mt.get("dataset") != key:
+                    continue
+                if mt.get("time_field") in lost:
                     broke(kind, key, f"字段 {mt.get('time_field')} 已删但指标 {mt.get('id')} 用作 time_field")
+                if lost and mt.get("structured"):
+                    # Analyze the current expression against both schemas so removed
+                    # fields remain resolvable. A changed metric that no longer uses
+                    # them must not be marked breaking. Literals are not references.
+                    known_fields = {f.get("name"): f for f in before.get("fields", []) or []}
+                    known_fields.update({f.get("name"): f for f in after.get("fields", []) or []})
+                    dependency_ds = dict(after, fields=list(known_fields.values()))
+                    dependencies = metric_dependencies(mt, dependency_ds)
+                    if not dependencies.get("error"):
+                        removed_refs = lost & set(dependencies["fields"])
+                        if removed_refs:
+                            broke(kind, key,
+                                  f"字段 {', '.join(sorted(removed_refs))} 已删但指标 {mt.get('id')} "
+                                  "的表达式或过滤仍引用（按单表编译依赖核对）")
         if kind == "ontology_relation" and before.get("mapping") != after.get("mapping"):
             if before.get("mapping") == "equi_key":
                 broke(kind, key, f"mapping 由 equi_key 变为 {after.get('mapping')!r}（已投影关系失去落地键）")

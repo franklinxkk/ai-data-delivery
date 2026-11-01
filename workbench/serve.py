@@ -59,6 +59,8 @@ def make_server(service, port=0):
                 self.guard(path.startswith("/api/"))
                 if path == "/api/state":
                     return self.response(200, service.state())
+                if path == "/api/review":
+                    return self.response(200, service.review_html(), "text/html; charset=utf-8", "human-review.html")
                 if path in {"/api/export", "/api/backup"}:
                     return self.response(200, service.export(path.endswith("backup")), "application/zip", "project-backup.zip" if path.endswith("backup") else "semantic-delivery.zip")
                 if path == "/":
@@ -85,8 +87,9 @@ def make_server(service, port=0):
                     raise ValueError("请求必须是对象")
                 routes = {"/api/import": service.import_file, "/api/edit": service.edit, "/api/answer": service.answer,
                           "/api/scene": service.scene, "/api/query": service.query, "/api/feedback": service.feedback,
-                          "/api/consumer": service.consumer, "/api/check": lambda _: service.check(),
-                          "/api/resolve-feedback": service.resolve_feedback,
+                          "/api/consumer": service.consumer, "/api/context": service.context,
+                          "/api/bundle": service.bundle, "/api/check": lambda _: service.check(),
+                          "/api/resolve-feedback": service.resolve_feedback, "/api/derive": service.derive,
                           "/api/layout": lambda r: service.store.save_layout(r["positions"]),
                           "/api/restore": lambda r: service.store.restore(r["target"], r["revision"])}
                 action = routes.get(urlsplit(self.path).path)
@@ -103,11 +106,11 @@ def make_server(service, port=0):
     return HTTPServer(("127.0.0.1", port), Handler)
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--project", required=True, help="本地项目目录，自动创建 project.sqlite")
     ap.add_argument("--port", type=int, default=0, help="默认自动选取可用端口")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     service = Service(args.project)
     server = make_server(service, args.port)
     address = f"http://127.0.0.1:{server.server_port}"

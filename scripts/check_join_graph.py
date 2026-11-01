@@ -91,7 +91,7 @@ def analyze(model, conn=None):
             result.update(status="error", detail=str(exc))
         queries.append(result)
     states = [r["status"] for r in records + queries]
-    status = "not_ready" if any(s in {"fail", "error", "unknown"} for s in states) else ("pass" if conn is not None else "declared_only")
+    status = "not_ready" if not states or any(s in {"fail", "error", "unknown"} for s in states) else ("pass" if conn is not None else "declared_only")
     return {"status": status, "relationships": records, "queries": queries,
             "scope": "declared edges and explicit query paths; uniqueness is not referential coverage or live lineage"}
 

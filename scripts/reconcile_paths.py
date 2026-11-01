@@ -21,11 +21,11 @@ import os
 import argparse
 import json
 import sys
-import urllib.request
 
 import yaml
 from _contract import guard_endpoint, readonly, load
 from _sql import compile_single
+from _network import safe_json, response_error
 
 
 def compile_metric_sql(mt, ds, names):
@@ -46,13 +46,9 @@ def classify_diff(expected, actual, mt, tol=1e-4):
     return "不一致"
 
 
-def ask(endpoint, q, timeout=30):
-    req = urllib.request.Request(endpoint.rstrip("/") + "/api/ask",
-                                 data=json.dumps({"question": q}).encode("utf-8"),
-                                 headers={"Content-Type": "application/json"})
+def ask(endpoint, q, timeout=30, allow_remote=False):
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.load(r)
+        return safe_json(endpoint.rstrip("/") + "/api/ask", {"question": q}, timeout=timeout, allow_remote=allow_remote)
     except Exception as e:
         return {"error": str(e)}
 
@@ -90,9 +86,14 @@ def run_active(args):
                 rec["metric_path"] = norm(expected)
                 rec["compiled_sql"] = sql
                 if args.endpoint:
-                    resp = ask(args.endpoint, f"查一下{mt.get('name')}")
+                    resp = ask(args.endpoint, f"查一下{mt.get('name')}", allow_remote=getattr(args, "allow_remote", False))
+                    failure = response_error(resp, require_result=True)
+                    if failure:
+                        raise ValueError(failure)
                     actual = resp.get("value")
                     if actual is None and resp.get("rows"):
+                        if len(resp["rows"]) != 1 or not isinstance(resp["rows"][0], list) or len(resp["rows"][0]) != 1:
+                            raise ValueError("标量指标核对要求唯一一行一列，不能截取部分结果")
                         actual = resp["rows"][0][0]
                     rec["query_path"] = norm(actual) if actual is not None else None
                     ok = actual is not None and norm(actual) == norm(expected)
@@ -141,6 +142,8 @@ def run_offline(args):
     def pick(d, k):
         v = d.get(k)
         if isinstance(v, dict):
+            if response_error(v, require_result=True):
+                return None
             return v.get("value", v.get("rows"))
         return v  # 兼容扁平 {id: 数值} 写法
 
@@ -151,7 +154,7 @@ def run_offline(args):
         mismatch += 0 if ok else 1
         print(f"[{'一致' if ok else '不一致'}] {k}: 指标路径={va} 宽表路径={vb}")
     print(f"\n离线对账：不一致 {mismatch} 条")
-    return 1 if mismatch else 0
+    return 1 if mismatch or not (set(a) | set(b)) else 0
 
 
 def main():

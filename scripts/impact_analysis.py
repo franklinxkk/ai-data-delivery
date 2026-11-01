@@ -101,8 +101,12 @@ def main():
 
     aff_rels, aff_paths = [], []
     for r in m.get("relationships", []):
+        declared_keys = set()
+        for key in ('join_key', 'join_key_from', 'join_key_to', 'from_columns', 'to_columns'):
+            value = r.get(key)
+            declared_keys.update([value] if isinstance(value, str) else value or [])
         if (r.get("from") in affected_ds or r.get("to") in affected_ds
-                or r.get("join_key") in field_names):
+                or declared_keys & field_names):
             aff_rels.append(f"{r.get('from')} → {r.get('to')}（{r.get('type', '?')}"
                             f"/{r.get('join_key', '-')}）")
     for p in m.get("multi_hop_paths", []):
