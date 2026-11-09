@@ -20,6 +20,13 @@ def make_parser():
     p.add_argument("--package", required=True, help="Explicit ZIP file or extracted package directory")
     commands = p.add_subparsers(dest="command", required=True, parser_class=Parser)
     commands.add_parser("verify", help="Verify bytes, references, states and evidence, not business truth")
+    commands.add_parser("describe", help="Discover read-only tools and execution boundaries")
+    context = commands.add_parser("context", help="Read required definitions, scopes, dependencies, evidence and gaps together")
+    context.add_argument("--id", required=True, action="append", dest="ids")
+    context.add_argument("--intent", choices=["explain", "calculate", "query", "act"], default="explain")
+    context.add_argument("--as-of")
+    context.add_argument("--limit", type=int, default=100)
+    context.add_argument("--offset", type=int, default=0)
     search = commands.add_parser("search", help="Find definitions; multiple matches remain ambiguous")
     search.add_argument("--query", required=True)
     search.add_argument("--domain")
@@ -56,6 +63,10 @@ def main(argv=None):
         package = read_package(args.package)
         if args.command == "verify":
             result = package.verify()
+        elif args.command == "describe":
+            result = package.describe()
+        elif args.command == "context":
+            result = package.context(args.ids, intent=args.intent, as_of=args.as_of, limit=args.limit, offset=args.offset)
         elif args.command == "search":
             scope = args.scope
             if scope and scope.lstrip().startswith("{"):

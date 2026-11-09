@@ -1,4 +1,4 @@
-# 本地语义工作台 · v0.2.2-dev
+# 本地语义工作台 · v0.2.3-dev
 
 本地单人知识建模工作台。按“知识材料 → 待核对 → 语义图谱 → 交付与调用”完成一次建图任务；原文、候选、统一语义资产和历史保存在所选项目目录的 `project.sqlite` 中。项目历史单独查看，数值分析工具作为次入口保留。
 
@@ -23,7 +23,7 @@ python -X utf8 scripts/start.py --project "./work/new-domain" --ddl "./materials
 
 `--model "./materials/model.json"` 与 `--ddl` 二选一。材料经过解析后形成可支持的候选，不直接确认或覆盖图谱。已有项目不重复使用初始化参数；进入页面继续上传。`--prepare-only` 只准备项目，不启动网页。
 
-**1.0 前不承诺旧项目、模型格式或命令行为兼容。** 当前为 v0.2.2-dev，建议用新目录体验；升级前保留旧目录与私人备份，不依赖自动迁移。
+**1.0 前不承诺旧项目、模型格式或命令行为兼容。** 当前为 v0.2.3-dev，建议用新目录体验；升级前保留旧目录与私人备份，不依赖自动迁移。
 
 ## 知识材料
 
@@ -107,7 +107,9 @@ python -X utf8 scripts/knowledge.py --project "./work/ontology" --revision PROJE
 
 ```bash
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" verify
+python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" describe
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" search --query "营运车辆"
+python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" context --id "ASSET_ID" --intent explain
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" get --id "ASSET_ID"
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" sources --id "ASSET_ID"
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" neighbors --id "ASSET_ID" --direction both
@@ -127,4 +129,4 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" neig
 
 本机页面和 API 使用同源检查及临时会话令牌，CLI 直接访问明确指定的本机项目；这不是多人权限或企业认证系统。知识解析、语义包读取不联网、不执行材料指令。原有消费者适配须明确配置地址，按其受控端点规则调用。
 
-v0.2.2-dev 的操作说明不等于验收报告。维护者可按受影响范围运行 `tests/test_knowledge_parsers.py`、`tests/test_knowledge_flow.py`、`tests/test_semantic_package.py` 及原有工作台测试；完整入口为 `python -m unittest discover -s tests -v`。日常使用无需先跑所有检查；测试、真实页面操作、业务验收与生产部署应分别记录，不沿用旧版测试数或收益结论。
+v0.2.3-dev 的操作说明不等于验收报告。维护者可按受影响范围运行 `tests/test_knowledge_parsers.py`、`tests/test_knowledge_flow.py`、`tests/test_semantic_package.py` 及原有工作台测试；完整入口为 `python -m unittest discover -s tests -v`。日常使用无需先跑所有检查；测试、真实页面操作、业务验收与生产部署应分别记录，不沿用旧版测试数或收益结论。

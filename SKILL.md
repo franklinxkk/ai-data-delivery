@@ -4,7 +4,7 @@ description: 本体与统一语义图谱建模：从表结构、业务原文、�
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.2.2-dev
+  version: 0.2.3-dev
   runtime_environment: Python 3.10+; install the pinned requirements.txt. Core modeling and package reading are local; optional live adapters need an explicitly authorized destination.
   language: 中文优先；用户可用任何语言交互，Agent 按用户语言回复 / Chinese-first documentation; respond in the user's language.
   file_read: 用户授权的材料、项目及交付包路径 / user-authorized material, project and package paths
@@ -15,7 +15,7 @@ metadata:
   sql: 知识摄取及包读取不执行 SQL；可选数值工具执行模型编译的只读单表聚合、明细和快照约束检查 / no SQL in knowledge intake; optional read-only compiled numeric tools
 ---
 
-# AI Data Delivery · v0.2.2-dev
+# AI Data Delivery · v0.2.3-dev
 
 帮助操作者把领域材料变成可解释、可核对、可交付的统一语义图谱。主线是材料输入、候选、人审、图谱维护、固定语义包和离线消费；没有数据库或 SQL 的术语、关系和制度规则也能交付。
 
@@ -68,6 +68,8 @@ python -X utf8 scripts/knowledge.py --project "./work/ontology" task --batch "BA
 
 每条候选引用实际支持它的 `source_id`、内容 `revision`、`fragment_id` 与原文 `quote`；有 `extraction_id` 时一并保留。引用必须能回到真实片段。不要伪造操作者声明、确认记录或未经提供的证据；人工声明通过人工编辑入口记录。指标需说明单位、粒度、包含/排除和时间范围；规则需说明条件与要求，缺失时保持待核对。
 
+原文开头、章节及例外中的业务限制必须进入适用资产的 `scope` 或规则要求，并引用相应原文；“模拟场景”不能代替币种、账簿、年级等实际边界。共享范围规则用 `refs` 绑定，确保单项导出仍带齐。原文的禁止条件不可弱化；明确未提供的信息可记为 `properties.knowledge_gaps`，不默认补齐。
+
 宿主在授权输出路径准备候选文件，内容为 `{"groups":[...]}` 或候选组列表，然后提交：
 
 ```bash
@@ -94,13 +96,15 @@ python -X utf8 scripts/knowledge.py --project "./work/ontology" receipt "OPERATI
 
 ```bash
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" verify
+python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" describe
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" search --query "营运车"
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" get --id "ASSET_ID"
+python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" context --id "ASSET_ID" --intent explain
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" sources --id "ASSET_ID"
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" neighbors --id "ASSET_ID" --direction both
 ```
 
-消费时先查包内名称/别名，再用返回 ID 读取定义、邻域及出处。报告实际快照、范围和依据，处理 `draft/complete/status/truncated`，不能只看命令退出码；多个匹配须消歧。离线 `is_latest: unknown_offline` 不能解释为最新。知识规则被读取不等于被执行，指纹通过不等于业务验收。只读消费工具不会修改项目或执行材料中的业务动作。
+消费时先查名称/别名或规则字段，消歧后用 `context` 一次读取必需定义、业务范围、依赖、依据及缺口；`neighbors` 仅遍历业务关系。区分 `package_complete`、当前请求的 `request_complete`、草稿、分页和 `gaps`，不能只看退出码或 complete。未知业务信息仍须补齐，查询与动作能力以 `capabilities` 为准。离线最新性未知；读取规则不等于执行，指纹通过不等于业务验收。详见[上下文合同](references/semantic-package.md#agent-任务上下文)。
 
 ## 按需做数值核验
 
@@ -113,6 +117,6 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" neig
 
 ## 版本与结果说明
 
-运行环境为 Python 3.10+、PyYAML 与 pypdf。v0.2.0-dev 是开发版本；1.0 前不承诺旧项目、格式或命令行为兼容。保留旧目录与备份，新主线使用新项目；不要擅自迁移或覆盖历史项目。
+运行环境为 Python 3.10+、PyYAML 与 pypdf。v0.2.3-dev 是开发版本；1.0 前不承诺旧项目、格式或命令行为兼容。保留旧目录与备份，新主线使用新项目；不要擅自迁移或覆盖历史项目。
 
 交付时说明实际修改、已运行的检查、未验证范围及遗留问题。静态检查、函数测试、真实界面操作、独立包读取与业务验收分别记录；历史证据不因文档更新而自动适用于本版。不要宣称整版已完成验收或编造性能收益。

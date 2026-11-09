@@ -10,9 +10,11 @@
 
 ```powershell
 python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.zip" verify
+python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.zip" describe
 python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.zip" search --query "营运车"
 python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.zip" get --id ent_vehicle
 python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.zip" sources --id rule_maintenance
+python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.zip" context --id rule_maintenance --intent explain
 python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.zip" neighbors --id ent_vehicle --direction in --depth 1
 ```
 
@@ -41,6 +43,10 @@ python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.
 ## 资产及依据
 
 每个资产使用项目内唯一的稳定 `id`。`kind` 支持 `entity/term/attribute/relation/metric/rule/dataset/field/mapping`。资产包含名称、定义、领域、适用范围、别名、知识状态、属性、显式必须引用 `refs`、依据和业务有效期。状态为 `draft/confirmed/needs_review/retired`。
+
+`scope` 描述实际业务范围，例如单一账簿、币种、适用年级、允许的业务形态；“模拟场景”“待用户审阅”只是材料性质，不能代替业务限制。将原文开头、章节和例外中的限制写入适用资产并引用相应片段。共用范围也可建成有依据的规则，通过 `refs` 绑定到消费资产；单资产与子图导出会一起带出。来源的登记 `scope` 随来源元数据保留，`sources` 返回 `source_scope`，但登记信息不自动成为已确认业务规则。
+
+确实尚未明确的业务问题可用 `properties.knowledge_gaps: ["结算完成时点尚未提供"]` 保存，并在资产依据中引用原文。它是已知待补问题，不是默认答案。原文的禁止条件应完整进入规则的 `requirement`；不能仅保留在来源中，或把“不自动决定”弱化为“不自动执行”。工具检查结构、引用和引文有效性，不自动证明 Agent 已理解并覆盖了原文全部限制；仍需对照原文核对。
 
 关系与映射另外保存 `from/to/predicate/relation_type`。反向查看只改变遍历方向，不改原谓词、不生成新业务事实。分类关系不会自动产生继承或推理。按 ID 读取只识别明确 ID 和合并重定向，绝不把同名对象当作 ID 替换。
 
@@ -72,7 +78,7 @@ python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.
 
 | 调用 | 结果要求 |
 |---|---|
-| `search --query` | 按名称/别名精确匹配优先，再查定义等文本；返回命中原因和候选。多条匹配返回 `ambiguous`，不自动选第一条。分页前计算是否歧义，`--limit 1` 不会隐藏第二种含义。 |
+| `search --query` | 名称/别名精确匹配优先，再查定义、领域、范围、关系谓词及规则/指标的业务字段（条件、要求、单位、粒度、包含/排除、时间、表达式、值类型、待补问题）。返回 `match_fields` 和候选；不检索执行SQL、审查日志或原文指令。多条匹配返回 `ambiguous`，分页不会隐藏歧义。 |
 | `search --domain/--kind/--scope` | 依据调用方明确提供的条件过滤。`scope` 可以是完全匹配的范围文字，或用于匹配范围对象的 JSON 子集。业务范围不是权限。 |
 | `search --as-of YYYY-MM-DD` | 未指定日期保留所有有效期。指定日期时排除明确不在区间内的项；缺少任一时间边界的项标 `applicability: unknown` 并保留，不能据此假定唯一答案。日期边界按日包含。 |
 | `get --id` | 返回完整定义、状态与依据；提供 `--as-of` 也不隐藏指定资产，只报告是否位于已知区间。 |
@@ -82,7 +88,30 @@ python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.
 
 搜索和邻域支持 `--limit 1..500`、`--offset`；返回 `total/next_offset/truncated`。截断和非首页都不能标记为完整结果。`complete` 只针对本包或本次明确请求范围，并非“整个领域知识完整”。搜索的 `not_found` 只表示包内没有匹配，不能据此断言现实世界不存在该概念。
 
-所有正常结果返回实际 `snapshot_id/source_revision/scope`。包通过完整性校验也不代表候选已确认、规则已执行、观点无争议或本包是最新版本。消费者先处理歧义与缺口，再基于已返回定义作答，并引用具体资产 ID 与来源。
+所有正常结果返回实际 `snapshot_id/source_revision/scope` 和 `package_complete`。`get` 的 `complete/request_complete` 针对该资产及必需依赖，`search` 针对本页命中及其依赖（分页时不完整），`sources` 针对所请求引文；它们不代表整包完整或业务批准。`verify` 仍核对整包；具体未确认状态、身份冲突和触发别名在 `issues` 内返回。包通过完整性校验也不代表规则已执行、观点无争议或本包最新。
+
+## Agent 任务上下文
+
+先用 `describe` 发现工具与只读能力，`search` 消歧后调用：
+
+```powershell
+python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.zip" context --id rule_maintenance --intent explain
+```
+
+`--id` 可重复，输入必须是明确的身份。Python 对应 `package.context(["rule_maintenance"], intent="explain")`。`intent` 可为 `explain/calculate/query/act`；它只描述消费意图，不授予权限或触发业务。默认按整个必需依赖闭包返回，支持 `--as-of`、`--limit 1..500`、`--offset`；不自动扩大成全部邻接网络。
+
+| 返回字段 | 如何使用 |
+|---|---|
+| `root_ids/required_asset_ids/assets` | 根身份、全部所需身份、本页完整资产。合并重定向只跟随已声明的身份。 |
+| `business_scopes` | 每项实际适用范围，与资产定义一致，不仅是ZIP的资产选择范围。 |
+| `dependency_edges` | `definition_reference` 为 refs；`relation_endpoint` 为关系端点依赖；`execution_reference` 为随包执行声明的引用。它们不是新推断的业务关系。 |
+| `relations` | 本页关系资产保留原始 from/to/predicate，反向查看不改业务事实。 |
+| `evidence/source_warnings` | 每项具体断言、修订、片段、位置和提取警告。只带选中的原文，不能宣称已读全文。 |
+| `gaps` | 缺依赖、依据、身份复核、有效期未知/不适用、显式待补问题、分页或缺执行能力等原因和下一步。不得把未知补为零或通过。 |
+| `package_complete/knowledge_complete/request_complete` | 分别是整包、所需依赖范围、当前实际返回内容的完整性。`request_complete` 也是本方法的 `complete`；分页时为 false。完整返回仍可含已明确记录的业务待补问题，应逐条处理 `gaps`。 |
+| `capabilities` | 本读取器能解释知识，给定数据的计算由消费方完成；不附实例数据、不连接数据库、不执行动作，角色定义不授予权限。即使含 execution 声明也不改变这一点。 |
+
+`query/act` 额外返回缺数据连接或缺动作执行器的明确缺口。`calculate` 不声称调用方提供的数据已经核验。日期未知或处于已知有效期外的必需定义保留并给出缺口，不靠删除它们假造完整上下文。分页时根据 `next_offset` 继续并保留之前各页；完整性不等于适用于当前业务、更不等于整个领域已穷尽。
 
 ## 程序接入与错误
 
@@ -98,6 +127,7 @@ package = read_package("semantic.zip")
 package.verify()
 package.search("收入", domain="财务")
 package.get("rule_maintenance")
+package.context(["rule_maintenance"], intent="explain")
 package.sources("rule_maintenance")
 package.neighbors("ent_vehicle", direction="in")
 subgraph_bytes, subgraph_manifest = package.export(["rule_maintenance"])

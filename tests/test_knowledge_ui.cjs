@@ -65,6 +65,7 @@ function boot({state={},helper=createHelper(),api,session=new Map(),local=new Ma
     async click(kw='publish',data={}){const button={dataset:{kw,...data},closest:()=>null,disabled:false};await listeners.click[0]({target:{closest:selector=>selector==='[data-kw]'?button:null}});},
     async dragNode(id,dx,dy){const selected={dataset:{kwNode:id},classList:{add(){}}};const target={classList:{contains:()=>false},closest:selector=>selector==='#kw-canvas'?canvas:selector==='[data-kw-node]'?selected:null};const start={target,clientX:100,clientY:100,preventDefault(){}};for(const fn of listeners.pointerdown||[])fn(start);for(const fn of listeners.pointermove||[])fn({target,clientX:100+dx,clientY:100+dy});for(const fn of listeners.pointerup||[])await fn({target,clientX:100+dx,clientY:100+dy});},
     change(id,value){const element={id,value,dataset:{},matches:()=>false,closest:()=>null};for(const fn of listeners.change||[])fn({target:element});},
+    input(id,value){const element={id,value,dataset:{},matches:()=>false,closest:()=>null,hasAttribute:()=>false};for(const fn of listeners.input||[])fn({target:element});},
     view(){return JSON.parse(local.get('kw-view:'+(state.project_id||'vm-project'))||'{}');}
   };
 }
@@ -209,8 +210,22 @@ async function checkPublishRecovery(){
   assert.equal(JSON.parse(session.get('kw-pending:publish-recovery')).length,0);
   console.log('PASS: lost publish response -> reopened script -> same operation receipt -> one publish write');
 }
+async function checkRuleFieldSearch(){
+  const rules=[{...node('dispatch'),kind:'rule',name:'工单派发',properties:{condition:'需要派单',requirement:'唯一匹配',execution:{sql:'SECRET_EXECUTION'}}},
+    {...node('outcome'),kind:'rule',name:'成果判断',scope:'单一账簿',properties:{condition:'排除缺考',requirement:'达到70%',knowledge_gaps:['完成时点未知']}}];
+  const app=boot({state:{project_id:'semantic-search',assets:rules}});app.mount();
+  app.change('kw-canvas-view','all');await tick();
+  for(const [query,id] of [['派单','dispatch'],['70%','outcome'],['缺考','outcome'],['单一账簿','outcome'],['完成时点','outcome']]){
+    app.input('kw-graph-search',query);await tick();
+    assert.deepEqual(Object.keys(positionsOnScreen(app.svg)),[id]);
+  }
+  app.input('kw-graph-search','SECRET_EXECUTION');await tick();assert.deepEqual(positionsOnScreen(app.svg),{});
+  assert.equal(app.requests.length,0);
+  console.log('PASS: graph search discovers rule fields, scope and declared gaps, without indexing execution code');
+}
 (async()=>{
   await checkPublishRecovery();await checkReadOnlyCanvasActions();await checkSavedArrangementAndUndo();
   await checkFailedWriteAndRetry();await checkStaleCalculation();await checkAutomaticPreview();
   await checkNewViewPreviewAfterPendingCalculation();await checkFirstDragAndPinPersistence();
+  await checkRuleFieldSearch();
 })().catch(error=>{console.error(error);process.exitCode=1;});
