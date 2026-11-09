@@ -308,7 +308,7 @@ class TestPromoteDraft(unittest.TestCase):
         doc = yaml.safe_load((out / "promote_draft.yaml").read_text(encoding="utf-8"))
         kinds = {d["id"]: d["kind"] for d in doc["drafts"]}
         self.assertEqual(kinds["hazard_major"], "✅ 可直接合入")
-        self.assertTrue(kinds["hazard_bad_val"].startswith("🔶"))   # 枚举无近似 → 待确认
+        self.assertTrue(kinds["hazard_bad_val"].startswith("⛔"))   # 枚举无近似：不可丢失过滤后合并
         self.assertTrue(kinds["hazard_ratio"].startswith("⛔"))      # 派生引用
         self.assertEqual([t["id"] for t in doc["detail_templates"]], ["hazard_list"])
         self.assertEqual({s["id"] for s in doc["skipped"]}, {"hazard_count", "no_table"})
@@ -316,6 +316,8 @@ class TestPromoteDraft(unittest.TestCase):
         ops = yaml.safe_load((out / "ops.yaml").read_text(encoding="utf-8"))["ops"]
         self.assertEqual([o["id"] for o in ops], ["hazard_major"])
         self.assertEqual(ops[0]["extra_where"], "level = '重大'")
+        review_ops = yaml.safe_load((out / "ops_review.yaml").read_text(encoding="utf-8"))["ops"]
+        self.assertNotIn("hazard_bad_val", {op["id"] for op in review_ops})
         r2 = run_cli([str(ROOT / "scripts" / "patch_model.py"),
                       "-f", str(self.dir / "model.yaml"), "batch", str(out / "ops.yaml")])
         self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)

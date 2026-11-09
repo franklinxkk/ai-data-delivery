@@ -16,9 +16,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
-import rebuild
-from _process import (OwnedProcess, child_env, parse_argv, read_record,
+sys.path.insert(0, str(ROOT))
+from maintainer import rebuild
+from maintainer._process import (OwnedProcess, child_env, parse_argv, read_record,
                       require_process_support, validate_argv, write_record)
 
 PYTHON = str(Path(getattr(sys, '_base_executable', sys.executable)).resolve())

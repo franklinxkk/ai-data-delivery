@@ -101,7 +101,7 @@ templates:
     status: 草案               # 草案|已发布|停用
 ```
 
-lint 校验：id 重复、dataset 未声明、columns/time_field 引用不存在字段均为 ERROR（E18）；缺 time_field 或 synonyms<3 为 WARN（W18）。模板只声明"哪个数据集、哪些列、什么固定过滤"，执行层负责分页/排序/脱敏，模型不承载行级安全策略。promote_draft.py 把 list/rank 类盘点指标自动产出为本段草稿（`columns_raw` 待映射伪代码列，人审改成物理列后才算数）。
+lint 校验：id 重复、dataset 未声明、columns/time_field 引用不存在字段均为 ERROR（E18）；缺 time_field 或 synonyms<3 为 WARN（W18）。模板只声明"哪个数据集、哪些列、什么固定过滤"，执行层负责分页/排序/脱敏，模型不承载行级安全策略。`promote_draft.py` 仅在来源与过滤可完整映射时，将 list/rank 产出为 `templates_draft.yaml` 草稿；复杂或缺字段/值映射的过滤只进清单。`columns_raw` 是待映射的 SELECT 列材料，可能含未支持的表达式，不是 `columns`，也不会交给 SQL 编译器执行；人审确定物理列并改成 `columns` 后，才能按正式模板检查与消费。自动提升器的 AND 比较式子集不代表完整编译器支持范围。
 
 ## 报告身份与交换
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Build first, then replace only a service recorded by this tool.
+"""Source-only maintainer utility; not part of the installed modeling skill.
+
+Build first, then replace only a service recorded by this tool.
 
 --port diagnoses occupancy; it never selects a process to terminate. Commands
 must keep the managed service in the foreground, not daemonize or launch and
@@ -19,8 +21,12 @@ import sys
 import time
 from urllib.parse import urlsplit
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / 'scripts'))
+
 from _contract import guard_endpoint
-from _process import (OwnedProcess, canonical, child_env, parse_argv, process_lock,
+from maintainer._process import (OwnedProcess, canonical, child_env, parse_argv, process_lock,
                       read_record, remove_record, require_process_support,
                       validate_argv, write_record)
 

@@ -12,4 +12,6 @@ python examples/conference-practice/run_demo.py --out tmp/conference-demo
 
 预期在写数据前直接约定并写入示例，不从被测SQL产生。模型推断的对象仍是候选。更新过滤后旧上下文拒绝使用，重新生成才可消费。样例用于学习与工具回归，不能拿来证明模型在未见问题上的泛化准确率；独立评审应另造数据并先写预期。
 
+本例直接维护已约定的 COUNT、去重计数与 SUM 定义，再验证编译和消费；没有使用 `promote_draft.py` 自动翻译公式。自动提升目前只生成完整单表 COUNT(*) 与 AND 比较式的待审操作；其他聚合、OR 或未映射条件留在清单待定义，不能据本例推断已支持自动提升。
+
 命令、工作台操作、分页与错误边界见[完整路径](../../references/metric-context.md)。

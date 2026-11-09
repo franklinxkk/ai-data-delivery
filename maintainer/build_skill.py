@@ -11,7 +11,15 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = {"SKILL.md", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md", "requirements.txt"}
-DIRECTORIES = {"scripts", "references", "mocks", "examples", "starter_packs", "workbench"}
+DIRECTORIES = {"scripts", "references", "examples", "starter_packs", "workbench"}
+# These source-only tools must not re-enter an installed skill, even when a
+# dirty preview's git index still contains their old runtime locations.
+MAINTAINER_ONLY = {"scripts/rebuild.py", "scripts/_process.py"}
+
+
+def runtime_paths(tracked):
+    return sorted(p for p in tracked if p and p not in MAINTAINER_ONLY
+                  and (p in FILES or p.split("/")[0] in DIRECTORIES))
 
 
 def git(*args):
@@ -28,7 +36,7 @@ def main():
     metadata = yaml.safe_load((ROOT / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[1])
     version = str(metadata["metadata"]["version"])
     tracked = git("ls-files", "-z").decode("utf-8").split("\0")
-    paths = sorted(p for p in tracked if p and (p in FILES or p.split("/")[0] in DIRECTORIES))
+    paths = runtime_paths(tracked)
     if not FILES <= set(paths):
         ap.error("missing tracked runtime entry files")
     if any(p.endswith((".db", ".sqlite", ".sqlite3", ".pyc")) or "__pycache__" in p or p.endswith(("actual.jsonl", "report.json", "server.json")) for p in paths):

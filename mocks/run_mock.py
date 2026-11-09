@@ -23,7 +23,9 @@
 import argparse
 import json
 import os
+from pathlib import Path
 import sqlite3
+import stat
 import subprocess
 import sys
 
@@ -37,9 +39,61 @@ import reconcile_paths as recon
 from _contract import minimal_env
 
 
+def _plain_path(path):
+    """Reject links/reparse points before reading, executing or replacing a file."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+        raise ValueError(f"场景路径不能是符号链接或 junction：{path}")
+    if path.is_file() and info.st_nlink > 1:
+        raise ValueError(f"场景文件不能是硬链接：{path}")
+
+
+def managed_domain(domain_dir):
+    """Only real, immediate children of this source checkout's mocks directory."""
+    root = Path(HERE).resolve(strict=True)
+    path = Path(domain_dir)
+    if ".." in path.parts or path.name in {"", ".", ".."}:
+        raise ValueError("领域必须是 mocks 下的真实一级目录")
+    _plain_path(path)
+    resolved = path.resolve(strict=True)
+    if path.parent.resolve(strict=True) != root or resolved.parent != root or not resolved.is_dir():
+        raise ValueError("领域必须是 mocks 下的真实一级目录")
+    for name in ("build_db.py", "semantic.yaml", "cases.json", "domain.db", "actual.jsonl", "report.json"):
+        child = resolved / name
+        _plain_path(child)
+        if child.resolve().parent != resolved:
+            raise ValueError(f"场景文件超出领域目录：{child}")
+        if name in {"build_db.py", "semantic.yaml", "cases.json"} and not child.is_file():
+            raise ValueError(f"领域缺少场景文件：{child}")
+        if child.exists() and not child.is_file():
+            raise ValueError(f"场景路径必须是普通文件：{child}")
+    return resolved
+
+
+def domain_from_name(name):
+    if not isinstance(name, str) or not name or name in {".", ".."} or any(c in name for c in "/\\:\0") or name[-1] in ". ":
+        raise ValueError("--domain 只接受 mocks 下的一级目录名，不接受路径")
+    return managed_domain(Path(HERE) / name)
+
+
 def run_step(name, cmd, cwd):
-    p = subprocess.run([sys.executable] + cmd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", cwd=cwd, env=minimal_env())
+    domain = managed_domain(cwd)
+    if not isinstance(cmd, (list, tuple)) or not cmd:
+        raise ValueError("mock 步骤必须使用已知脚本参数数组")
+    script = Path(cmd[0])
+    if not script.is_absolute():
+        script = domain / script
+    _plain_path(script)
+    script = script.resolve(strict=True)
+    allowed = {domain / "build_db.py"} | {Path(SCRIPTS).resolve() / filename for filename in
+               ("check_model.py", "gold_lint.py", "run_eval.py")}
+    if script not in allowed:
+        raise ValueError(f"mock 步骤不允许执行此脚本：{script}")
+    p = subprocess.run([sys.executable, str(script)] + list(cmd[1:]), capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", cwd=domain, env=minimal_env())
     ok = p.returncode == 0
     print(f"[{'PASS' if ok else 'FAIL'}] {name}")
     if not ok:
@@ -57,8 +111,11 @@ def norm(x):
 
 def gen_actual(domain_dir, db_path, recon):
     """模拟引擎：cases.json → actual.jsonl（编译指标口径 / 执行原生 SQL / 守卫拒答）。"""
-    m = yaml.safe_load(open(os.path.join(domain_dir, "semantic.yaml"), encoding="utf-8"))
-    cases = json.load(open(os.path.join(domain_dir, "cases.json"), encoding="utf-8"))
+    domain_dir = managed_domain(domain_dir)
+    if Path(db_path).resolve() != domain_dir / "domain.db":
+        raise ValueError("模拟数据库必须是当前领域的 domain.db")
+    m = yaml.safe_load((domain_dir / "semantic.yaml").read_text(encoding="utf-8"))
+    cases = json.loads((domain_dir / "cases.json").read_text(encoding="utf-8"))
     if isinstance(cases, dict):
         cases = cases.get("cases", cases.get("gold_results"))
     ds_index = {d["name"]: d for d in m.get("datasets", [])}
@@ -97,6 +154,7 @@ def gen_actual(domain_dir, db_path, recon):
 
 
 def run_domain(domain_dir):
+    domain_dir = managed_domain(domain_dir)
     name = os.path.basename(domain_dir)
     print(f"\n===== 领域 mock：{name} =====")
     db_path = os.path.join(domain_dir, "domain.db")
@@ -140,9 +198,12 @@ def main():
         print("错误：未找到任何领域场景", file=sys.stderr)
         return 2
 
-    results = {}
-    for d in domains:
-        results[d] = run_domain(os.path.join(HERE, d))
+    try:
+        selected = [(name, domain_from_name(name)) for name in domains]
+        results = {name: run_domain(path) for name, path in selected}
+    except (ValueError, OSError) as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
     print("\n===== MOCK 总览 =====")
     for d, ok in results.items():
         print(f"[{'PASS' if ok else 'FAIL'}] {d}")

@@ -1,4 +1,4 @@
-# ai-data-delivery · v0.2.0-dev
+# ai-data-delivery · v0.2.1-dev
 
 把表结构、业务知识、行业术语、指标口径和管理制度整理成**有原文依据、可视化维护、可交给 Agent 使用的统一语义图谱**。
 
@@ -83,7 +83,7 @@ python -X utf8 scripts/start.py --project "./work/numeric-demo" --demo
 
 把完整目录安装到宿主支持的 skills 位置，再请 Agent 使用 `ai-data-delivery`。工作台和离线读取器也可独立使用；无需另装需求设计 skill。运行依赖为 PyYAML 与 pypdf，无需 Node、CDN 或 AI API 密钥。
 
-**v0.2.0-dev 是开发版本。1.0 前不承诺旧项目、模型格式或命令行为兼容。** 本轮以新项目开始；升级前保留原目录和私人备份，不把旧项目直接覆盖为新格式。历史验证记录仅适用于其标注的版本和场景，本说明不宣称已完成业务验收、生产部署或性能验证。
+**v0.2.1-dev 是开发版本。1.0 前不承诺旧项目、模型格式或命令行为兼容。** 本轮以新项目开始；升级前保留原目录和私人备份，不把旧项目直接覆盖为新格式。历史验证记录仅适用于其标注的版本和场景，本说明不宣称已完成业务验收、生产部署或性能验证。
 
 维护者可按改动范围运行解析、知识流程、语义包及原有能力测试；源码中的完整检查入口为：
 
@@ -91,6 +91,8 @@ python -X utf8 scripts/start.py --project "./work/numeric-demo" --demo
 python -m unittest discover -s tests -v
 python mocks/run_mock.py --all
 ```
+
+安装包不含源码测试、可执行 mock 树或通用服务重建工具。维护任务在源码仓库进行，具体能力范围及本次审计处置见[安全说明](SECURITY.md)。
 
 更多背景：[大会机制取舍](references/conference-practices-2026.md)、[领域起步包](starter_packs/README.md)、[标准边界](references/standards.md)。这些是按需参考，不是建图前必须完成的流程。
 

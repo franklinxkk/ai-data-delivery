@@ -1,5 +1,5 @@
 """Network policy and real loopback HTTP tests; never contact external services."""
-from contextlib import ExitStack, contextmanager, redirect_stdout
+from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
 import io
 import json
 import os
@@ -243,6 +243,42 @@ class LoopbackTransport(unittest.TestCase):
 
 
 class ConsumerAdapters(unittest.TestCase):
+    def test_live_eval_mixed_modes_and_ambiguous_base_urls_never_start(self):
+        live = ['run_eval.py', '--cases', 'cases.json', '--endpoint']
+        for rest in [
+            ['http://127.0.0.1', '--gold', 'cases.json', '--actual', 'actual.jsonl'],
+            ['http://127.0.0.1/proxy?mode=read'],
+            ['http://127.0.0.1/proxy#'],
+            ['https://engine.example'],
+        ]:
+            with self.subTest(rest=rest), patch.object(sys, 'argv', live + rest), \
+                    patch.object(run_eval, 'run_live') as run, redirect_stderr(io.StringIO()):
+                self.assertEqual(run_eval.main(), 2)
+                run.assert_not_called()
+        with patch.object(run_eval, 'safe_json') as send:
+            self.assertIn('error', run_eval.ask('http://127.0.0.1/proxy?mode=read', 'q'))
+            send.assert_not_called()
+
+    def test_live_eval_sends_only_original_questions_to_explicit_engine(self):
+        with server() as state, tempfile.TemporaryDirectory() as td, redirect_stdout(io.StringIO()):
+            path = Path(td)
+            suite_paths = []
+            questions = ['模拟问句一', '模拟多跳问句']
+            for index, question in enumerate(questions):
+                cases = path / f'cases-{index}.json'
+                cases.write_text(json.dumps([
+                    {'id': str(index), 'question': question, 'expect': {'type': 'scalar', 'value': 3}},
+                ]), encoding='utf-8')
+                suite_paths.append(str(cases))
+            args = ['run_eval.py', '--endpoint', state['base'], '--cases', suite_paths[0],
+                    '--multihop', suite_paths[1], '--out', str(path / 'report.json')]
+            with patch.object(sys, 'argv', args):
+                self.assertEqual(run_eval.main(), 0)
+            self.assertEqual(
+                [(call['method'], call['path'], json.loads(call['body'])) for call in state['calls']],
+                [('POST', '/api/ask', {'question': question}) for question in questions],
+            )
+
     def test_all_wrappers_preserve_explicit_allow_remote(self):
         for module, invoke in [
             (capture_case, lambda allowed: capture_case.call('POST', 'https://engine.example/api/ask', {'question': 'q'}, allow_remote=allowed)),

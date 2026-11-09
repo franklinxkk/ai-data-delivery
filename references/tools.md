@@ -18,7 +18,7 @@
 | 首次使用 | **start** | --project 新目录 --demo；或 --model/--ddl 加可选 --sample；准备并打开本机工作台，已有项目不覆盖 |
 | S0 | derive_ontology | 已有数据集与显式关系生成本体候选；`--out` 为新文件，不覆盖已有语义或推断业务规则 |
 | S0 | ingest_ddl | DDL 台账；可选 --model-out 部分草案，需核对解析范围 |
-| S0 | profile_db | SQLite 数据画像；敏感名启发式不等于完整脱敏 |
+| S0 | profile_db | 只读 SQLite 数据画像；路径不存在或无法读取时拒绝，不创建空库；输出不得指向源库或其文件别名；敏感名启发式不等于完整脱敏 |
 | S0 | detect_isomorphic | 同构表候选，不自动决定合并 |
 | S0 | harvest_metrics | 指标公式盘点，分类结果需结合真实来源复核 |
 | S0 | gold_seed | 评测骨架，独立期望需补充 |
@@ -40,17 +40,16 @@
 | S3/S5 | ingest_feedback | 用户反馈归集 |
 | S3/S5 | suggest_card | 修订建议卡，不自动授权修改 |
 | S3/S5 | patch_model | syn/struct/set/batch/fixuid 五入口；batch 一次写入 ops.yaml，--db/--expect 验算作用见入口说明 |
-| S4 | promote_draft | 盘点指标 → ✅/🔶/⛔/📋 四分提升草稿 + ops.yaml + 提升清单.md；草稿必须人审后 batch 合入 |
-| S3/S5 | promote_gold | 已确认反馈加入评测集 |
+| S4 | promote_draft | 来源对应的完整单表 COUNT(*) 与 AND 比较式可生成待审操作；FROM 不匹配本条来源/映射表、字段/值/模型缺口及复杂口径仅保留清单待定义，不输出可合并操作；list/rank 的 columns_raw 仅为待映射草稿 |
+| S3/S5 | promote_gold | 已确认反馈加入评测集；scalar 必须显式提供 value（0/null 有效），rows 必须提供逐行列表（[] 有效）；缺失期望拒写，同 id 更新 |
 | S4 | release_gate | --profile static/validated/production；默认不再跳过必需证据 |
 | S4 | gen_dictionary | 由模型生成可读口径字典 |
 | S4 | export_exchange | 模型/用例/证据/视图与哈希清单；输出目录必须为空 |
 | S4 | **visualize_model** | --model [--session] [--report ...] --out model.html；离线只读视图 |
-| S5 | check_consistency | 模型与物理结构漂移，不验证业务数据/时效 |
+| S5 | check_consistency | 只读比较模型与物理结构；路径不存在或无法读取时退出 2，不创建空库或报告零错误；不验证业务数据/时效 |
 | S5 | plan_stability | 指定服务的重复请求抽查；SQL 指纹不同需解释，结果兜底不证明 SQL 计划一致 |
 | S5 | impact_analysis | 文本引用得到影响候选，不是完整调用图 |
 | S5 | probe_model | 检查目标服务当前模型信息 |
-| S5 | rebuild | 触发目标服务重建，需在用户授权的范围内运行 |
 
 ## 本地可视化工作台
 
@@ -64,6 +63,8 @@ python scripts/start.py --project ./workbench-projects/my-project
 
 它复用 `check_model`、`check_join_graph`、`check_constraints`、`_sql.compile_single` 和 DDL 解析器。消费者检查只对接明确指定的已知本机 Java JSON 接口。当前不执行自由 NL2SQL、办事写操作、政策裁决或决策优化；场景编辑页会呈现所需条件与尚未接入的运行能力。细节见 [workbench README](../workbench/README.md)。
 
-维护命令：`python -m unittest discover -s tests -v`、`python mocks/run_mock.py --all`、`python examples/onboarding/run_demo.py --out tmp/demo`、`python maintainer/build_skill.py --out dist`。验证强度不同，不能用一个命令的成功代替全部阶段。
+公共示例：`python examples/onboarding/run_demo.py --out tmp/demo`。
+
+以下维护命令仅在源码仓库可用：`python -m unittest discover -s tests -v`、`python mocks/run_mock.py --all`、`python maintainer/build_skill.py --out dist`。`maintainer/rebuild.py` 是独立的通用构建/前台进程替换辅助工具，只供明确授权的源码维护任务；它及其进程模块、测试与可执行 mocks 树均不进入安装包。验证强度不同，不能用一个命令的成功代替全部阶段。
 
 报告传递：`export_exchange --report` 要求对象含 `evidence` 模型摘要和时间。`reconcile_paths --out` 是原始逐案结果列表，不能直接作验收报告导入；使用 `run_eval --help` 按独立预期、实际结果和模型绑定产生报告。

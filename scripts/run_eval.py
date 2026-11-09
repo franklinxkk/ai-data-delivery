@@ -6,6 +6,7 @@
       [--gold-results gold_results.json] [--multihop multihop.json] [--out report.json]
   逐条 POST {endpoint}/api/ask，比对标量/行集合/拒绝判定，
   失败明细带 SQL 与推理链（route/value/sql/reasoning 全留痕）。
+  发送主用例和多跳用例的原始 question。仅使用已授权接收这些问句的引擎及下游服务。
 
 模式 B · 离线文件比对（无引擎环境 / CI 存档比对）
   python run_eval.py --gold gold.yaml --actual actual.jsonl [--report report.json]
@@ -155,9 +156,15 @@ def unify_expect(case, gold_results):
 
 # ---------- 模式 A：活引擎 ----------
 
+def engine_ask_url(endpoint):
+    if "?" in endpoint or "#" in endpoint:
+        raise ValueError("引擎基础 URL 不允许查询参数或片段；工具会在路径后加 /api/ask")
+    return endpoint.rstrip("/") + "/api/ask"
+
+
 def ask(endpoint, question, timeout=30, allow_remote=False):
     try:
-        result = safe_json(endpoint.rstrip("/") + "/api/ask", {"question": question}, timeout=timeout, allow_remote=allow_remote)
+        result = safe_json(engine_ask_url(endpoint), {"question": question}, timeout=timeout, allow_remote=allow_remote)
         return result if isinstance(result, dict) else {"error": "接口响应必须是 JSON 对象"}
     except Exception as e:
         return {"error": str(e)}
@@ -357,8 +364,9 @@ def run_offline(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="回归比对器 v0.0.5（活引擎 / 离线双模式）")
-    ap.add_argument("--endpoint", help="活引擎地址（模式 A）")
+    ap = argparse.ArgumentParser(description="回归比对器 v0.0.5（活引擎 / 离线双模式）",
+                                 epilog="活引擎会发送原始 question。使用前核对目标引擎和下游服务获准处理这些问句。")
+    ap.add_argument("--endpoint", help="已获授权的活引擎基础 URL，逐条 POST 到其 /api/ask（模式 A）")
     ap.add_argument("--cases", help="用例集 json/yaml（模式 A）")
     ap.add_argument("--gold-results", dest="gold_results", default=None,
                     help="fmt3 用例的期望行（gold_results.json）")
@@ -371,12 +379,16 @@ def main():
     ap.add_argument("--db", help="绑定 SQLite 数据快照；不证明端点使用了此快照")
     ap.add_argument("--mode", choices=["mock"], help="显式标记合成模拟证据")
     ap.add_argument("--allow-remote", action="store_true",
-                    help="允许非本机/内网端点（默认拒绝，防误发业务内容到公网）")
+                    help="允许公网 IP 或其他域名；默认仅允许 localhost、回环和私有 IP")
     args = ap.parse_args()
 
-    if args.endpoint:
+    if args.endpoint is not None:
+        if args.gold is not None or args.actual is not None or args.report is not None:
+            print("错误：活引擎与离线选项不能混用；请只指定一种模式", file=sys.stderr)
+            return 2
         try:
             guard_endpoint(args.endpoint, args.allow_remote)
+            engine_ask_url(args.endpoint)
         except ValueError as exc:
             print(f"错误：{exc}", file=sys.stderr)
             return 2

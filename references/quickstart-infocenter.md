@@ -8,7 +8,8 @@
 ```bash
 python scripts/profile_db.py --db physical.db --out profile.yaml
 ```
-每张表的行数、枚举列实测取值、空值率、疑似时间列。
+每张表的行数、枚举列实测取值和空值率。连接以只读模式打开；数据库路径不存在或文件无法读取时退出 2，不创建空数据库，也不生成成功画像。
+`--out` 必须是独立的画像文件，不能与 `--db` 是同一路径、解析后的路径别名或指向同一文件的链接；否则拒绝输出并保留源库。
 用途：建模前核对"库里长的"和"业务说的"是不是一回事。敏感字段名启发式仅供参考，不等于脱敏结论。
 
 **2. 结构漂移巡检（上游改表了没有）**
@@ -17,6 +18,7 @@ python scripts/check_consistency.py --model semantic.yaml --db physical.db
 ```
 ERROR = 模型引用的表/字段在库里不存在了（必须处理）；
 WARN = 库里有模型没声明的新列等（评估后决定要不要纳入）。
+数据库不存在或无法只读检查时退出 2，提示核对路径、权限或文件格式；这属于检查未执行，不会报告“ERROR 0”。
 
 **3. 约束验证报告（数据质量的可信凭据）**
 ```bash
@@ -31,7 +33,7 @@ python scripts/check_constraints.py --model semantic.yaml --db physical.db --out
 
 ## 权限边界（已在工具层落地）
 
-- 脚本对数据库只执行**只读聚合查询**（SELECT COUNT/SUM/AVG），连接以只读模式打开
+- 以上检查工具以只读模式读取 SQLite 结构与数据；不会因路径写错而创建数据库
 - 网络访问默认仅本机/内网，远程必须显式 `--allow-remote`
 - 完整声明见仓库根目录 [SECURITY.md](../SECURITY.md)，可直接作为安全审查材料
 

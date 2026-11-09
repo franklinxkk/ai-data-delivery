@@ -15,23 +15,34 @@ import argparse
 import re
 import sqlite3
 import sys
+from contextlib import closing
+from pathlib import Path
 
-import yaml
+from _contract import quote, readonly, write
 
 SENSITIVE_PAT = re.compile(r"身份证|手机号|电话|资格证号|证件号|id_card|phone|mobile", re.I)
 
 
+def ensure_separate_output(db_path, out_path):
+    """只读连接不保护输出文件；拒绝路径别名、符号链接或硬链接指向源库。"""
+    source, output = Path(db_path), Path(out_path)
+    if output.resolve() == source.resolve() or (output.exists() and output.samefile(source)):
+        raise ValueError(f"--out 不能指向 --db 数据库或其文件别名：{out_path}；请选择新的画像文件路径")
+
+
 def profile_table(conn, table, enum_max):
-    cols = conn.execute(f"PRAGMA table_info('{table}')").fetchall()
+    table_sql = quote(table)
+    cols = conn.execute(f"PRAGMA table_info({table_sql})").fetchall()
     # PRAGMA: cid, name, type, notnull, dflt_value, pk
-    row_count = conn.execute(f"SELECT COUNT(*) FROM '{table}'").fetchone()[0]
+    row_count = conn.execute(f"SELECT COUNT(*) FROM {table_sql}").fetchone()[0]
     out_cols = []
     for _, cname, ctype, _, _, pk in cols:
         rec = {"name": cname, "type": ctype or "", "pk": bool(pk)}
+        column_sql = quote(cname)
         n = conn.execute(
-            f"SELECT COUNT(DISTINCT \"{cname}\") FROM '{table}'").fetchone()[0]
+            f"SELECT COUNT(DISTINCT {column_sql}) FROM {table_sql}").fetchone()[0]
         nulls = conn.execute(
-            f"SELECT COUNT(*) FROM '{table}' WHERE \"{cname}\" IS NULL").fetchone()[0]
+            f"SELECT COUNT(*) FROM {table_sql} WHERE {column_sql} IS NULL").fetchone()[0]
         rec["distinct"] = n
         rec["null_rate"] = round(nulls / row_count, 4) if row_count else 0
         if pk and row_count:
@@ -40,7 +51,7 @@ def profile_table(conn, table, enum_max):
             rec["note"] = "敏感列：不取样"
         elif 0 < n <= enum_max:
             vals = [r[0] for r in conn.execute(
-                f"SELECT DISTINCT \"{cname}\" FROM '{table}' WHERE \"{cname}\" IS NOT NULL "
+                f"SELECT DISTINCT {column_sql} FROM {table_sql} WHERE {column_sql} IS NOT NULL "
                 f"ORDER BY 1 LIMIT {enum_max}").fetchall()]
             rec["enum_values"] = [str(v) for v in vals]
         out_cols.append(rec)
@@ -62,16 +73,18 @@ def main():
               f"检查路径拼写；相对路径以当前工作目录为基准。", file=sys.stderr)
         return 2
 
-    conn = sqlite3.connect(args.db)
-    tables = [r[0] for r in conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
-    profile = [profile_table(conn, t, args.enum_max) for t in sorted(tables)]
-    conn.close()
-
-    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-    with open(args.out, "w", encoding="utf-8") as f:
-        yaml.safe_dump({"db": args.db, "table_count": len(profile), "tables": profile},
-                       f, allow_unicode=True, sort_keys=False)
+    try:
+        ensure_separate_output(args.db, args.out)
+        with closing(readonly(args.db)) as conn:
+            tables = [r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+            profile = [profile_table(conn, t, args.enum_max) for t in sorted(tables)]
+        ensure_separate_output(args.db, args.out)
+        write(args.out, {"db": args.db, "table_count": len(profile), "tables": profile})
+    except (sqlite3.Error, ValueError, OSError) as exc:
+        print(f"错误：无法生成数据库画像 {args.db}：{exc}\n"
+              "请核对数据库与输出路径、权限和 SQLite 文件格式。", file=sys.stderr)
+        return 2
     enum_cols = sum(1 for t in profile for c in t["columns"] if "enum_values" in c)
     print(f"画像完成：{len(profile)} 张表，{enum_cols} 个枚举候选列 → {args.out}")
     return 0

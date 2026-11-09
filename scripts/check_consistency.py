@@ -18,9 +18,10 @@ import glob
 import os
 import sqlite3
 import sys
+from contextlib import closing
 
 import yaml
-from _contract import load
+from _contract import load, quote, readonly
 
 TYPE_CLASSES = {
     "int": "num", "integer": "num", "bigint": "num", "smallint": "num",
@@ -36,13 +37,12 @@ def type_class(t):
 
 
 def db_structure(db_path):
-    conn = sqlite3.connect(db_path)
     tables = {}
-    for (tbl,) in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
-        cols = {r[1]: r[2] for r in conn.execute(f"PRAGMA table_info({tbl})")}
-        tables[tbl] = cols
-    conn.close()
+    with closing(readonly(db_path)) as conn:
+        for (tbl,) in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
+            cols = {r[1]: r[2] for r in conn.execute(f"PRAGMA table_info({quote(tbl)})")}
+            tables[tbl] = cols
     return tables
 
 
@@ -73,7 +73,12 @@ def main():
         print("错误：需 --meta 或 --model", file=sys.stderr)
         return 2
 
-    actual = db_structure(args.db)
+    try:
+        actual = db_structure(args.db)
+    except (sqlite3.Error, ValueError, OSError) as exc:
+        print(f"错误：无法只读检查数据库 {args.db}：{exc}\n"
+              "请核对数据库文件路径、读取权限和 SQLite 文件格式；不会创建数据库。", file=sys.stderr)
+        return 2
     expected = load_expectations(args)
     errors, warns = [], []
 

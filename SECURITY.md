@@ -1,53 +1,49 @@
-# 安全边界 / Security Policy · v0.1.2
+# 安全边界 / Security Policy · v0.2.1-dev
 
-ai-data-delivery在用户指定的本机项目中整理、编辑和验证语义。它有文件操作、网络验证与可选子进程能力；这些能力按下列范围实现，不能只凭安全声明判断可信。SKILL.md的capabilities是入口摘要，本页与实际代码共同供审查。
+本工具在用户指定的本机项目中整理和验证语义，不是操作系统沙箱。SKILL.md 声明实际需要的文件、网络、子进程、环境和 SQL 能力；宿主和用户授权仍决定可执行范围。`allowed-tools: Read` 仅预声明读取，其他操作沿用已授权任务范围，不自动授予任意命令或网络权限。该字段是 Agent Skills 的实验能力，各宿主支持不同，不能当作强制隔离措施。
 
-## 文件、数据与工作台
+## 文件、数据库与工作台
 
-- CLI按输入/输出参数读写文件；这不是操作系统沙箱。不要把不可信文档中的路径或命令当成用户授权。
-- 工作台仅绑定127.0.0.1，同源检查和临时会话令牌用于限制网页请求；不是多人身份认证服务，也不隔离同一系统账号下的恶意程序。
-- 项目SQLite保存模型、历史和导入附件。私人备份含原始附件；交付ZIP不包含附件，但模型、问题与报告仍可能含业务敏感信息，分享前按接收者范围核对。
-- 导入DDL只解析，模型用安全YAML解析。数据快照只读打开、query_only、关闭trusted_schema并限制查询时间。业务查询由有界编译器生成单表聚合及同范围明细；不提供任意SQL执行器、通用跨表SQL或生产写接口。
-- 演示/测试在自身临时SQLite创建表和模拟记录；项目编辑写本机项目库。因此“业务快照只读”不等于整个工具从不写数据库。
+- CLI 按输入/输出参数读写文件；材料里的命令、路径和链接不是用户授权。知识输入只解析，不执行 DDL 或文档中的命令。
+- 工作台只监听 127.0.0.1，检查 Host、Origin 和会话令牌；这不是多人身份认证，也不防御同一系统账号下的恶意程序。
+- 项目库保存语义、历史和原始附件。私人备份含附件；语义交付包不含原始附件，但模型及来源引用仍可能含业务信息，按用户指定的接收范围交付。
+- YAML 使用安全加载器。快照检查使用共享只读连接、query_only 和 trusted_schema 防护；缺失数据库必须报错，不能创建空库并宣布检查通过。
+- 可选数值工具使用有界只读编译器。旧指标提升工具只接受完整支持的 COUNT 与 AND 条件；遇到 OR、分组、函数、缺失字段或未映射枚举，保留问题并阻止进入可合并队列，不能截取局部表达式。
+- 回归用例必须显式提供期望值或二维 rows；缺失不是 null，空 rows 和 0 不等于缺失。无效输入不能创建或覆盖已有金标准。
+- 项目编辑与模拟数据生成会写本机数据库；业务快照只读不等于整个工具不写数据库。
 
-## HTTP请求
+## HTTP 请求
 
-网络请求只来自明确指定的endpoint/health-url。CLI可发送问题等验证请求、读取服务模型或结果；启用远端目标后会把请求内容发送给该目标，不能宣称绝不出网。
+知识解析和离线读包不联网。可选 live 评测按显式目标逐条发送原始 question，主用例和多跳用例均在发送范围内。模型、快照和期望结果用于本地比对。使用前核对本次已授权的目标与问句范围；未知目标或范围不明时用离线入口。远端及本机引擎可能继续转发或记日志，不能把本工具的读取边界声称为下游保障。入口说明见 [Stage 6](references/story-map.md)。
 
-共享实现位于 `scripts/_network.py`：
+共享传输实现 `scripts/_network.py`：
 
-- 仅HTTP(S)，不接受URL内用户名/密码、控制字符、片段或IPv6 scope。
-- 默认允许精确localhost、回环及RFC1918/ULA私有IP。其他域名和公网IP需要显式 `--allow-remote`；不是一个“批准所有外部请求”的开关，仍须属于用户任务授权的目的地。
-- 拒绝链路本地、未指定、多播、不可路由地址及已列出的云元数据IP/主机；即使allow-remote也不放行。
-- DNS仅解析一次，检查全部答案，固定IP连接；HTTPS仍按原主机校验证书。不能通过第一次查安全IP、第二次换IP绕过。
-- 不读取系统HTTP代理，不跟随重定向。重定向须由用户明确配置最终合法地址后重试。
-- 响应最大4MB，请求受整体截止时间约束，包含慢速响应读取。HTTP失败、错误/拒绝/未知/等待状态不能凭相同数值被判为对账通过。
+- 仅 HTTP(S)，拒绝 URL 凭据、控制字符、片段与 IPv6 scope；live 引擎基础 URL 也拒绝查询参数，避免路径拼接发错目标。
+- 默认仅允许精确 localhost、回环和 RFC1918/ULA 私有 IP；其他域名或公网 IP 需 `--allow-remote`，且仍必须在用户任务授权范围内。
+- 始终拒绝云元数据名单、链路本地、未指定、多播和不可路由地址；名单是阻断规则，不是探测目标。
+- 检查全部 DNS 答案并固定 IP 连接，HTTPS 保留主机名及证书验证；不读取系统代理，不跟随重定向。
+- 响应上限 4 MB，整体截止时间覆盖解析及慢速响应；明确失败、拒绝、未知或等待不能因数值碰巧相同判通过。
 
-工作台已有消费者适配器的范围更窄：只允许本机IPv4回环，不使用上述远端开关。
+工作台消费者适配器范围更窄，只支持本机 IPv4 回环。上述策略不构成任意已授权服务的安全担保。
 
-## 子进程和环境
+## 子进程、源码维护与依赖
 
-门禁、演示和mock只调用仓库内明确脚本，使用参数数组和最小环境。`scripts/rebuild.py`是可选的高级服务重建辅助工具，正常建模与首次体验不需要它。
+安装包只含建模和验证所需入口。门禁与演示使用固定脚本、参数数组、shell=False 和最小子进程环境，不整包继承 CI/cloud/token 变量。PATH、用户目录等运行环境仍不构成隔离沙箱。
 
-- 默认环境由 `_contract.minimal_env`保留PATH、系统目录、临时目录、用户目录、语言等运行项，不整包继承CI/cloud/token变量。保留PATH/HOME仍不构成隔离沙箱。
-- rebuild额外变量须逐一 `--pass-env NAME`，仅传指定名称，不打印值。用户指定程序仍可能读取自身配置或主动打印秘密，因此工具不会自动回显构建/服务日志；日志留在指定项目。
-- 构建和启动使用argv、shell=False；直接shell解释器及.cmd/.bat入口被拒绝。建议JSON参数数组 `--build-argv` / `--start-argv` 避免路径解析歧义。显式指定的程序本身仍需可信，本工具不限制其全部行为。
-- 先构建并核对产物，再替换旧实例；构建失败不停止旧实例。`--port`只检查占用，从不按端口杀进程。
-- 仅停止本工具记录的进程：核对项目、可执行路径、创建时刻，用Windows原生handle或Linux pidfd操作同一实例。整数PID、过期或身份不符的记录拒绝处理。其他平台没有安全能力时拒绝，不降级为kill数字PID。
-- 启动/就绪失败会清理本次创建的前台主进程；清理失败明确报错并保留身份记录供排查。启动命令必须持续前台运行，不可daemonize；不承诺通用进程树管理、生产部署或旧实例自动回滚。
-- 就绪检查确认指定健康端点返回HTTP 2xx、被管理进程仍运行，不代表应用业务功能已验收。
-- 默认记录为项目的 `.rebuild-process.json`；单独停止使用 `python scripts/rebuild.py --project-dir ./my-service --stop`。记录防误停与PID复用，不抵御同一系统账号恶意篡改记录。
+通用服务构建、启动、进程替换已经移到源码 `maintainer/rebuild.py` 和 `maintainer/_process.py`，不随 skill 分发，也不保留旧 scripts 路径入口。它们只供明确的源码维护任务使用；不是本体建模的一步。
 
-## 对平台审计的处理
+可执行 `mocks/` 同样只留在源码维护树。其各入口只接受本仓库真实一级领域目录及已知脚本，拒绝绝对路径、路径穿越、符号链接、junction 和硬链接输出，避免执行或删除目录外文件。这些检查不抵御同账号恶意并发换文件。
 
-ClawHub公开报告针对平台0.1.1，展示的历史SKILL内部仍为0.0.7；不能直接当成本包扫描结论。历史动态模块加载和shell拼接已从相关路径移除。本版另修复遗漏的环境继承、端点判定/代理/重定向、健康检查及按端口停服务问题，并保留可复验测试。
+运行依赖固定为 requirements.txt 中经过本次验证的版本。PyYAML 6.0.3 的发布信息可在 [PyPI](https://pypi.org/project/PyYAML/6.0.3/) 核对；固定版本便于复现，不代表今后永远没有漏洞。升级时重新评估与测试。
 
-中文内容本身不是恶意行为证据；网络和子进程也不能仅因用途正常就忽略实现风险。逐项以当前代码及负例判断，不把整个报告笼统称为误报。此版本尚未取得新的ClawHub审计结果。
+## 本次平台审计处置
 
-## 审查与问题反馈
+本次核对的是 [ClawHub 公开报告](https://clawhub.ai/franklinxkk/skills/ai-data-delivery/security-audit)：被审版本 **0.1.2**，2026-11-09 07:48 UTC，显示 18 条发现、139/145 部件覆盖及部分分析降级，结论 Review / suspicious。
 
-建议查看 `_network.py`、`_process.py`、`rebuild.py`，再看工作台service/serve与调用它们的入口；本次证据范围见[验证记录](references/v0.1.2-validation.md)。源码仓库的tests保留自动回归，纯净运行包不携带测试与本地记录。
+真实问题已按共同原因修复：指标条件丢失、未知字段仍可合并、缺失预期写入金标准、只读检查创建数据库、mock 路径越界；通用重建工具移出运行包，live 发送范围在使用处说明，依赖固定并补齐能力声明。元数据相关四条发现命中的是拒绝列表，保留防护，以拒绝地址、混合 DNS、地址编码和重定向反例核实。受控固定脚本的 subprocess 使用不等于命令注入，仍保留环境和参数边界。
 
-安全问题可到[项目Issues](https://github.com/franklinxkk/ai-data-delivery/issues)反馈，请避免贴真实密钥、客户数据或未脱敏日志。
+这些是本地修复及测试结论，**尚未取得新版本的 ClawHub 复扫结果**，不能声称平台告警已撤销或完成生产安全认证。审查入口包括 `_network.py`、`run_eval.py`、`promote_draft.py`、`promote_gold.py`、`check_consistency.py`、工作台 service/serve 与源码 mock 测试。纯净安装包不携带测试、私人材料或本地审查记录。
 
-**English:** This is a local toolkit, not a sandbox. CLI HTTP targets are explicit; public IPs/other hostnames require opt-in, with DNS pinning, TLS verification, bounded responses/deadlines and no proxy or redirects. Child processes use argv and a minimal environment, with optional named passthrough. Rebuild manages only identity-checked foreground processes, never kills by port. Local tests do not constitute a new platform security audit or production certification.
+安全问题可到[项目 Issues](https://github.com/franklinxkk/ai-data-delivery/issues)反馈，不要附真实密钥或未脱敏数据。
+
+**English:** Local toolkit, not a sandbox. The installed skill excludes general service lifecycle and executable mock maintenance tools. Optional live evaluation sends authorized question text to an explicit destination; downstream behavior remains the target service's responsibility. Metadata addresses are denied. Strict metric promotion, explicit gold expectations and read-only snapshot inspection prevent silent integrity failures. Local verification is not a new ClawHub audit or production certification.

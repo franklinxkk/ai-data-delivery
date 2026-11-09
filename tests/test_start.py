@@ -93,7 +93,8 @@ class FirstUse(unittest.TestCase):
         from mocks import run_mock
         with mock.patch.dict(os.environ,{'DELIVERY_SECRET_SENTINEL':'not-a-real-secret'}),mock.patch.object(run_mock.subprocess,'run') as child:
             child.return_value.returncode=0
-            run_mock.run_step('environment probe',['example.py'],ROOT)
+            domain=ROOT/'mocks'/'retail'
+            run_mock.run_step('environment probe',[str(domain/'build_db.py')],domain)
         self.assertNotIn('DELIVERY_SECRET_SENTINEL',child.call_args.kwargs['env'])
 
 

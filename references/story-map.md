@@ -89,13 +89,15 @@ python scripts/promote_draft.py --raw inventory/metrics_raw.yaml --from-meta met
     --model semantic.yaml --out promote/     # 逐条生成提升草稿（四分：✅/🔶/⛔/📋）
 ```
 
-每条草稿自带：目标数据集、字段翻译（中文→物理列）、枚举值对齐提议、比率分子分母拆分（SUM/SUM 加权，禁行级平均）、**待决项标记**。然后开业务审阅会，按 提升清单.md 逐条拍板：
+草稿保留原始口径、目标数据集、字段翻译（中文→物理列）、枚举值对齐提议和待决项。自动提升仅支持完整的单表 `SELECT COUNT(*) FROM 表`，可附用 `AND` 连接的字段比较式。完整且确定的映射进入 `ops.yaml`；有唯一近似字段/枚举提议的完整口径进入 `ops_review.yaml`，逐条确认后才能合入。缺字段、缺枚举映射、缺模型，或包含 OR、分组、关联、排序等不支持的语法时，只保留清单待定义，不截取条件、不生成可合并操作。比率及其他聚合须人工给出完整定义，不会自动拆成分子分母或替换为 COUNT。
+
+SQL 的 FROM 表必须与本条 `source_table` 或 `mapped_table` 相符；来源不一致时先核对公式和表映射，不能仅因字段同名就换表合入。按 `提升清单.md` 核对后再执行：
 
 ```bash
 python scripts/patch_model.py -f semantic.yaml batch promote/ops.yaml --db 快照.db   # 批量一次写入+验算
 ```
 
-- list/rank 类进**明细查询模板**（templates 段，一等资产），路由"要清单还是要数字"先分流
+- list/rank 类在来源与过滤可完整映射时生成**明细查询模板草稿**；`columns_raw` 仅保留待核对的 SELECT 列，需人工映射成 `columns`，不作为可执行 SQL。复杂或不完整的过滤仍只进清单。
 - 每条指标 synonyms ≥ 3 由 lint 门禁强制（W17）——这是指标命中路由的生命线
 - ⚠️ 表名未映射的指标单独可见，不会掉进"有来源但没映射"的缝里
 
@@ -117,18 +119,23 @@ python scripts/patch_model.py -f semantic.yaml batch promote/ops.yaml --db 快�
 
 ## Stage 6 · 验证：上线门禁（2-3 天）
 
+仅在已授权的引擎和下游模型服务上运行 live 评测。先核对 `$ENGINE` 是本次获准使用的引擎基础 URL，并核对主用例、可选多跳用例的问句是否在允许发送的范围内。问句可能含业务标识或敏感信息。目标未知或问句范围不明时，用已有的授权应答文件做离线比对。
+
 ```bash
-python scripts/run_eval.py --model semantic.yaml --endpoint $ENGINE --cases cases.json  # live 模式
+python scripts/run_eval.py --model semantic.yaml --db 快照.db \
+    --endpoint "$ENGINE" --cases cases.json --out eval.json
 python scripts/release_gate.py --profile validated --model semantic.yaml \
     --cases cases.json --db 快照.db --eval-report eval.json --out gate.json
 ```
 
-- 评测必须在**正式 LLM 链路**上跑（教训：前端规则引擎的 92.6% 不能当上线依据，证据分级只能标 mock）
+- live 模式把主用例和可选多跳用例的原始 `question` 逐条 POST 到 `${ENGINE}/api/ask`。模型、SQLite 快照及期望结果用于本地证据绑定或比对。引擎收到问句后可能继续转发、调用数据服务或记录日志，这些行为由目标服务控制，即使引擎地址是本机或内网。
+- 默认仅允许精确的 `localhost`、回环和私有 IP。使用已授权的公网 IP 或其他域名时显式加 `--allow-remote`。传输拒绝云元数据等地址、拒绝重定向，并在检查 DNS 结果后固定连接地址。基础 URL 可带服务路径，须省略查询参数和片段。
+- 要核对正式 LLM 链路时，使用获准连接该链路的引擎。合成模拟应答用 `--mode mock` 标记。离线命令 `python scripts/run_eval.py --gold cases.json --actual actual.jsonl` 只比对本地文件，默认记录为离线证据。
 - 门禁 not_ready 时逐 gate 给 actionable 提示
 
 | 我得到 | 价值 |
 | --- | --- |
-| 带证据分级（live）的准确率数字 | 敢上线，也敢向甲方汇报 |
+| 带证据分级（live）的准确率数字 | 对照本次用例、目标链路和实际响应 |
 | release_log 留痕 | 每次放行的技术证据可审计 |
 
 ## Stage 7 · 运营：持续质量（长期）

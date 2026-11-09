@@ -18,7 +18,7 @@ v0.0.5：检查只对其范围负责。无数据库时可形成候选与草案�
 补丁后行为零变化、改了没生效——**先怀疑环境，再怀疑引擎**。实测高发三类：
 
 1. **服务加载旧模型**：用 `probe_model.py --endpoint <地址> --model semantic.yaml` 核对运行时版本/数据集数/指标数/结构化数与本地权威源是否一致。
-2. **构建产物是旧包**：rebuild.py 的新鲜度校验（产物旧于源码时拒绝 --skip-build）就是为此存在；手工排查可比对 jar 内 class 时间戳与源文件。
+2. **构建产物是旧包**：按目标项目既有构建流程生成新产物，并核对构建记录、产物时间与来源版本；手工排查可比对 jar 内 class 时间戳与源文件。
 3. **端口被旧实例占用**：readiness 通过不代表是新实例，查进程命令行确认启动路径与端口归属。
 
 排除环境层后再进入症状对照表。取证用 `capture_case.py --endpoint <地址> --question "<问句>" --out badcases/`——应答、检索命中、模型快照三件套一次落盘为登记卡，用户只有口头反馈时先用 `ingest_feedback.py` 入池。
@@ -66,23 +66,23 @@ v0.0.5：检查只对其范围负责。无数据库时可形成候选与草案�
 
 ## bad case 记录模板
 
-登记卡由 `capture_case.py` 自动生成骨架（三件套已填），归因后回填 symptom/layer/fix/verify/expect；triage 出归因层后用 `suggest_card.py` 生成修订建议卡（证据/建议动作/影响面/回归占位）供评审；修复回归通过后 `promote_gold.py` 回流 gold 集（expect 未填拒绝入库，同 id 幂等覆盖）。口径类修复另跑 `reconcile_paths.py` 双路径对账确认指标路径与问数路径一致。
+登记卡由 `capture_case.py` 自动生成骨架（三件套已填），归因后回填 symptom/layer/fix/verify/expect；triage 出归因层后用 `suggest_card.py` 生成修订建议卡（证据/建议动作/影响面/回归占位）供评审；修复回归通过后 `promote_gold.py` 回流 gold 集。`scalar` 必须显式填写 `value`，0 和明确预期为 NULL 的 `value: null` 都有效；`rows` 必须填写逐行值列表，如 `[[0]]`，空结果用 `[]`，不能省略或写 null；`refusal` 不要求结果值。缺失或结构非法时拒绝写入，已有 gold 保持不变；同 id 更新期望而不重复追加。口径类修复另跑 `reconcile_paths.py` 双路径对账确认指标路径与问数路径一致。
 
-每个修过的 case 按此模板沉淀进 gold 集和交付说明：
+每个修过的 case 按此模板保存为单张登记卡（YAML mapping），再通过 `promote_gold.py --card 登记卡.yaml --gold gold.yaml` 加入 gold 集：
 
 ```yaml
-- id: bc-YYYYMMDD-NNN
-  question: "原始问句（逐字）"
-  symptom: 1        # 对照表症状编号
-  layer: model      # model / engine / data / environment
-  evidence_stop: L2  # 取证瀑布止于哪一级；下探须注明上级不足原因
-  fix: 'patch_model.py syn 指标ID 大区'   # 附完整命令行，可复跑
-  verify: 'SELECT COUNT(*) ... → 60 行'    # struct 类修复必填：物理库验算留痕
-  expect:
-    type: scalar    # scalar / rows / refusal
-    value: 0
-  regression_before: "72/74"
-  regression_after: "73/74"
+id: bc-YYYYMMDD-NNN
+question: "原始问句（逐字）"
+symptom: 1        # 对照表症状编号
+layer: model      # model / engine / data / environment
+evidence_stop: L2  # 取证瀑布止于哪一级；下探须注明上级不足原因
+fix: 'patch_model.py syn 指标ID 大区'   # 附完整命令行，可复跑
+verify: 'SELECT COUNT(*) ... → 60 行'    # struct 类修复必填：物理库验算留痕
+expect:
+  type: scalar    # scalar / rows / refusal
+  value: 0
+regression_before: "72/74"
+regression_after: "73/74"
 ```
 
 ## 领域症状包

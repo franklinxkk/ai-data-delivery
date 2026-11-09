@@ -51,24 +51,41 @@ def save(path, data):
 
 
 def to_case(card, fmt):
-    e = card.get("expect") or {}
+    if not isinstance(card, dict):
+        raise ValueError("登记卡必须是 mapping，且需填写 expect")
+    e = card.get("expect")
+    if not isinstance(e, dict):
+        raise ValueError("登记卡 expect 未填或不是 mapping")
     etype = e.get("type")
     if etype not in ("scalar", "rows", "refusal"):
         raise ValueError("登记卡 expect.type 未填或非法（scalar/rows/refusal）——先定验收期望再入库")
+    if etype == "scalar":
+        if "value" not in e:
+            raise ValueError("登记卡 expect.value 未填；0 与显式 null 是已定义结果，不能省略 value")
+        if isinstance(e["value"], (dict, list)):
+            raise ValueError("登记卡 expect.value 必须是单值；多行结果请用 type: rows + rows")
+    elif etype == "rows":
+        if "rows" not in e or not isinstance(e["rows"], list):
+            raise ValueError("登记卡 expect.rows 未填或不是列表；空结果请明确填写 rows: []，不能使用 null")
+        if any(not isinstance(row, list) for row in e["rows"]):
+            raise ValueError("登记卡 expect.rows 的每行必须是值列表，例如 [[0]]；空结果使用 []")
+    for key in ("id", "question"):
+        if not isinstance(card.get(key), str) or not card[key].strip():
+            raise ValueError(f"登记卡 {key} 未填或不是非空文本")
     if fmt == "expect":
         case = {"id": card["id"], "question": card["question"],
                 "expect": {"type": etype}}
         if etype == "scalar":
-            case["expect"]["value"] = e.get("value")
+            case["expect"]["value"] = e["value"]
         elif etype == "rows":
-            case["expect"]["rows"] = e.get("rows")
+            case["expect"]["rows"] = e["rows"]
     else:  # merged 格式
         case = {"id": card["id"], "type": "badcase回流", "question": card["question"],
                 "expect_reject": etype == "refusal"}
         if etype == "scalar":
-            case["gold_rows"] = [[e.get("value")]]
+            case["gold_rows"] = [[e["value"]]]
         elif etype == "rows":
-            case["gold_rows"] = e.get("rows")
+            case["gold_rows"] = e["rows"]
     case["note"] = f"bad case 回流：{card.get('note') or card.get('fix') or ''}"
     return case
 

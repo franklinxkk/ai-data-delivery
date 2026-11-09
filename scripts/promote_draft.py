@@ -7,7 +7,7 @@ patch_model.py batch 一次合入——不再手写翻译脚本。
 
 四分输出（沿用真实项目验证过的分类法）：
   ✅ 可直接合入：count 型 + 字段/值全部对上宽表枚举 → ops.yaml（可直接 batch）
-  🔶 映射待确认：字段/值有提议映射但需人审（cn 推断、枚举近似、非 COUNT 聚合）
+  🔶 映射待确认：完整 COUNT 口径的字段/值有提议映射但需人审（cn 推断、枚举近似）
                  → ops_review.yaml（确认后 batch）+ 提升清单.md
   ⛔ 需业务定义：派生引用（公式里引用其他指标）或宽表无对应字段 → 只进清单
   📋 明细模板：list/rank 类不进 metrics，产出 templates 段草稿（明细查询是一等资产）
@@ -38,7 +38,10 @@ import yaml
 
 from _contract import load
 
-COND_RE = re.compile(r"([一-鿿A-Za-z_][\w一-鿿]*)\s*(<>|>=|<=|=|>|<)\s*(?:'([^']*)'|(\d+(?:\.\d+)?))")
+IDENT = r"[一-鿿A-Za-z_][\w一-鿿]*"
+COND_RE = re.compile(rf"({IDENT})\s*(<>|>=|<=|=|>|<)\s*(?:'((?:[^']|'')*)'|(\d+(?:\.\d+)?))")
+QUERY_RE = re.compile(rf"\s*SELECT\s+(.+?)\s+FROM\s+({IDENT})"
+                      r"(?:\s+WHERE\s+(.+?))?\s*;?\s*", re.I | re.S)
 DERIVED_RE = re.compile(r"[一-鿿]+(?:数|率)(?![\w'])")
 NAME_SUFFIX = re.compile(r"(数|总数|数量|明细|统计|情况|排行|提醒|报告|率)$")
 PROFILE_TABLE = re.compile(r"profile|画像|snapshot|档案")
@@ -66,12 +69,31 @@ def pick_time(ds):
 
 
 def translate_where(where, cols):
-    """WHERE 伪代码 → extra_where 片段。返回 (片段, 问题清单)。
+    """完整 AND 比较式 → extra_where；返回 (片段, 问题清单, 是否完整)。
     字段三级解析：物理名直中 → cn 全等（唯一）→ cn 近似包含（唯一，标【推断字段】）。"""
-    issues, parts = [], []
-    for m in COND_RE.finditer(where or ""):
+    if where is None:
+        return "", [], True  # 未写 WHERE 与写了空 WHERE 不同
+    text = where.strip()
+    matches, pos = [], 0
+    while True:
+        m = COND_RE.match(text, pos)
+        if not m:
+            return "", [f"【口径未支持】WHERE 第 {pos + 1} 位起无法完整解析：{text[pos:pos + 80]!r}；"
+                        "仅支持用 AND 连接的字段比较，请补充可完整映射的口径后重跑"], False
+        matches.append(m)
+        pos = m.end()
+        if not text[pos:].strip():
+            break
+        conjunction = re.match(r"\s+AND\s+", text[pos:], re.I)
+        if not conjunction:
+            return "", [f"【口径未支持】WHERE 第 {pos + 1} 位起包含未支持内容：{text[pos:pos + 80]!r}；"
+                        "OR、分组及其他过滤语法不会截取或改写，请人工补充完整口径"], False
+        pos += conjunction.end()
+
+    issues, parts, complete = [], [], True
+    for m in matches:
         field, op, sval, nval = m.group(1), m.group(2), m.group(3), m.group(4)
-        val = sval if sval is not None else nval
+        val = sval.replace("''", "'") if sval is not None else nval
         phys = None
         if field in cols:
             phys = field
@@ -91,20 +113,23 @@ def translate_where(where, cols):
                     issues.append(f"字段「{field}」近似多义：{[(n, cols[n]['cn']) for n in near]}")
         if not phys:
             issues.append(f"【字段缺口】宽表无「{field}」对应列")
+            complete = False
             continue
-        lit = f"'{val}'" if sval is not None else val
+        lit = "'" + val.replace("'", "''") + "'" if sval is not None else val
         if sval is not None:
             enum = cols[phys]["enum"]
             if enum and val not in enum:
                 near = [e for e in enum if val in e or e in val]
                 if len(near) == 1:
                     issues.append(f"【值待确认】{phys} 枚举无 '{val}'，提议 → '{near[0]}'（枚举：{enum}）")
-                    lit = f"'{near[0]}'"
+                    lit = "'" + near[0].replace("'", "''") + "'"
                 else:
-                    issues.append(f"【值待确认】{phys} 枚举无 '{val}'，无近似（枚举：{enum}）")
+                    issues.append(f"【值映射缺口】{phys} 枚举无 '{val}'，无唯一近似（枚举：{enum}）；"
+                                  "补充完整值映射后重跑")
+                    complete = False
                     continue
         parts.append(f"{phys} {op} {lit}")
-    return " AND ".join(parts), issues
+    return " AND ".join(parts) if complete else "", issues, complete
 
 
 def synonyms_for(mid, name, syn_map):
@@ -129,30 +154,45 @@ def classify(x, ctx):
     ds = ctx["src2ds"].get(table)
     cols = ctx["meta_idx"].get(table, {})
     formula = x.get("formula_raw") or ""
-    mwhere = re.search(r"\bWHERE\b(.+?)(?:ORDER\s+BY|$)", formula, re.I | re.S)
-    where = mwhere.group(1).strip() if mwhere else ""
-    extra, issues = translate_where(where, cols)
+    query = QUERY_RE.fullmatch(formula)
+    if query:
+        extra, issues, complete = translate_where(query.group(3), cols)
+        sources = {value.casefold() for value in (x.get("source_table"), table)
+                   if isinstance(value, str) and value}
+        if query.group(2).casefold() not in sources:
+            issues.append(f"【来源不一致】SQL FROM 为「{query.group(2)}」，与本条来源表"
+                          f"「{x.get('source_table')}」或映射宽表「{table}」不符；"
+                          "请核对原始公式和表映射后重跑")
+            extra, complete = "", False
+    else:
+        extra, complete = "", False
+        issues = ["【口径未支持】只能完整翻译单表 SELECT ... FROM 表 [WHERE AND比较式]；"
+                  "空 WHERE、关联、分组、排序等口径请人工补充，原始口径保留在清单中"]
 
     entry = {"id": mid, "name": name, "dataset": ds, "wide_table": table,
              "synonyms": synonyms_for(mid, name, ctx["syn_map"]),
              "formula_raw": formula, "source_table": x.get("source_table"),
              "rule_bound": bool(x.get("rule_bound")),
-             "extra_where": extra or None, "issues": issues}
+             "extra_where": extra or None, "issues": issues, "mergeable": False}
     if ds is None:
         entry["issues"] = [f"【模型缺口】映射宽表 {table} 不在 semantic.yaml datasets 中，"
                            "需先把该表建模为数据集"] + entry["issues"]
 
+    if not complete or ds is None:
+        entry.update(kind="⛔ 需业务定义", extra_where=None,
+                     reason="口径存在未解析内容或字段/值/模型缺口；不生成可合并操作，补齐后重跑")
+        return "drafts", entry
+
     if x.get("type") in ("list", "rank"):
         entry["kind"] = "📋 明细模板"
-        sel = re.search(r"SELECT\s+(.+?)\s+FROM", formula, re.I | re.S)
-        entry["select_raw"] = sel.group(1).strip() if sel else ""
+        entry["select_raw"] = query.group(1).strip()
         entry["time_field"] = ctx["ds_time"].get(ds)
         if table and PROFILE_TABLE.search(table):
             entry["issues"] = [f"【粒度存疑】{table} 疑似主体快照粒度，明细行可能装不下，"
                                "需核对宽表 grain 或改用明细宽表"] + entry["issues"]
         return "templates", entry
 
-    is_count = re.match(r"\s*SELECT\s+COUNT\s*\(\s*\*\s*\)", formula, re.I)
+    is_count = re.fullmatch(r"COUNT\s*\(\s*\*\s*\)", query.group(1).strip(), re.I)
     is_ratio = x.get("type") == "pct" or "/" in formula
     derived = [d for d in DERIVED_RE.findall(formula) if d != name]
 
@@ -161,24 +201,23 @@ def classify(x, ctx):
                      reason=f"口径引用派生指标 {derived}，需业务给出宽表字段级定义")
     elif is_count:
         entry.update(kind="✅ 可直接合入" if not issues else "🔶 映射待确认",
-                     type="count", expr="COUNT(*)",
+                     type="count", expr="COUNT(*)", mergeable=True,
                      time_field=ctx["ds_time"].get(ds))
     elif is_ratio:
-        entry.update(kind="⛔ 需业务定义" if derived else "🔶 映射待确认",
+        entry.update(kind="⛔ 需业务定义",
                      type="ratio",
                      reason="比率型需拆分子/分母（禁行级平均）"
                             + (f"；派生引用 {derived}" if derived else ""))
     else:
-        entry.update(kind="🔶 映射待确认", type="count", expr="COUNT(*)",
-                     time_field=ctx["ds_time"].get(ds),
-                     reason="SELECT 非 COUNT(*)，按 count 草拟，需确认聚合语义")
-    if entry["kind"].startswith("✅") and ds is None:
-        entry["kind"] = "🔶 映射待确认"  # 模型缺口未补不能算可直接合入
+        entry.update(kind="⛔ 需业务定义", extra_where=None,
+                     reason="SELECT 非完整 COUNT(*)，请补充实际聚合定义；不会替换为 COUNT(*)")
     return "drafts", entry
 
 
 def to_struct_op(d):
     """✅/🔶 草稿 → patch_model batch struct op。"""
+    if not d.get("mergeable") or not d.get("dataset") or not d.get("kind", "").startswith(("✅", "🔶")):
+        raise ValueError(f"指标 {d.get('id')} 的口径不完整，不能生成可合并操作；请核对 issues 与原始口径")
     op = {"op": "struct", "id": d["id"], "create": True, "name": d.get("name"),
           "type": d.get("type", "count"), "dataset": d.get("dataset"),
           "expr": d.get("expr", "COUNT(*)")}

@@ -15,7 +15,7 @@ import signal
 import sys
 import uuid
 
-from _contract import minimal_env
+from scripts._contract import minimal_env
 
 OWNER = 'ai-data-delivery/rebuild'
 SHELLS = {'cmd', 'powershell', 'pwsh', 'sh', 'bash', 'dash', 'ash', 'zsh',
