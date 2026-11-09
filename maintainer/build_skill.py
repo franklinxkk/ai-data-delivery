@@ -10,7 +10,7 @@ import zipfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = {"SKILL.md", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md", "requirements.txt"}
+FILES = {"SKILL.md", "SKILL.zh-CN.md", "README.md", "README.zh-CN.md", "SECURITY.zh-CN.md", "CHANGELOG.md", "LICENSE", "SECURITY.md", "requirements.txt"}
 DIRECTORIES = {"scripts", "references", "examples", "starter_packs", "workbench"}
 # These source-only tools must not re-enter an installed skill, even when a
 # dirty preview's git index still contains their old runtime locations.
@@ -50,7 +50,9 @@ def main():
                 "files": []}
     entries = {}
     for name in paths:
-        data = (ROOT / name).read_bytes().replace(b"\r\n", b"\n")
+        data = (ROOT / name).read_bytes()
+        if Path(name).suffix.lower() in {".md", ".py", ".js", ".json", ".yaml", ".yml", ".txt", ".html", ".css", ".sql", ".csv"}:
+            data = data.replace(b"\r\n", b"\n")
         entries[name] = data
         manifest["files"].append({"path": name, "sha256": hashlib.sha256(data).hexdigest()})
     entries["BUILD.json"] = (json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()

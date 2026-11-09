@@ -91,7 +91,9 @@ def make_server(service, port=0):
                 if path == "/":
                     body = (STATIC / "index.html").read_bytes().replace(b"__SESSION_TOKEN__", token.encode())
                     return self.response(200, body, "text/html; charset=utf-8", download_session=True)
-                if path in {"/app.js", "/style.css", "/knowledge.js", "/knowledge.css", "/graph-layout.js", "/vendor/elk.bundled.js"}:
+                if path == "/ui-en.js":
+                    return self.response(200, b"window.UI_EN=" + (STATIC / "ui-en.json").read_bytes() + b";", "text/javascript; charset=utf-8")
+                if path in {"/app.js", "/i18n.js", "/style.css", "/knowledge.js", "/knowledge.css", "/graph-layout.js", "/vendor/elk.bundled.js"}:
                     return self.response(200, (STATIC / path[1:]).read_bytes(), "text/javascript; charset=utf-8" if path.endswith("js") else "text/css; charset=utf-8")
                 self.response(404, {"error": "页面不存在"})
             except PermissionError as exc:
@@ -123,7 +125,7 @@ def make_server(service, port=0):
                     "edit": service.knowledge.edit, "merge": service.knowledge.merge,
                     "separate": service.knowledge.separate, "retire": service.knowledge.retire,
                     "review-source": service.knowledge.review_source, "undo": service.knowledge.undo,
-                    "publish": service.knowledge.publish}.items()})
+                    "publish": service.knowledge.publish, "example": service.knowledge.example}.items()})
                 action = routes.get(urlsplit(self.path).path)
                 if action is None:
                     return self.response(404, {"error": "操作不存在"})
@@ -150,12 +152,13 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--project", required=True, help="本地项目目录，自动创建 project.sqlite")
     ap.add_argument("--port", type=int, default=0, help="默认自动选取可用端口")
+    ap.add_argument("--language", choices=['en', 'zh'], default='en')
     args = ap.parse_args(argv)
     service = Service(args.project)
     server = make_server(service, args.port)
     address = f"http://127.0.0.1:{server.server_port}"
     (service.store.directory / "server.json").write_text(json.dumps({"url": address, "pid": os.getpid()}), encoding="utf-8")
-    print(f"语义工作台已启动：{address}\n项目：{service.store.directory}\n按 Ctrl+C 停止。", flush=True)
+    print(f"Semantic Workbench / 语义工作台: {address}/?lang={args.language}\nProject / 项目: {service.store.directory}\nCtrl+C to stop / 停止。", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

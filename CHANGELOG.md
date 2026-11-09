@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 — 2026-11-09
+
+- Add English and Simplified Chinese skill instructions, README, workbench UI and guides; preserve original knowledge when switching language. / 新增中英文技能、说明和工作台界面，切换不改写领域知识。
+- Add an executable equipment-loan semantic exercise: text + DDL, explicit review, graph maintenance and independent Agent consumption. / 新增可直接运行的设备借用建模练习。
+- Publish bilingual human-review pages and reader instructions; show real graph screenshots and an input-to-answer example. / 交付阅读页及调用说明双语化，展示真实图谱及完整案例。
+- Fix graph double-click editing after selection redraw and improve English node labels. / 修复选中重绘影响双击编辑，改善英文节点换行。
+- Do not treat different asset kinds (such as a business object and its physical table) as mergeable duplicate identities; same-kind conflicts still require review. / 不把不同类型的同名对象误判为可合并身份；保留同类型冲突检查。
+- Pre-1.0 projects and formats remain incompatible by default. / 1.0 前仍不承诺旧项目与格式兼容。
+
 ## 0.2.3-dev — 2026-11-09
 
 - 修复分项适用范围在界面编辑时被转成字符串的问题，按分项维护并保留嵌套值和类型；修正上下文末页仍提示继续取页的诊断。

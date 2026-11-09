@@ -20,9 +20,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", required=True)
     parser.add_argument("--revision", type=int)
+    parser.add_argument("--language", choices=['en', 'zh'], default='en')
     parser.add_argument("--operation-id", help="Reuse this ID with identical input after an uncertain result")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("state", help="Read the current project and material/candidate status")
+    commands.add_parser("example", help="Prepare authored proposals after reviewing the equipment example DDL; never confirms knowledge")
     material = commands.add_parser("import", help="Register material without overwriting the graph")
     material.add_argument("--file", required=True)
     material.add_argument("--domain", default="")
@@ -51,9 +53,11 @@ def main(argv=None):
         elif args.command == "import":
             path = Path(args.file)
             result = service.import_material({**req, "filename": path.name, "content_base64": base64.b64encode(path.read_bytes()).decode(),
-                "domain": args.domain, "scope": args.scope, "source_id": args.source_id, "distinct_source": args.distinct_source})
+                "domain": args.domain, "scope": args.scope, "language": args.language, "source_id": args.source_id, "distinct_source": args.distinct_source})
         elif args.command == "task":
-            result = service.task({**req, "batch_id": args.batch, "action": args.action})
+            result = service.task({**req, "batch_id": args.batch, "action": args.action, 'language': args.language})
+        elif args.command == "example":
+            result = service.example(req)
         else:
             data = json.loads(Path(args.file).read_text(encoding="utf-8-sig"))
             groups = data if isinstance(data, list) else data.get("groups")

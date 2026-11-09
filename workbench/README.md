@@ -1,134 +1,84 @@
-# 本地语义工作台 · v0.2.3-dev
+# Semantic Workbench · v0.3.0
 
-本地单人知识建模工作台。按“知识材料 → 待核对 → 语义图谱 → 交付与调用”完成一次建图任务；原文、候选、统一语义资产和历史保存在所选项目目录的 `project.sqlite` 中。项目历史单独查看，数值分析工具作为次入口保留。
+[简体中文](README.zh-CN.md) · [Quickstart](../README.md) · [Candidate contract](../references/m1-m2-contract.md)
 
-工作台不内置大模型。文件读取和结构候选在本机完成，业务语义候选由当前宿主 Agent 生成，或由操作者手工创建。无需 Node、CDN、AI API 密钥或独立数据库服务；Python 依赖为 PyYAML 和 pypdf。
+The local workbench stores materials, reviews proposals, edits one semantic graph and publishes independently readable snapshots. Your host Agent supplies reasoning; the workbench has no embedded model and does not automatically confirm uploaded knowledge.
 
-## 启动与继续
-
-在工具根目录运行：
+## Open a project and choose a language
 
 ```bash
 python -m pip install -r requirements.txt
-python -X utf8 scripts/start.py --project "./work/ontology"
+python -X utf8 scripts/start.py --project "./work/my-domain" --language en
 ```
 
-打开终端打印的本机 URL。服务只绑定 `127.0.0.1`，默认自动选可用端口；关闭进程后文件保留，再以同一项目路径启动即可继续。路径含中文或空格时使用引号。
+Open the printed loopback URL. Use the same directory to reopen. `--language en|zh` chooses the initial interface; the top-right selector changes it and remembers the preference for that browser origin. Source text and asset values remain unchanged. Save or clear unsaved input and close dialogs before switching. Browser-native file-picker text follows the browser/OS language.
 
-新项目可直接带入一份 DDL 或模型作为材料：
+For a complete included exercise, add `--example equipment` with a **new** project path. Review the DDL group first, then return to Materials and prepare the authored business proposals. Review those before opening the graph and publishing. Remove `--example` when reopening; initialization refuses to overwrite projects. This fixture does not run AI or confirm knowledge automatically.
 
-```bash
-python -X utf8 scripts/start.py --project "./work/new-domain" --ddl "./materials/schema.sql"
-```
+## Materials
 
-`--model "./materials/model.json"` 与 `--ddl` 二选一。材料经过解析后形成可支持的候选，不直接确认或覆盖图谱。已有项目不重复使用初始化参数；进入页面继续上传。`--prepare-only` 只准备项目，不启动网页。
+Paste text or upload files up to 32 MB each. Give material a useful name, domain and business scope; unknown domain/scope can be clarified later. Scope is retained with the source. Uploading and parsing do not confirm meaning.
 
-**1.0 前不承诺旧项目、模型格式或命令行为兼容。** 当前为 v0.2.3-dev，建议用新目录体验；升级前保留旧目录与私人备份，不依赖自动迁移。
-
-## 知识材料
-
-粘贴原文时填写来源名称，可补充领域和适用范围，点击“保存材料”。上传可一次选多份文件，每份最多 32 MB；逐份显示结果，失败项可修正后重试。原件留在本机，不执行其中的脚本、SQL 或链接。
-
-| 输入 | 提取与定位 | 限制和恢复方法 |
-| --- | --- | --- |
-| TXT、Markdown、粘贴原文 | 行号、段落；Markdown 标题路径 | 默认 UTF-8，识别 UTF-16 BOM。编码失败可先另存 UTF-8 后重传；链接不自动打开 |
-| SQLite/MySQL DDL | 受支持的 `CREATE TABLE`、表/字段说明、主键、显式外键与语句/行位置 | 不执行 SQL。不支持的语句和附加选项保留原文并提示；复合键保持列顺序。双方表列无法核对的 FK 保留声明，先补资料或修正，不生成猜测的业务关系 |
-| CSV、XLSX | 工作表、表头、行、单元格；保留 0、空单元格及缺失值差别 | 展开“表格读取范围”选择工作表名、表头行和 A1 区域；留空工作表读全部。每个所选区域最多 100000 个单元格。重复/空表头提示修正，不按重名列覆盖 |
-| XLSX 公式与合并单元格 | 保留公式及已有缓存值，标明无缓存 | 不重算公式，无缓存不当作 0；不按显示格式推算日期等含义，合并范围不自动向下填值。需要可靠数值时在表格软件计算后另存，或提供明确值的 CSV |
-| DOCX | 可读取正文段落、标题与表格单元格 | 图片、嵌入对象、复杂表格和附加文档区域可能未提取，按提示补充文字。定位不伪造页码；旧 `.doc` 请先转换 |
-| 有文本层的 PDF | 页码与提取文字 | 不做 OCR、不解密。扫描/空白/失败页分别提示；提供可读副本或对应页文字。表格结构、多栏顺序和图片内容不保证可靠，需在原页核对 |
-| JSON、YAML | 原文与安全解析结构 | 受支持的 `semantic.assets` / `assets` 形成模型候选；任意旧结构仅作为材料，不承诺自动迁移。重复键、无效格式等必须先核对 |
-
-ZIP 批量压缩包、旧 XLS/DOC、图片不属于本版直接解析范围。读取结果区分“解析完成、部分完成、失败、待转换”；部分完成仍可查看已有片段与未处理提示。读取完成不会使任何业务定义自动成为已确认知识。
-
-点击已有材料的“查看原文”可以回到具体片段，切换历史内容修订或提取结果，并下载原件。“更新材料”选择同一来源后上传新内容；同名不同内容不能直接猜成更新。相同字节内容默认复用；若出处不同，勾选“内容相同但出处不同，保留独立来源”。
-
-同一原件更改读取区域后重新提取，内容修订不变，解析结果另留身份。来源更新保留旧原件和依据；被改动、删除或无法定位的引用进入复核，不自动删掉知识，也不把旧链接悄悄换成新原文。
-
-## 宿主 Agent 任务
-
-材料保存后，在“处理任务”点击“准备 Agent 任务”，复制指令给当前宿主 Agent。宿主读取本批次片段与现有资产、生成有出处的候选、通过工具提交；返回后刷新页面进入“待核对”。准备任务本身不会自动调用模型。没有宿主时可直接进入图谱“新建知识”。
-
-以下命令供宿主使用，操作者无需维护内部 JSON。`BATCH_ID`、项目修订和操作 UUID 均取实际任务结果或由宿主生成：
-
-```bash
-python -X utf8 scripts/knowledge.py --project "./work/ontology" state
-python -X utf8 scripts/knowledge.py --project "./work/ontology" task --batch "BATCH_ID"
-python -X utf8 scripts/knowledge.py --project "./work/ontology" --revision PROJECT_REVISION --operation-id "OPERATION_ID" propose --batch "BATCH_ID" --file "./work/candidates.json"
-```
-
-候选文件格式为 `{"groups":[...]}` 或组列表，详见[实现合同](../references/m1-m2-contract.md)。`propose --partial` 用于尚未处理完全部材料；组说明应交代已处理范围与剩余部分。CLI 只提供材料摄取、任务与候选提交，不代替页面上的人工确认。
-
-宿主也可以使用 `knowledge.py import --file` 导入材料，附 `--domain`、`--scope`，更新时附 `--source-id`，相同内容但不同出处附 `--distinct-source`。命令中的 `--project`、`--revision` 和 `--operation-id` 必须放在子命令前。
-
-取消任务后已有候选仍保留，迟到结果不新增候选；选择“恢复任务”后再继续。结果未知时查询 `knowledge.py --project "./work/ontology" receipt "OPERATION_ID"`，相同载荷重试复用原操作 ID；不能通过反复换 ID 重复提交。
-
-## 待核对
-
-按批次和状态选择一组变化。每项并排显示当前定义和候选，可打开原文、调整候选字段、说明处理理由，再选择“接纳整组”“暂缓”或“拒绝”。引用有缺口或当前来源、目标、依赖已变化时，不会部分写入这一组；先核对变化，再提交修正后的建议。
-
-确认知识需要名称、定义、领域、适用范围与依据。指标还需单位、粒度、包含/排除和时间范围；规则需条件与要求；属性和字段需值类型。手工编辑可先保存草稿。确认表示操作者认可定义，不表示规则已经执行或数据结果已验证。
-
-同名和别名提示用于发现可能的身份冲突，不自动合并。在图谱详情中比较两项知识后，可以合并到明确的存续 ID，或说明不同含义并保持分离。来源变化产生的“需复核”在本页单独列出：对照旧依据和新片段，采纳修订，或说明旧定义仍适用的理由。
-
-修改冲突时保留当前输入并提示刷新核对，不能仅更新页面修订号后覆盖最新定义。已接纳、拒绝和暂缓的处置随项目保存；重跑同一建议不会自动清除原决定。
-
-## 语义图谱
-
-切换“业务”“指标与规则”“数据映射”“全部”视图，按名称、别名、定义、规则条件、要求及适用范围检索，并按领域、类型或状态筛选。选择节点查看定义、关系、引用与来源，进入邻域继续核对；表格视图与图谱编辑同一份知识。
-
-已有分项适用范围按各分项呈现并保存，修改定义不会把它变成字符串；数值、是/否、嵌套列表和未知值保留原含义。“仍待明确的问题”按行记录资料尚未回答的问题，独立 Agent 的上下文会返回这些缺口，不会自动补成零、通过或可执行。
-
-- 拖动节点调整布局，空白处拖动平移，缩放或整理布局；布局保存与语义修订分开。
-- “展开画布”进入专注模式，充分利用屏幕；可显示或收起详情，按 Esc 或“退出专注”返回。“适应画布”将当前图元完整放入可见范围。选中节点突出直接相关的关系，点击空白处取消高亮；这些查看动作不会修改定义或保存位置。
-- “自动布局”依据当前节点、完整关系和定义引用安排位置，选择适合画布比例的布局，避让节点与关系标签；不承诺任意复杂图都无交叉。固定节点保持坐标，计算或保存失败保留原布局；可以撤销最近的布局操作。已有拖动位置在重开后保留，重新布局需主动点击。
-- 实线和箭头表示业务关系，虚线表示定义引用；已有显式关系的对象对不再重复画引用线。关系名称保留完整文字，长名称换行；移动后的标签用细引导线对应关系。
-- 双击编辑已有知识；“新建知识”支持对象、术语、属性、关系、指标、规则、数据集、字段和映射。
-- 从连接点拖到目标，或点击“连接对象”，填写关系类型、谓词、定义和依据后保存。物理 FK 与业务关系分开，不凭连线推断业务含义。
-- 已有 ID 保持稳定。停用保留历史；删除只用于无引用且未发布的草稿。合并会更新引用，不能以改名字代替身份处理。
-
-“项目历史”显示修改修订；“检查并撤回”在条件允许时新增一个撤回修订。已有后续相关修改时需处理影响，不能用整体回滚覆盖新工作。布局撤销只恢复布局。
-
-## 交付与调用
-
-在交付页选择知识，或不勾选以交付全部业务语义。必需引用和关系端点自动补齐；数据集、字段、映射和物理 FK 默认只在被明确选中或作为必要依赖时带出。“附带数据映射与执行声明”用于需要同时交付这些内容的场景，不代表执行已经可用。
-
-“发布确认快照”检查当前范围，未确认、需复核、停用依赖或缺失依据会提示具体对象。修复后重试、缩小范围，或用“导出草稿供讨论”保留明确的草稿状态与缺口。保存后查看实际范围并下载；无关范围的问题不应要求把整个项目先补全。
-
-| 包内文件 | 用途 |
+| Input | Reading and limits |
 | --- | --- |
-| `model.json` | 此快照的语义定义、稳定 ID 和合并重定向 |
-| `sources.json` | 所选断言实际使用的来源修订、必要片段与定位 |
-| `manifest.json` | 快照身份、实际范围、草稿/完整状态、缺口与文件指纹 |
-| `human-review.html` | 离线查看相同定义、关系方向和出处 |
-| `README.md` | 包的调用说明和边界 |
+| TXT/Markdown/pasted text | Original text, line ranges and Markdown headings; embedded commands and links are not executed |
+| SQLite/MySQL DDL | Supported CREATE TABLE, columns, primary/composite/foreign keys and comments; unsupported syntax reported, SQL not executed |
+| CSV/XLSX | Sheet/header/range selection, cells and original locations; no formula recalculation, missing caches are not zero, merged cells are not silently filled |
+| DOCX | Readable paragraphs, headings and table cells; images and embedded/complex layout limitations reported, no invented page numbers |
+| Text-layer PDF | Page text and page numbers; no OCR, scanned/encrypted pages need readable input, tables/multiple columns require visual source checking |
+| JSON/YAML | Safe parsing with original content retained; supported semantic assets become proposals, arbitrary old models are not confirmed automatically |
 
-默认不附原附件和项目 SQLite；“私人项目备份”另行提供可继续编辑的完整项目。交付范围不等于脱敏或权限校验，发送前按实际接收方核对内容。
+ZIP batches, legacy XLS/DOC and image extraction are not direct inputs. Results distinguish complete, partial, failed and needs conversion. Partial extraction retains readable fragments and warnings.
 
-另一个 Agent 或程序只需语义 ZIP/解包目录及本工具读取器：
+**View source** opens a located fragment, its source revision and extraction. You can download the original. **Update material** explicitly targets an existing source; the same filename does not imply an update. Identical bytes normally reuse a source; select “same content, different origin” when needed. Re-extracting unchanged bytes with different reading options creates a new extraction, not a new original. Old evidence stays attached to its original revision; changed or missing fragments trigger review.
+
+## Host Agent tasks
+
+After saving material, choose **Prepare Agent task**, copy the instructions to your Agent, then refresh after it submits candidates. Preparation changes task state but does not call a model. Without a host, use **New knowledge** in the graph.
+
+The host handles IDs and JSON; users need not maintain them:
 
 ```bash
-python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" verify
-python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" describe
-python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" search --query "营运车辆"
-python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" context --id "ASSET_ID" --intent explain
-python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" get --id "ASSET_ID"
-python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" sources --id "ASSET_ID"
-python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" neighbors --id "ASSET_ID" --direction both
+python -X utf8 scripts/knowledge.py --project "./work/my-domain" state
+python -X utf8 scripts/knowledge.py --project "./work/my-domain" --language en task --batch BATCH_ID
+python -X utf8 scripts/knowledge.py --project "./work/my-domain" --revision PROJECT_REVISION --operation-id OPERATION_ID propose --batch BATCH_ID --file "./work/candidates.json"
 ```
 
-用搜索返回的真实 ID 替换 `ASSET_ID`。查看 JSON 的实际快照、范围、草稿、完整性、歧义和截断信息，不仅判断退出码。包是固定快照；原项目后续修改不改已交付文件，离线无法判断是否已有更新。完整参数、子图导出和 Python 接口见[固定语义包合同](../references/semantic-package.md)。
+Use actual task results and a generated UUID. Global options precede the subcommand. Proposals are complete evidence-linked assets; see the [contract](../references/m1-m2-contract.md). Partial batches must say what remains. CLI proposals do not bypass human review.
 
-## 可选数值工具
+Cancelling keeps existing candidates but rejects late additions. Resume explicitly before continuing. For unknown submission results, read `receipt OPERATION_ID`; identical retries reuse the same ID. Different payloads need a new operation. Conflict recovery rereads current definitions rather than overwriting them with stale input.
 
-图谱页的“数值与明细核对”、材料页的“打开数值试算资料”进入原有工具。保留数值模型编辑、独立 SQLite 快照、只读单表聚合及同范围明细、约束检查、本机演示引擎和指标上下文包。这套数值模型需单独配置并实际核验，新语义图谱不会自动生成执行 SQL 或同步这些口径。
+## Review candidates and source changes
 
-新目录可运行 `python -X utf8 scripts/start.py --project "./work/numeric-demo" --demo`，然后进入数值与明细核对。A、A、NULL 合成练习区分 3/2/1；未给独立预期只记计算完成。真实资料可从“试算资料”导入快照，或新项目加 `--sample` 与来源声明；`deidentified` 只是声明，不会自动脱敏。
+Filter by batch/status and inspect each group. Expand all candidates, including other pages, to compare current definitions, proposals and original evidence. Edit proposals if necessary, record a reason, then accept the **whole group**, defer or reject. Current source/target/dependency conflicts reject the transaction without partial writes and retain inputs for correction.
 
-数值查询使用只读 SQLite 与受限编译器，不接受任意 SQL 输入；不执行跨表聚合或生产写操作。模型/快照变化使原有相关报告过期。原有 ZIP 的 `00-human-review.html` 属于数值交付路径，新主线语义包的页面为 `human-review.html`，二者不要混用。详细限制见[指标消费路径](../references/metric-context.md)。
+Confirmed knowledge needs a name, definition, domain, scope and evidence. Metrics additionally need unit, grain, inclusions, exclusions and time scope. Rules need conditions and requirements; attributes/fields need value type. Manual editing can save incomplete drafts. Confirmation means an operator accepted the definition, not that a rule ran or a number was verified.
 
-## 边界与验证
+Names/aliases suggest identity collisions but never merge automatically. Compare definitions and scopes, choose a surviving ID for a deliberate merge, or record why items stay separate. Source review compares old evidence with new fragments: adopt changes or explain why the original definition still applies. Preserve recorded accept/reject/defer decisions on replay.
 
-本机页面和 API 使用同源检查及临时会话令牌，CLI 直接访问明确指定的本机项目；这不是多人权限或企业认证系统。知识解析、语义包读取不联网、不执行材料指令。原有消费者适配须明确配置地址，按其受控端点规则调用。
+## Semantic graph
 
-v0.2.3-dev 的操作说明不等于验收报告。维护者可按受影响范围运行 `tests/test_knowledge_parsers.py`、`tests/test_knowledge_flow.py`、`tests/test_semantic_package.py` 及原有工作台测试；完整入口为 `python -m unittest discover -s tests -v`。日常使用无需先跑所有检查；测试、真实页面操作、业务验收与生产部署应分别记录，不沿用旧版测试数或收益结论。
+Choose Business, Metrics and rules, Data mapping or All knowledge. Search names, aliases, definitions, rule conditions/requirements, scopes and declared gaps; filter by domain/type/status. Select nodes or edges to inspect sources and required references. Table and graph views edit the same assets.
+
+- Drag nodes to arrange; drag blank canvas to pan. Double-click to edit. Drag a connection port or choose **Connect objects**, then specify the relationship meaning and evidence.
+- **Expand canvas** uses the screen; show/hide details as needed. **Fit canvas** includes current graph objects. Selecting highlights related edges; clicking blank space clears the highlight without changing data.
+- **Auto layout** uses topology and canvas proportions, routes around nodes and labels, and respects fixed positions. It reduces clutter but cannot guarantee zero crossings for arbitrary graphs. Failure restores the prior layout; **Undo layout** reverses the last layout action. Reopening retains saved positions.
+- Solid arrows represent explicit relationships. Dotted lines represent required definition references; existing explicit relationships suppress duplicate reference lines between the same objects. Physical foreign keys remain distinct from business relationships.
+- Structured scopes preserve nested values and types, including 0, false, null and arrays. **Open questions** records missing facts for independent Agent context.
+- IDs stay stable. Retirement retains history; deletion is limited to unreferenced, unpublished drafts. Merges rewrite references, not merely display names.
+
+Project history preserves revisions. **Check and undo** creates a new revision when safely reversible; subsequent conflicting edits must be resolved first. Layout undo does not roll back business knowledge.
+
+## Deliver and consume
+
+Select a scope or leave all business semantics selected. Required dependencies are added automatically. Unconfirmed definitions, pending source review, retired dependencies, missing evidence and unresolved identity issues in that scope block confirmed publication. Fix those items, narrow scope or export an explicitly marked draft. SQL bindings are not required for a purely semantic package.
+
+Publish a confirmed snapshot and download its ZIP. It contains model.json, required source fragments, a scope/fingerprint manifest, bilingual human-review.html and reader instructions. It excludes original attachments and the project database. A later edit does not mutate an issued snapshot. See [independent reading](../references/agent-reader.md).
+
+Private backups are separate and include original materials and SQLite. Restore a backup into a new directory, not over a live project. Offline package readers cannot know that a newer snapshot exists.
+
+## Optional numeric tools and boundaries
+
+**Check numbers and details** opens the retained numeric tools; **Open numeric sample data** manages their snapshots. They use separate numeric models. `--demo` starts that older exercise, distinct from the ontology quickstart. Confirming semantic definitions does not create SQL or synchronize numeric models.
+
+This is a local, single-user tool. It is not a database authorization system, production query gateway or business action executor. Source instructions do not authorize tools. See [security](../SECURITY.md). Before 1.0 there is no guarantee of compatibility with old projects or formats.

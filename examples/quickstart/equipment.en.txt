@@ -1,0 +1,11 @@
+This is a fictional equipment-loan exercise for Lab L only. Cross-lab transfers and automatic purchases are outside scope.
+
+A lab is identified by its lab ID. Each equipment item has one equipment ID and belongs to exactly one lab.
+
+Equipment is recorded in the equipment table: id identifies the item and lab_id identifies its lab. The state field is 'in_store' for items in storage; disabled is 0 for enabled items and 1 for disabled items.
+
+Only items in storage that are not disabled are eligible to borrow. A rule definition does not authorize an Agent to perform a loan.
+
+Available equipment count is the number of distinct equipment IDs in Lab L with state='in_store' and disabled=0, at the requested point in time. The unit is items. Other labs, items not in storage and disabled items are excluded; duplicate records of the same ID count once.
+
+No inventory observations, borrower permissions or loan execution connector are supplied. The definition alone cannot answer how many items are available now or execute a loan.
