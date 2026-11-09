@@ -105,6 +105,7 @@ class AgentContextTests(unittest.TestCase):
         second = package.context(["r"], limit=2, offset=2)
         self.assertFalse(second["complete"])
         self.assertIsNone(second["next_offset"])
+        self.assertIn("已到末页", next(g for g in second["gaps"] if g["code"] == "CONTEXT_TRUNCATED")["next_step"])
         self.assertEqual({a["id"] for a in first["assets"] + second["assets"]}, {"r", "a", "b", "executor"})
         action = package.context(["r"], intent="act")
         self.assertFalse(action["capabilities"]["execute_actions"]["available"])

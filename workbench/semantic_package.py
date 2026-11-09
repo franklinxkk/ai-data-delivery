@@ -818,7 +818,8 @@ class SemanticPackage:
         gaps += declared_gaps
         if truncated:
             gaps.append({"code": "CONTEXT_TRUNCATED", "message": "当前仅返回所需上下文的一页",
-                         "next_step": "按next_offset继续；若offset非零，还需保留此前页面"})
+                         "next_step": "按next_offset继续并保留此前各页；最终合并身份须覆盖required_asset_ids" if offset + len(page_ids) < len(ordered)
+                                      else "已到末页；合并此前各页，并核对身份集合覆盖required_asset_ids，不要继续请求空的next_offset"})
         if intent in {"query", "act"}:
             gaps.append({"code": "NO_DATA_CONNECTOR" if intent == "query" else "NO_ACTION_EXECUTOR",
                          "message": "离线知识读取器未连接实例数据" if intent == "query" else "离线知识读取器不执行业务动作",
