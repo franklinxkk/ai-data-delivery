@@ -1,6 +1,7 @@
 import http.client
 import http.cookiejar
 import json
+from pathlib import Path
 import socket
 import tempfile
 import threading
@@ -55,6 +56,30 @@ class BrowserEntryTests(unittest.TestCase):
         self.assertEqual(status, 403)
         status, _ = self.get("/", {**headers, "Sec-Fetch-Mode": "cors"})
         self.assertEqual(status, 403)
+
+    def test_graph_scripts_are_exact_local_allowlist_with_self_only_csp(self):
+        static = Path(__file__).resolve().parents[1] / "workbench" / "static"
+        headers = {"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Dest": "script"}
+        for path in ("/graph-layout.js", "/vendor/elk.bundled.js"):
+            with self.subTest(path=path):
+                status, body = self.get(path, headers)
+                self.assertEqual(status, 200)
+                self.assertEqual(body, (static / path[1:]).read_bytes())
+                self.assertEqual(int(self.response_headers["Content-Length"]), len(body))
+                mime = self.response_headers["Content-Type"].split(";", 1)[0].strip().lower()
+                self.assertIn(mime, {"text/javascript", "application/javascript"})
+                self.assertEqual(self.response_headers["X-Content-Type-Options"], "nosniff")
+                directives = dict(part.strip().split(None, 1) for part in
+                                  self.response_headers["Content-Security-Policy"].split(";") if part.strip())
+                for directive in ("default-src", "script-src", "connect-src"):
+                    self.assertEqual(directives[directive], "'self'")
+                self.assertEqual(self.get(path, {**headers, "Sec-Fetch-Site": "cross-site"})[0], 403)
+        for path in ("/vendor/unknown.js", "/vendor/LICENSE.md", "/vendor/../graph-layout.js",
+                     "/vendor/%2e%2e/graph-layout.js", "/vendor/../vendor/elk.bundled.js", "/../SKILL.md"):
+            with self.subTest(rejected_path=path):
+                status, body = self.get(path, headers)
+                self.assertEqual(status, 404)
+                self.assertIn("error", json.loads(body))
 
     def test_browser_download_cookie_only_reads_immutable_snapshot(self):
         self.service.knowledge.edit({"revision": 0, "operation_id": "download-asset", "asset": {"id": "vehicle", "kind": "entity", "name": "车辆"}})

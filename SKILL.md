@@ -4,7 +4,7 @@ description: 本体与统一语义图谱建模：从表结构、业务原文、�
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.2.1-dev
+  version: 0.2.2-dev
   runtime_environment: Python 3.10+; install the pinned requirements.txt. Core modeling and package reading are local; optional live adapters need an explicitly authorized destination.
   language: 中文优先；用户可用任何语言交互，Agent 按用户语言回复 / Chinese-first documentation; respond in the user's language.
   file_read: 用户授权的材料、项目及交付包路径 / user-authorized material, project and package paths
@@ -15,7 +15,7 @@ metadata:
   sql: 知识摄取及包读取不执行 SQL；可选数值工具执行模型编译的只读单表聚合、明细和快照约束检查 / no SQL in knowledge intake; optional read-only compiled numeric tools
 ---
 
-# AI Data Delivery · v0.2.1-dev
+# AI Data Delivery · v0.2.2-dev
 
 帮助操作者把领域材料变成可解释、可核对、可交付的统一语义图谱。主线是材料输入、候选、人审、图谱维护、固定语义包和离线消费；没有数据库或 SQL 的术语、关系和制度规则也能交付。
 

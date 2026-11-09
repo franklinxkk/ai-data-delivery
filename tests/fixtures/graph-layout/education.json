@@ -1,0 +1,251 @@
+{
+  "domain": "education",
+  "source_revision": 7,
+  "source_document_sha256": "f8d40783565360d76dfffc340bacb44c3de0b16eec0b8e01526d58be810fb25a",
+  "source": "Fictional materials modeled by independent GPT 6.1 sol runs on 2026-11-09; no real customer data.",
+  "asset_count": 23,
+  "nodes": [
+    {
+      "id": "edu_student",
+      "name": "学生",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "edu_major",
+      "name": "专业",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "edu_plan",
+      "name": "培养方案",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "edu_course",
+      "name": "课程",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "edu_section",
+      "name": "开课班",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "edu_teacher",
+      "name": "教师",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "edu_attempt",
+      "name": "修读记录",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "edu_outcome",
+      "name": "学习成果",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "edu_evaluation",
+      "name": "成果评价记录",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "edu_credit_rule",
+      "name": "模拟学分认定规则",
+      "kind": "rule",
+      "refs": [
+        "edu_student",
+        "edu_course",
+        "edu_attempt",
+        "edu_student_attempt",
+        "edu_attempt_section",
+        "edu_section_course"
+      ]
+    },
+    {
+      "id": "edu_outcome_rule",
+      "name": "模拟成果达成规则",
+      "kind": "rule",
+      "refs": [
+        "edu_attempt",
+        "edu_outcome",
+        "edu_evaluation",
+        "edu_attempt_evaluation",
+        "edu_evaluation_outcome",
+        "edu_attempt_section",
+        "edu_section_course",
+        "edu_course_outcome"
+      ]
+    },
+    {
+      "id": "edu_outcome_rate",
+      "name": "模拟成果达成率",
+      "kind": "metric",
+      "refs": [
+        "edu_section",
+        "edu_attempt",
+        "edu_outcome",
+        "edu_outcome_rule"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edu_student_major",
+      "from": "edu_student",
+      "to": "edu_major",
+      "label": "归属主修专业",
+      "reference": false
+    },
+    {
+      "id": "edu_major_plan",
+      "from": "edu_major",
+      "to": "edu_plan",
+      "label": "制定方案",
+      "reference": false
+    },
+    {
+      "id": "edu_student_plan",
+      "from": "edu_student",
+      "to": "edu_plan",
+      "label": "适用方案",
+      "reference": false
+    },
+    {
+      "id": "edu_plan_course",
+      "from": "edu_plan",
+      "to": "edu_course",
+      "label": "纳入课程",
+      "reference": false
+    },
+    {
+      "id": "edu_section_course",
+      "from": "edu_section",
+      "to": "edu_course",
+      "label": "对应课程",
+      "reference": false
+    },
+    {
+      "id": "edu_teacher_section",
+      "from": "edu_teacher",
+      "to": "edu_section",
+      "label": "主讲并提交成绩",
+      "reference": false
+    },
+    {
+      "id": "edu_student_attempt",
+      "from": "edu_student",
+      "to": "edu_attempt",
+      "label": "产生修读",
+      "reference": false
+    },
+    {
+      "id": "edu_attempt_section",
+      "from": "edu_attempt",
+      "to": "edu_section",
+      "label": "对应开课班",
+      "reference": false
+    },
+    {
+      "id": "edu_course_outcome",
+      "from": "edu_course",
+      "to": "edu_outcome",
+      "label": "定义学习成果",
+      "reference": false
+    },
+    {
+      "id": "edu_attempt_evaluation",
+      "from": "edu_attempt",
+      "to": "edu_evaluation",
+      "label": "采集评价证据",
+      "reference": false
+    },
+    {
+      "id": "edu_evaluation_outcome",
+      "from": "edu_evaluation",
+      "to": "edu_outcome",
+      "label": "评价学习成果",
+      "reference": false
+    },
+    {
+      "id": "$ref:edu_credit_rule:edu_student",
+      "from": "edu_credit_rule",
+      "to": "edu_student",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:edu_credit_rule:edu_course",
+      "from": "edu_credit_rule",
+      "to": "edu_course",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:edu_credit_rule:edu_attempt",
+      "from": "edu_credit_rule",
+      "to": "edu_attempt",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:edu_outcome_rule:edu_attempt",
+      "from": "edu_outcome_rule",
+      "to": "edu_attempt",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:edu_outcome_rule:edu_outcome",
+      "from": "edu_outcome_rule",
+      "to": "edu_outcome",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:edu_outcome_rule:edu_evaluation",
+      "from": "edu_outcome_rule",
+      "to": "edu_evaluation",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:edu_outcome_rate:edu_section",
+      "from": "edu_outcome_rate",
+      "to": "edu_section",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:edu_outcome_rate:edu_attempt",
+      "from": "edu_outcome_rate",
+      "to": "edu_attempt",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:edu_outcome_rate:edu_outcome",
+      "from": "edu_outcome_rate",
+      "to": "edu_outcome",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:edu_outcome_rate:edu_outcome_rule",
+      "from": "edu_outcome_rate",
+      "to": "edu_outcome_rule",
+      "label": "",
+      "reference": true
+    }
+  ]
+}

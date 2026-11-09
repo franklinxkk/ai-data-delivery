@@ -1,0 +1,382 @@
+{
+  "domain": "finance",
+  "source_revision": 4,
+  "source_document_sha256": "c361d53c521b72197464251d745b92aaeab74cacef731a626441b3d61ff4337d",
+  "source": "Fictional materials modeled by independent GPT 6.1 sol runs on 2026-11-09; no real customer data.",
+  "asset_count": 40,
+  "nodes": [
+    {
+      "id": "sec.investor",
+      "name": "投资者",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.securities_account",
+      "name": "证券账户",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.cash_account",
+      "name": "资金账户",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.security",
+      "name": "证券",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.issuer",
+      "name": "发行人",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.order",
+      "name": "委托",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.fill",
+      "name": "成交",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.settlement",
+      "name": "结算",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.position",
+      "name": "证券持仓",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.cash_balance",
+      "name": "资金余额",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.valuation",
+      "name": "日终估值",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.risk_check",
+      "name": "风险核对",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "sec.trading_role",
+      "name": "交易岗",
+      "kind": "term",
+      "refs": []
+    },
+    {
+      "id": "sec.settlement_role",
+      "name": "结算岗",
+      "kind": "term",
+      "refs": []
+    },
+    {
+      "id": "sec.risk_role",
+      "name": "风控岗",
+      "kind": "term",
+      "refs": []
+    },
+    {
+      "id": "sec.available_cash",
+      "name": "模拟可用资金",
+      "kind": "metric",
+      "refs": [
+        "sec.cash_balance"
+      ]
+    },
+    {
+      "id": "sec.issuer_concentration",
+      "name": "发行人集中度",
+      "kind": "metric",
+      "refs": [
+        "sec.valuation",
+        "sec.issuer",
+        "sec.issues"
+      ]
+    },
+    {
+      "id": "sec.cancel_remainder",
+      "name": "撤销仅作用于余量",
+      "kind": "rule",
+      "refs": [
+        "sec.order",
+        "sec.fill"
+      ]
+    },
+    {
+      "id": "sec.settlement_idempotence",
+      "name": "成交结算防重",
+      "kind": "rule",
+      "refs": [
+        "sec.settlement",
+        "sec.fill"
+      ]
+    },
+    {
+      "id": "sec.freeze_adjustment",
+      "name": "资金冻结按原项调整",
+      "kind": "rule",
+      "refs": [
+        "sec.cash_balance",
+        "sec.order",
+        "sec.settlement"
+      ]
+    },
+    {
+      "id": "sec.missing_price",
+      "name": "估值缺价处理",
+      "kind": "rule",
+      "refs": [
+        "sec.valuation",
+        "sec.position"
+      ]
+    },
+    {
+      "id": "sec.concentration_threshold",
+      "name": "集中度阈值与缺数分流",
+      "kind": "rule",
+      "refs": [
+        "sec.risk_check",
+        "sec.issuer_concentration"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "sec.owns_account",
+      "from": "sec.investor",
+      "to": "sec.securities_account",
+      "label": "登记开户",
+      "reference": false
+    },
+    {
+      "id": "sec.binds_cash",
+      "from": "sec.securities_account",
+      "to": "sec.cash_account",
+      "label": "绑定资金账户",
+      "reference": false
+    },
+    {
+      "id": "sec.issues",
+      "from": "sec.issuer",
+      "to": "sec.security",
+      "label": "发行",
+      "reference": false
+    },
+    {
+      "id": "sec.order_account",
+      "from": "sec.order",
+      "to": "sec.securities_account",
+      "label": "归属证券账户",
+      "reference": false
+    },
+    {
+      "id": "sec.order_security",
+      "from": "sec.order",
+      "to": "sec.security",
+      "label": "指向证券",
+      "reference": false
+    },
+    {
+      "id": "sec.order_fill",
+      "from": "sec.order",
+      "to": "sec.fill",
+      "label": "产生实际成交",
+      "reference": false
+    },
+    {
+      "id": "sec.settles_fill",
+      "from": "sec.settlement",
+      "to": "sec.fill",
+      "label": "记账对应成交",
+      "reference": false
+    },
+    {
+      "id": "sec.holds_position",
+      "from": "sec.securities_account",
+      "to": "sec.position",
+      "label": "承载持仓",
+      "reference": false
+    },
+    {
+      "id": "sec.position_security",
+      "from": "sec.position",
+      "to": "sec.security",
+      "label": "统计证券数量",
+      "reference": false
+    },
+    {
+      "id": "sec.position_settlement",
+      "from": "sec.position",
+      "to": "sec.settlement",
+      "label": "取成功结算",
+      "reference": false
+    },
+    {
+      "id": "sec.holds_balance",
+      "from": "sec.cash_account",
+      "to": "sec.cash_balance",
+      "label": "承载余额",
+      "reference": false
+    },
+    {
+      "id": "sec.values_position",
+      "from": "sec.valuation",
+      "to": "sec.position",
+      "label": "估值纳入持仓",
+      "reference": false
+    },
+    {
+      "id": "sec.concentration_valuation",
+      "from": "sec.issuer_concentration",
+      "to": "sec.valuation",
+      "label": "采用同批估值",
+      "reference": false
+    },
+    {
+      "id": "sec.risk_concentration",
+      "from": "sec.risk_check",
+      "to": "sec.issuer_concentration",
+      "label": "引用集中度",
+      "reference": false
+    },
+    {
+      "id": "sec.risk_issuer",
+      "from": "sec.risk_check",
+      "to": "sec.issuer",
+      "label": "核对发行人敞口",
+      "reference": false
+    },
+    {
+      "id": "sec.trade_order",
+      "from": "sec.trading_role",
+      "to": "sec.order",
+      "label": "维护委托受理",
+      "reference": false
+    },
+    {
+      "id": "sec.ops_settlement",
+      "from": "sec.settlement_role",
+      "to": "sec.settlement",
+      "label": "核对结算结果",
+      "reference": false
+    },
+    {
+      "id": "sec.risk_owner",
+      "from": "sec.risk_role",
+      "to": "sec.risk_check",
+      "label": "负责风险核对",
+      "reference": false
+    },
+    {
+      "id": "$ref:sec.available_cash:sec.cash_balance",
+      "from": "sec.available_cash",
+      "to": "sec.cash_balance",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.issuer_concentration:sec.issuer",
+      "from": "sec.issuer_concentration",
+      "to": "sec.issuer",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.cancel_remainder:sec.order",
+      "from": "sec.cancel_remainder",
+      "to": "sec.order",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.cancel_remainder:sec.fill",
+      "from": "sec.cancel_remainder",
+      "to": "sec.fill",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.settlement_idempotence:sec.settlement",
+      "from": "sec.settlement_idempotence",
+      "to": "sec.settlement",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.settlement_idempotence:sec.fill",
+      "from": "sec.settlement_idempotence",
+      "to": "sec.fill",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.freeze_adjustment:sec.cash_balance",
+      "from": "sec.freeze_adjustment",
+      "to": "sec.cash_balance",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.freeze_adjustment:sec.order",
+      "from": "sec.freeze_adjustment",
+      "to": "sec.order",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.freeze_adjustment:sec.settlement",
+      "from": "sec.freeze_adjustment",
+      "to": "sec.settlement",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.missing_price:sec.valuation",
+      "from": "sec.missing_price",
+      "to": "sec.valuation",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.missing_price:sec.position",
+      "from": "sec.missing_price",
+      "to": "sec.position",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.concentration_threshold:sec.risk_check",
+      "from": "sec.concentration_threshold",
+      "to": "sec.risk_check",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:sec.concentration_threshold:sec.issuer_concentration",
+      "from": "sec.concentration_threshold",
+      "to": "sec.issuer_concentration",
+      "label": "",
+      "reference": true
+    }
+  ]
+}

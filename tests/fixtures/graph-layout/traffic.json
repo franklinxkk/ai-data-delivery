@@ -1,0 +1,242 @@
+{
+  "domain": "traffic",
+  "source_revision": 4,
+  "source_document_sha256": "39dc1e11086d0f38e25ef34dbc6840a3c39d381a41195a43a68910d340e9a66d",
+  "source": "Fictional materials modeled by independent GPT 6.1 sol runs on 2026-11-09; no real customer data.",
+  "asset_count": 26,
+  "nodes": [
+    {
+      "id": "traffic.vehicle",
+      "name": "营运车辆",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "traffic.carrier",
+      "name": "运输企业",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "traffic.driver",
+      "name": "驾驶员",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "traffic.trip",
+      "name": "运输行程",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "traffic.regulator",
+      "name": "监管机构",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "traffic.observation",
+      "name": "设备观测",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "traffic.event",
+      "name": "风险事件",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "traffic.order",
+      "name": "处置工单",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "traffic.operating-party",
+      "name": "行程运营责任单位",
+      "kind": "term",
+      "refs": [
+        "traffic.carrier",
+        "traffic.operates"
+      ]
+    },
+    {
+      "id": "traffic.handling-party",
+      "name": "工单处置责任单位",
+      "kind": "term",
+      "refs": [
+        "traffic.carrier",
+        "traffic.responsible"
+      ]
+    },
+    {
+      "id": "traffic.rule-confirm",
+      "name": "演练事件确认",
+      "kind": "rule",
+      "refs": [
+        "traffic.observation",
+        "traffic.trip",
+        "traffic.event",
+        "traffic.evidences",
+        "traffic.occurred-on"
+      ]
+    },
+    {
+      "id": "traffic.rule-assign",
+      "name": "演练工单派发",
+      "kind": "rule",
+      "refs": [
+        "traffic.event",
+        "traffic.order",
+        "traffic.operates",
+        "traffic.responsible"
+      ]
+    },
+    {
+      "id": "traffic.metric-daily",
+      "name": "日确认风险事件数",
+      "kind": "metric",
+      "refs": [
+        "traffic.event",
+        "traffic.rule-confirm"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "traffic.holds",
+      "from": "traffic.carrier",
+      "to": "traffic.vehicle",
+      "label": "登记持有",
+      "reference": false
+    },
+    {
+      "id": "traffic.uses",
+      "from": "traffic.trip",
+      "to": "traffic.vehicle",
+      "label": "当次使用",
+      "reference": false
+    },
+    {
+      "id": "traffic.drives",
+      "from": "traffic.driver",
+      "to": "traffic.trip",
+      "label": "分段驾驶",
+      "reference": false
+    },
+    {
+      "id": "traffic.operates",
+      "from": "traffic.carrier",
+      "to": "traffic.trip",
+      "label": "实际运营",
+      "reference": false
+    },
+    {
+      "id": "traffic.supervises",
+      "from": "traffic.regulator",
+      "to": "traffic.carrier",
+      "label": "辖区监管",
+      "reference": false
+    },
+    {
+      "id": "traffic.evidences",
+      "from": "traffic.observation",
+      "to": "traffic.event",
+      "label": "提供事件证据",
+      "reference": false
+    },
+    {
+      "id": "traffic.occurred-on",
+      "from": "traffic.event",
+      "to": "traffic.trip",
+      "label": "关联发生行程",
+      "reference": false
+    },
+    {
+      "id": "traffic.addresses",
+      "from": "traffic.order",
+      "to": "traffic.event",
+      "label": "处置所针对",
+      "reference": false
+    },
+    {
+      "id": "traffic.responsible",
+      "from": "traffic.order",
+      "to": "traffic.carrier",
+      "label": "分派处置职责",
+      "reference": false
+    },
+    {
+      "id": "traffic.oversees",
+      "from": "traffic.regulator",
+      "to": "traffic.order",
+      "label": "督办处置",
+      "reference": false
+    },
+    {
+      "id": "traffic.confirm-event",
+      "from": "traffic.rule-confirm",
+      "to": "traffic.event",
+      "label": "适用事件确认",
+      "reference": false
+    },
+    {
+      "id": "traffic.assign-order",
+      "from": "traffic.rule-assign",
+      "to": "traffic.order",
+      "label": "适用工单派发",
+      "reference": false
+    },
+    {
+      "id": "traffic.counts",
+      "from": "traffic.metric-daily",
+      "to": "traffic.event",
+      "label": "统计确认事件",
+      "reference": false
+    },
+    {
+      "id": "$ref:traffic.operating-party:traffic.carrier",
+      "from": "traffic.operating-party",
+      "to": "traffic.carrier",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:traffic.handling-party:traffic.carrier",
+      "from": "traffic.handling-party",
+      "to": "traffic.carrier",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:traffic.rule-confirm:traffic.observation",
+      "from": "traffic.rule-confirm",
+      "to": "traffic.observation",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:traffic.rule-confirm:traffic.trip",
+      "from": "traffic.rule-confirm",
+      "to": "traffic.trip",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:traffic.rule-assign:traffic.event",
+      "from": "traffic.rule-assign",
+      "to": "traffic.event",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:traffic.metric-daily:traffic.rule-confirm",
+      "from": "traffic.metric-daily",
+      "to": "traffic.rule-confirm",
+      "label": "",
+      "reference": true
+    }
+  ]
+}

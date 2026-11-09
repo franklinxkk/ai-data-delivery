@@ -1,0 +1,196 @@
+{
+  "domain": "plants",
+  "source_revision": 4,
+  "source_document_sha256": "13db71b40308b9540ecccb5126ac1e1f0afbd707e81c54d615ede428ab6c473d",
+  "source": "Fictional materials modeled by independent GPT 6.1 sol runs on 2026-11-09; no real customer data.",
+  "asset_count": 20,
+  "nodes": [
+    {
+      "id": "plant.cultivar",
+      "name": "园艺品种",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "plant.specimen",
+      "name": "单株植物",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "plant.plan",
+      "name": "养护计划",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "plant.observation",
+      "name": "养护观测",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "plant.measure",
+      "name": "养护措施",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "plant.member",
+      "name": "养护成员",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "plant.assignment",
+      "name": "责任分派",
+      "kind": "entity",
+      "refs": []
+    },
+    {
+      "id": "plant.captured-at",
+      "name": "实际观测时间",
+      "kind": "attribute",
+      "refs": [
+        "plant.observation"
+      ]
+    },
+    {
+      "id": "plant.soil-conclusion",
+      "name": "盆土观察结论",
+      "kind": "attribute",
+      "refs": [
+        "plant.observation"
+      ]
+    },
+    {
+      "id": "plant.main-owner",
+      "name": "同计划主责互斥",
+      "kind": "rule",
+      "refs": [
+        "plant.assignment",
+        "plant.r.roleplan",
+        "plant.r.assignee"
+      ]
+    },
+    {
+      "id": "plant.recheck-soil",
+      "name": "盆土观测复看",
+      "kind": "rule",
+      "refs": [
+        "plant.r.observed",
+        "plant.captured-at",
+        "plant.soil-conclusion",
+        "plant.r.planned",
+        "plant.main-owner"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "plant.r.cultivar",
+      "from": "plant.specimen",
+      "to": "plant.cultivar",
+      "label": "登记品种",
+      "reference": false
+    },
+    {
+      "id": "plant.r.planned",
+      "from": "plant.plan",
+      "to": "plant.specimen",
+      "label": "计划面向",
+      "reference": false
+    },
+    {
+      "id": "plant.r.observed",
+      "from": "plant.observation",
+      "to": "plant.specimen",
+      "label": "观测对象",
+      "reference": false
+    },
+    {
+      "id": "plant.r.inspect",
+      "from": "plant.observation",
+      "to": "plant.plan",
+      "label": "源于巡查计划",
+      "reference": false
+    },
+    {
+      "id": "plant.r.treated",
+      "from": "plant.measure",
+      "to": "plant.specimen",
+      "label": "措施对象",
+      "reference": false
+    },
+    {
+      "id": "plant.r.trigger",
+      "from": "plant.measure",
+      "to": "plant.observation",
+      "label": "可追溯至观测",
+      "reference": false
+    },
+    {
+      "id": "plant.r.roleplan",
+      "from": "plant.assignment",
+      "to": "plant.plan",
+      "label": "分派所属计划",
+      "reference": false
+    },
+    {
+      "id": "plant.r.assignee",
+      "from": "plant.assignment",
+      "to": "plant.member",
+      "label": "分派给成员",
+      "reference": false
+    },
+    {
+      "id": "plant.r.operator",
+      "from": "plant.measure",
+      "to": "plant.member",
+      "label": "由成员执行",
+      "reference": false
+    },
+    {
+      "id": "$ref:plant.captured-at:plant.observation",
+      "from": "plant.captured-at",
+      "to": "plant.observation",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:plant.soil-conclusion:plant.observation",
+      "from": "plant.soil-conclusion",
+      "to": "plant.observation",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:plant.main-owner:plant.assignment",
+      "from": "plant.main-owner",
+      "to": "plant.assignment",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:plant.recheck-soil:plant.captured-at",
+      "from": "plant.recheck-soil",
+      "to": "plant.captured-at",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:plant.recheck-soil:plant.soil-conclusion",
+      "from": "plant.recheck-soil",
+      "to": "plant.soil-conclusion",
+      "label": "",
+      "reference": true
+    },
+    {
+      "id": "$ref:plant.recheck-soil:plant.main-owner",
+      "from": "plant.recheck-soil",
+      "to": "plant.main-owner",
+      "label": "",
+      "reference": true
+    }
+  ]
+}

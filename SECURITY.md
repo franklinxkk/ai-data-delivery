@@ -1,4 +1,4 @@
-# 安全边界 / Security Policy · v0.2.1-dev
+# 安全边界 / Security Policy · v0.2.2-dev
 
 本工具在用户指定的本机项目中整理和验证语义，不是操作系统沙箱。SKILL.md 声明实际需要的文件、网络、子进程、环境和 SQL 能力；宿主和用户授权仍决定可执行范围。`allowed-tools: Read` 仅预声明读取，其他操作沿用已授权任务范围，不自动授予任意命令或网络权限。该字段是 Agent Skills 的实验能力，各宿主支持不同，不能当作强制隔离措施。
 
@@ -47,3 +47,5 @@
 安全问题可到[项目 Issues](https://github.com/franklinxkk/ai-data-delivery/issues)反馈，不要附真实密钥或未脱敏数据。
 
 **English:** Local toolkit, not a sandbox. The installed skill excludes general service lifecycle and executable mock maintenance tools. Optional live evaluation sends authorized question text to an explicit destination; downstream behavior remains the target service's responsibility. Metadata addresses are denied. Strict metric promotion, explicit gold expectations and read-only snapshot inspection prevent silent integrity failures. Local verification is not a new ClawHub audit or production certification.
+
+布局依赖 ELK 0.12.1 本地脚本，按其 EPL-2.0 许可证单独保留授权与来源指纹，见 `workbench/static/vendor/`。浏览器布局只处理已加载的图谱，不上传资料，不放宽 CSP，也不加载运行时 CDN。

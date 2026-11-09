@@ -91,7 +91,7 @@ def make_server(service, port=0):
                 if path == "/":
                     body = (STATIC / "index.html").read_bytes().replace(b"__SESSION_TOKEN__", token.encode())
                     return self.response(200, body, "text/html; charset=utf-8", download_session=True)
-                if path in {"/app.js", "/style.css", "/knowledge.js", "/knowledge.css"}:
+                if path in {"/app.js", "/style.css", "/knowledge.js", "/knowledge.css", "/graph-layout.js", "/vendor/elk.bundled.js"}:
                     return self.response(200, (STATIC / path[1:]).read_bytes(), "text/javascript; charset=utf-8" if path.endswith("js") else "text/css; charset=utf-8")
                 self.response(404, {"error": "页面不存在"})
             except PermissionError as exc:
