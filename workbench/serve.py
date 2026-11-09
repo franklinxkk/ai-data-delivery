@@ -2,7 +2,8 @@
 """Launch the local single-user workbench: python -m workbench.serve --project PATH."""
 import argparse
 import hmac
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.cookies import SimpleCookie
 import json
 import mimetypes
 import os
@@ -26,7 +27,7 @@ def make_server(service, port=0):
         def log_message(self, fmt, *args):
             pass  # URLs and business inputs are not diagnostic logs.
 
-        def response(self, status, body, mime="application/json; charset=utf-8", filename=None):
+        def response(self, status, body, mime="application/json; charset=utf-8", filename=None, download_session=False):
             if not isinstance(body, bytes):
                 body = json.dumps(body, ensure_ascii=False, allow_nan=False).encode()
             self.send_response(status)
@@ -38,6 +39,10 @@ def make_server(service, port=0):
             self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
             if filename:
                 self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            if download_session:
+                # Direct browser attachment downloads cannot send the fetch-only
+                # token header. Limit this HttpOnly session to immutable downloads.
+                self.send_header("Set-Cookie", f"workbench_download_{self.server.server_port}={token}; Path=/api/knowledge/download/; HttpOnly; SameSite=Strict")
             self.end_headers()
             self.wfile.write(body)
 
@@ -45,12 +50,21 @@ def make_server(service, port=0):
             hosts = {f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"}
             if self.headers.get("Host") not in hosts:
                 raise PermissionError("只接受本机工作台地址")
+            navigation = (not api and urlsplit(self.path).path == "/" and
+                          self.headers.get("Sec-Fetch-Mode") == "navigate" and
+                          self.headers.get("Sec-Fetch-Dest") == "document")
             origin = self.headers.get("Origin")
-            if origin and origin not in {"http://" + h for h in hosts}:
+            if origin and origin not in {"http://" + h for h in hosts} and not navigation:
                 raise PermissionError("拒绝跨站请求")
-            if self.headers.get("Sec-Fetch-Site") == "cross-site":
+            if self.headers.get("Sec-Fetch-Site") == "cross-site" and not navigation:
                 raise PermissionError("拒绝跨站访问")
-            if api and not hmac.compare_digest(self.headers.get("X-Workbench-Token", ""), token):
+            authenticated = hmac.compare_digest(self.headers.get("X-Workbench-Token", ""), token)
+            if api and self.command == "GET" and urlsplit(self.path).path.startswith("/api/knowledge/download/"):
+                cookies = SimpleCookie()
+                cookies.load(self.headers.get("Cookie", ""))
+                session = cookies.get(f"workbench_download_{self.server.server_port}")
+                authenticated = authenticated or bool(session and hmac.compare_digest(session.value, token))
+            if api and not authenticated:
                 raise PermissionError("会话已变更，请重新打开工作台页面")
 
         def do_GET(self):
@@ -59,20 +73,31 @@ def make_server(service, port=0):
                 self.guard(path.startswith("/api/"))
                 if path == "/api/state":
                     return self.response(200, service.state())
+                if path == "/api/knowledge/state":
+                    return self.response(200, service.knowledge.state())
+                if path.startswith("/api/knowledge/download/"):
+                    sid = path.rsplit("/", 1)[-1]
+                    return self.response(200, service.knowledge.download(sid), "application/zip", sid + ".zip")
+                if path.startswith("/api/knowledge/source/"):
+                    attachment = service.store.attachment(path.rsplit("/", 1)[-1])
+                    return self.response(200, bytes(attachment["content"]), "application/octet-stream", "source-material")
+                if path.startswith("/api/knowledge/operation/"):
+                    receipt = service.store.operation(path.rsplit("/", 1)[-1])
+                    return self.response(200, {"found": receipt is not None, "receipt": receipt})
                 if path == "/api/review":
                     return self.response(200, service.review_html(), "text/html; charset=utf-8", "human-review.html")
                 if path in {"/api/export", "/api/backup"}:
                     return self.response(200, service.export(path.endswith("backup")), "application/zip", "project-backup.zip" if path.endswith("backup") else "semantic-delivery.zip")
                 if path == "/":
                     body = (STATIC / "index.html").read_bytes().replace(b"__SESSION_TOKEN__", token.encode())
-                    return self.response(200, body, "text/html; charset=utf-8")
-                if path in {"/app.js", "/style.css"}:
+                    return self.response(200, body, "text/html; charset=utf-8", download_session=True)
+                if path in {"/app.js", "/style.css", "/knowledge.js", "/knowledge.css"}:
                     return self.response(200, (STATIC / path[1:]).read_bytes(), "text/javascript; charset=utf-8" if path.endswith("js") else "text/css; charset=utf-8")
                 self.response(404, {"error": "页面不存在"})
             except PermissionError as exc:
                 self.response(403, {"error": str(exc)})
             except Exception as exc:
-                self.response(400, {"error": str(exc)})
+                self.response(400, {"error": str(exc), **({"details": exc.as_dict()} if hasattr(exc, "as_dict") else {})})
 
         def do_POST(self):
             try:
@@ -92,6 +117,13 @@ def make_server(service, port=0):
                           "/api/resolve-feedback": service.resolve_feedback, "/api/derive": service.derive,
                           "/api/layout": lambda r: service.store.save_layout(r["positions"]),
                           "/api/restore": lambda r: service.store.restore(r["target"], r["revision"])}
+                routes.update({"/api/knowledge/" + name: action for name, action in {
+                    "import": service.knowledge.import_material, "task": service.knowledge.task,
+                    "propose": service.knowledge.propose, "review": service.knowledge.review,
+                    "edit": service.knowledge.edit, "merge": service.knowledge.merge,
+                    "separate": service.knowledge.separate, "retire": service.knowledge.retire,
+                    "review-source": service.knowledge.review_source, "undo": service.knowledge.undo,
+                    "publish": service.knowledge.publish}.items()})
                 action = routes.get(urlsplit(self.path).path)
                 if action is None:
                     return self.response(404, {"error": "操作不存在"})
@@ -101,9 +133,17 @@ def make_server(service, port=0):
             except Conflict as exc:
                 self.response(409, {"error": str(exc)})
             except Exception as exc:
-                self.response(400, {"error": str(exc)})
+                self.response(400, {"error": str(exc), **({"details": exc.as_dict()} if hasattr(exc, "as_dict") else {})})
 
-    return HTTPServer(("127.0.0.1", port), Handler)
+    class LocalServer(ThreadingHTTPServer):
+        daemon_threads = True
+
+        def get_request(self):
+            connection, address = super().get_request()
+            connection.settimeout(30)
+            return connection, address
+
+    return LocalServer(("127.0.0.1", port), Handler)
 
 
 def main(argv=None):

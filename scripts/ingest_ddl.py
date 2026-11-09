@@ -29,10 +29,67 @@ def is_time_col(cname, ctype):
     """时间列双重判定：严格后缀名 或 类型含 DATE/TIME。
     （子串 day/date 会误伤 overdue_days 这类时长度量，漏判 deadline 这类裸名。）"""
     return bool(TIME_NAME_HINT.search(cname) or TIME_TYPE_HINT.search(ctype))
+IDENTIFIER = r'(?:`(?:``|[^`])+`|"(?:""|[^"])+"|\[[^\]]+\]|[\w$]+)'
+QUALIFIED_IDENTIFIER = IDENTIFIER + r'(?:\s*\.\s*' + IDENTIFIER + r')*'
 COL_RE = re.compile(
-    r"^\s*[`\"]?(\w+)[`\"]?\s+([A-Za-z]+(?:\s*\([^)]*\))?(?:\s+UNSIGNED)?)(.*)$", re.I | re.S)
+    r"^\s*(" + IDENTIFIER + r")\s+([A-Za-z]+(?:\s*\([^)]*\))?(?:\s+UNSIGNED)?)(.*)$", re.I | re.S)
 PK_INLINE = re.compile(r"PRIMARY\s+KEY", re.I)
-COMMENT_RE = re.compile(r"COMMENT\s+'([^']*)'", re.I)
+COMMENT_RE = re.compile(r"COMMENT\s+'((?:''|[^'])*)'", re.I)
+
+
+def identifier(value):
+    """Keep qualification explicit; never bind different schemas by basename."""
+    parts = re.findall(IDENTIFIER, value.strip())
+    return '.'.join(p[1:-1].replace('``', '`').replace('""', '"')
+                    if p.startswith(('`', '"', '[')) else p for p in parts)
+
+
+def column_names(value):
+    values = split_columns(value)
+    if not values or any(not re.fullmatch(IDENTIFIER, v.strip()) for v in values):
+        raise ValueError('键字段必须为明确列名，不支持表达式或列前缀长度')
+    return [identifier(v) for v in values]
+
+
+def strip_comments(text):
+    """Mask comments without moving offsets or deleting SQL literals."""
+    return re.sub(r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|`(?:``|[^`])*`|--[^\n]*|\#[^\n]*|/\*.*?\*/",
+                  lambda x: x.group() if x.group().startswith(("'", '"', '`')) else
+                  ''.join('\n' if c == '\n' else ' ' for c in x.group()), text, flags=re.S)
+
+
+def mask_quoted(text):
+    """Locate SQL keywords outside string literals and quoted identifiers."""
+    return re.sub(r"'(?:''|\\.|[^'\\])*'|\"(?:\"\"|[^\"])*\"|`(?:``|[^`])*`|\[[^\]]*\]",
+                  lambda x: ' ' * len(x.group()), text, flags=re.S)
+
+
+FK_RE = re.compile(
+    r'^(?:CONSTRAINT\s+(' + IDENTIFIER + r')\s+)?FOREIGN\s+KEY\s*(?:' + IDENTIFIER + r'\s*)?'
+    r'\(([^)]+)\)\s+REFERENCES\s+(' + QUALIFIED_IDENTIFIER + r')\s*(?:\(([^)]+)\))?(.*)$', re.I | re.S)
+INLINE_REF_RE = re.compile(r'\bREFERENCES\s+(' + QUALIFIED_IDENTIFIER + r')\s*(?:\(([^)]+)\))?(.*)$', re.I | re.S)
+
+
+def foreign_key(raw, column=None):
+    keyword = re.search(r'\bREFERENCES\b', mask_quoted(raw), re.I) if column else None
+    match = (INLINE_REF_RE.match(raw[keyword.start():]) if keyword else None) if column else FK_RE.match(raw)
+    if not match:
+        return None
+    if column:
+        target, target_columns, tail = match.groups()
+        result = {'from_columns': [column]}
+    else:
+        constraint, source_columns, target, target_columns, tail = match.groups()
+        result = {'from_columns': column_names(source_columns)}
+        if constraint:
+            result['name'] = identifier(constraint)
+    result.update(to_table=identifier(target), to_columns=column_names(target_columns) if target_columns else [],
+                  raw_definition=raw)
+    for action in ('DELETE', 'UPDATE'):
+        am = re.search(r'\bON\s+' + action + r'\s+(SET\s+NULL|SET\s+DEFAULT|NO\s+ACTION|CASCADE|RESTRICT)\b', tail, re.I)
+        if am:
+            result['on_' + action.lower()] = ' '.join(am.group(1).upper().split())
+    return result
 
 
 def split_columns(body):
@@ -63,7 +120,7 @@ def split_columns(body):
 
 
 CREATE_RE = re.compile(
-    r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"]?(\w+)[`\"]?\s*\(", re.I)
+    r"CREATE\s+(?:TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(" + QUALIFIED_IDENTIFIER + r")\s*\(", re.I)
 
 
 def extract_table_bodies(text):
@@ -78,7 +135,7 @@ def extract_table_bodies(text):
         m = CREATE_RE.search(text, pos)
         if not m:
             return
-        name = m.group(1)
+        name = identifier(m.group(1))
         index = m.end()
         start = index
         depth, quoted = 1, None
@@ -116,8 +173,7 @@ def extract_table_bodies(text):
 def parse_sql(text, source_file):
     tables, failures = [], []
     # Protect SQL literals before stripping comments.
-    text = re.sub(r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|--[^\n]*|\#[^\n]*|/\*.*?\*/",
-                  lambda x: x.group() if x.group().startswith(("'", '"')) else " ", text, flags=re.S)
+    text = strip_comments(text)
     # 去掉 -- 与 # 行注释，但保留 COMMENT 'x' 内联注释
     for name, body in extract_table_bodies(text):
         if body is None:
@@ -130,39 +186,67 @@ def parse_sql(text, source_file):
             failures.append({"table": name, "source_file": source_file,
                              "reason": f"列定义解析失败：{exc}"})
             continue
-        cols, pks = [], []
+        cols, pks, fks, unsupported = [], [], [], []
         for raw in raw_columns:
             line = raw.strip().rstrip(",")
             if not line:
                 continue
             if re.match(r"(?:PRIMARY\s+KEY|UNIQUE|KEY|INDEX|CONSTRAINT|FOREIGN\s+KEY|CHECK)\b", line, re.I):
+                try:
+                    fk = foreign_key(line)
+                except ValueError as exc:
+                    unsupported.append(f'{line}: {exc}')
+                    continue
+                if fk:
+                    fks.append(fk)
+                    if not fk['to_columns']:
+                        unsupported.append(f'{line}: 外键未显式列出目标列，未推测目标主键')
+                    elif len(fk['from_columns']) != len(fk['to_columns']):
+                        unsupported.append(f'{line}: 外键两侧列数不一致')
+                    continue
                 pk = re.search(r"PRIMARY\s+KEY\s*\(([^)]+)\)", line, re.I)
                 if pk:
-                    pks += [x.strip().strip('`"') for x in pk.group(1).split(",")]
+                    try:
+                        pks += column_names(pk.group(1))
+                    except ValueError as exc:
+                        unsupported.append(f'{line}: {exc}')
+                else:
+                    unsupported.append(f'未提取此约束或索引的语义：{line}')
                 continue
             cm = COL_RE.match(line)
             if not cm:
-                tk = re.match(r"(?:PRIMARY\s+KEY|UNIQUE|KEY|INDEX|CONSTRAINT)", line, re.I)
-                if tk and "PRIMARY" in line.upper():
-                    pks += re.findall(r"`(\w+)`", line)
+                unsupported.append(f'无法解析列定义：{line}')
                 continue
-            cname, ctype, rest = cm.group(1), cm.group(2).upper(), cm.group(3)
-            is_pk = bool(PK_INLINE.search(rest))
+            cname, ctype, rest = identifier(cm.group(1)), cm.group(2).upper(), cm.group(3)
+            syntax = mask_quoted(rest)
+            is_pk = bool(PK_INLINE.search(syntax))
             if is_pk:
                 pks.append(cname)
             comment = ""
-            cmm = COMMENT_RE.search(rest)
+            comment_start = re.search(r'\bCOMMENT\b', syntax, re.I)
+            cmm = COMMENT_RE.match(rest[comment_start.start():]) if comment_start else None
             if cmm:
-                comment = cmm.group(1)
+                comment = cmm.group(1).replace("''", "'")
             cols.append({"name": cname, "type": ctype, "pk": is_pk,
                          "is_time": is_time_col(cname, ctype),
-                         "comment": comment})
+                         "comment": comment, "raw_definition": line})
+            try:
+                fk = foreign_key(rest, cname)
+                if fk:
+                    fk['raw_definition'] = line
+                    fks.append(fk)
+                    if not fk['to_columns'] or len(fk['to_columns']) != 1:
+                        unsupported.append(f'{cname}: 行内外键目标列缺失或列数不一致，未推测绑定')
+            except ValueError as exc:
+                unsupported.append(f'{cname}: {exc}')
+            if re.search(r'\b(?:GENERATED|CHECK|UNIQUE)\b|\bAS\s*\(', syntax, re.I):
+                unsupported.append(f'{cname}: 生成列或列约束仅保留原文，未提取其语义')
         for column in cols:
             column["pk"] = column["name"] in pks
         tables.append({"name": name, "source_file": source_file,
                        "column_count": len(cols), "pk_guess": pks,
                        "time_cols": [c["name"] for c in cols if c["is_time"]],
-                       "columns": cols})
+                       "columns": cols, "foreign_keys": fks, "unsupported": unsupported})
     return tables, failures
 
 

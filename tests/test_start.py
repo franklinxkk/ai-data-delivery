@@ -51,12 +51,31 @@ class FirstUse(unittest.TestCase):
         with self.assertRaises(ValueError):prepare(self.project,model=bad)
         self.assertFalse((self.project/'project.sqlite').exists())
 
-    def test_only_ddl_import_keeps_business_draft_without_sample(self):
+    def test_ddl_start_creates_reviewable_candidates_without_confirming_graph(self):
         ddl=self.root/'orders.sql';original=b'CREATE TABLE orders (id INTEGER PRIMARY KEY, amount INTEGER);'
         ddl.write_bytes(original);service,_=prepare(self.project,ddl=ddl)
         doc=service.store.read()['document']
-        self.assertEqual(doc['model']['datasets'][0]['name'],'orders')
+        self.assertEqual(doc['model']['semantic']['assets'], [])
+        knowledge = service.knowledge.state()
+        self.assertEqual(knowledge['sources'][0]['name'], 'orders.sql')
+        candidates = knowledge['groups'][0]['candidates']
+        self.assertEqual(candidates[0]['asset']['name'], 'orders')
+        self.assertEqual(knowledge['groups'][0]['status'], 'pending')
+        service.knowledge.review({'revision':knowledge['revision'], 'operation_id':'start-review',
+                                  'group_id':knowledge['groups'][0]['id'], 'action':'accept'})
+        reopened,_ = prepare(self.project)
+        self.assertEqual(len(reopened.knowledge.state()['assets']), 3)
         self.assertNotIn('tutorial',doc);self.assertFalse(doc.get('sample'));self.assertEqual(ddl.read_bytes(),original)
+
+    def test_model_start_retains_source_and_requires_candidate_review(self):
+        path=self.root/'model.json'
+        path.write_text(json.dumps({'assets':[{'id':'vehicle', 'kind':'entity', 'name':'车辆',
+            'definition':'运输载具', 'domain':'交通', 'scope':'合成验收'}]},ensure_ascii=False),encoding='utf-8')
+        service,_=prepare(self.project,model=path)
+        state=service.knowledge.state()
+        self.assertEqual(state['assets'],[])
+        self.assertEqual(state['groups'][0]['candidates'][0]['target_id'],'vehicle')
+        self.assertEqual(state['sources'][0]['revisions'][0]['parsed']['status'],'complete')
 
     def test_demo_is_not_mixed_with_customer_files(self):
         with self.assertRaisesRegex(ValueError,'不能混合'):prepare(self.project,demo='traffic',sample='customer.sqlite')

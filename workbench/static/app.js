@@ -2,11 +2,12 @@
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const token = $('meta[name="session-token"]').content;
-const menus = [['home','场景与工作台'],['data','数据与资料'],['model','语义建模'],['check','检查与试算'],['delivery','交付与版本'],['issues','问题与演进']];
+const menus = [['knowledge','知识材料'],['review','待核对'],['graph','语义图谱'],['publish','交付与调用'],['history','项目历史']];
+const legacyMenus = [['home','任务范围'],['data','试算资料'],['model','数值模型'],['check','数值与明细核对'],['delivery','项目备份'],['issues','项目问题']];
 const names = {datasets:'数据集',entities:'业务对象',relationships:'数据关联',relations:'业务关系',metrics:'指标',templates:'明细模板',concepts:'业务概念',constraints:'数据约束'};
 const states = {pass:'已通过',fail:'未通过',error:'执行错误',blocked:'存在阻断',review:'待核对',not_ready:'尚未验证',attention:'需关注',computed_only:'仅完成计算',declared:'已声明',declared_only:'仅结构声明',needs_input:'待补齐',unknown:'证据不足',executed_only:'已调用，待核对',model_mismatch:'引擎模型不一致'};
 Object.assign(states,{selected:'已选择，未执行',consumer_not_completed:'消费者未完成'});
-let state, page = location.hash.slice(1) || 'home', graphMode = 'entities', activeKind = 'entities', selected = null, connection = null, positions = {}, report = null, assetEdit = null;
+let state, page = location.hash.slice(1) || 'knowledge', graphMode = 'entities', activeKind = 'entities', selected = null, connection = null, positions = {}, report = null, assetEdit = null;
 let fieldRows = [];
 let bundleForm={metric:'',columns:[],limit:50,offset:0,expected:''};
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -14,9 +15,9 @@ const comma = v => Array.isArray(v)?v.join(','):v&&typeof v==='object'?Object.ke
 function notify(msg) { $('#toast').textContent = msg; $('#toast').classList.add('show'); clearTimeout(notify.timer); notify.timer=setTimeout(()=>$('#toast').classList.remove('show'),4500); }
 async function api(path, data) {
   const res = await fetch('/api/'+path, {method:data===undefined?'GET':'POST',headers:{'X-Workbench-Token':token,...(data===undefined?{}:{'Content-Type':'application/json'})},body:data===undefined?undefined:JSON.stringify(data)});
-  const body = await res.json(); if (!res.ok) throw new Error(body.error || '操作失败'); return body;
+  const body = await res.json(); if (!res.ok) {const error=new Error(body.error || '操作失败');error.status=res.status;error.details=body;throw error;} return body;
 }
-async function reload() { state=await api('state'); if(report?.id){const saved=state.runs.find(r=>r.id===report.id);if(saved)report={...saved.report,id:saved.id,stale:saved.stale};}else if(report?.source_revision!==undefined){report.stale=report.source_revision!==state.revision;} positions=state.layout; $('#project-name').textContent=state.document.name; $('#revision').textContent='项目版本 '+state.revision; render(); }
+async function reload() { const results=await Promise.all([api('state'),api('knowledge/state')]);state=results[0];window.KnowledgeWorkbench.update(results[1]); if(report?.id){const saved=state.runs.find(r=>r.id===report.id);if(saved)report={...saved.report,id:saved.id,stale:saved.stale};}else if(report?.source_revision!==undefined){report.stale=report.source_revision!==state.revision;} positions=state.layout; $('#project-name').textContent=state.document.name; $('#revision').textContent='项目版本 '+state.revision; render(); }
 async function mutate(path,data) { const r=await api(path,{revision:state.revision,...data}); await reload(); return r; }
 const badge = (value, label) => `<span class="badge ${esc(value)}">${esc(label || states[value] || value)}</span>`;
 const btn = (label, action, extra='', cls='') => `<button class="${cls}" data-action="${action}" ${extra}>${label}</button>`;
@@ -28,9 +29,10 @@ const title = (heading, sub, action='') => `<div class="page-head"><div><span cl
 function go(next) { page=next;location.hash=next;selected=null;connection=null;render(); }
 function render() {
   if(!state)return;
-  if(!menus.some(x=>x[0]===page))page='home';
+  if(![...menus,...legacyMenus].some(x=>x[0]===page))page='knowledge';
   $('nav').innerHTML=menus.map(([id,label],i)=>btn(`<span class="num">0${i+1}</span><span class="nav-label">${label}</span>`,'navigate',`data-page="${id}"`,id===page?'active':'')).join('');
-  $('#breadcrumb').textContent='工作空间 / '+menus.find(x=>x[0]===page)[1];
+  $('#breadcrumb').textContent='工作空间 / '+[...menus,...legacyMenus].find(x=>x[0]===page)[1];
+  if(menus.some(x=>x[0]===page)){$('#main').innerHTML=window.KnowledgeWorkbench.render(page);window.KnowledgeWorkbench.mount();return;}
   $('#main').innerHTML=({home:homePage,data:dataPage,model:modelPage,check:checkPage,delivery:deliveryPage,issues:issuesPage}[page])();
   if(state.document.sample?.provenance==='demo')$('#main').insertAdjacentHTML('afterbegin','<div class="notice warning">当前数据是模拟 / 演示快照，计算结果仅供练习或工具核对，不代表真实业务数据。</div>');
   if(page==='model')drawGraph();
@@ -218,7 +220,7 @@ document.addEventListener('click',e=>{if(e.target.closest('[data-close]'))$('#ed
 $('#refresh').addEventListener('click',()=>reload().catch(e=>notify(e.message)));
 $('#edit-form').addEventListener('submit',async e=>{e.preventDefault();const b=$('#edit-form button[type=submit]');b.disabled=true;try{await assetEdit.onSave();$('#editor').close();notify('修改已保存');}catch(err){$('#form-error').textContent=err.message;}finally{b.disabled=false;}});
 $('#delete-asset').addEventListener('click',async()=>{if(!confirm('删除这个资产？存在已知引用时会阻止删除。'))return;try{await mutate('edit',{kind:assetEdit.kind,key:assetEdit.key,remove:true});$('#editor').close();notify('资产已删除，历史版本仍保留');}catch(err){$('#form-error').textContent=err.message;}});
-window.addEventListener('hashchange',()=>{page=location.hash.slice(1)||'home';render();});
+window.addEventListener('hashchange',()=>{page=location.hash.slice(1)||'knowledge';render();});
 document.addEventListener('input',e=>{if(e.target.id==='graph-search'){const q=e.target.value.toLowerCase();$$('#graph .node').forEach(n=>n.style.opacity=!q||n.textContent.toLowerCase().includes(q)?1:.22);}});
 document.addEventListener('change',e=>{if(e.target.id==='bundle-metric'){
  const old=assets('metrics').find(m=>m.id===bundleForm.metric),next=assets('metrics').find(m=>m.id===e.target.value),d=assets('datasets').find(d=>d.name===next?.dataset);
@@ -241,4 +243,5 @@ document.addEventListener('pointermove',e=>{if(!drag||!$('#graph'))return;const 
 document.addEventListener('pointerup',async e=>{if(!drag)return;const d=drag;drag=null;$('#temp-edge')?.remove();if(d.port){const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-node]');if(target)connectNodes(d.id,target.dataset.node);}else if(d.moved){try{await api('layout',{positions});}catch(err){notify(err.message);}}});
 document.addEventListener('dblclick',e=>{const n=e.target.closest('#graph [data-node]');if(n)editAsset(graphMode,n.dataset.node);});
 document.addEventListener('keydown',e=>{const n=e.target.closest('#graph [data-node]');if(n&&e.key==='Enter')editAsset(graphMode,n.dataset.node);});
+window.KnowledgeWorkbench.configure({api,reload,go,notify,legacyState:()=>state});
 reload().catch(e=>{$('#main').innerHTML=empty('无法读取项目',esc(e.message));});

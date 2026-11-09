@@ -258,6 +258,8 @@ def local_json(base, path, payload=None):
 class Service:
     def __init__(self, directory):
         self.store = Store(directory)
+        from workbench.knowledge import KnowledgeService
+        self.knowledge = KnowledgeService(self.store)
 
     def state(self):
         state = self.store.read()

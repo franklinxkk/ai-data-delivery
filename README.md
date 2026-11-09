@@ -1,96 +1,97 @@
-# ai-data-delivery · v0.1.2
+# ai-data-delivery · v0.2.0-dev
 
-让 FDE 和数据产品经理把一个业务问题，变成**能看懂定义、能核对结果、能交给应用或 Agent 使用的数据语义**。
+把表结构、业务知识、行业术语、指标口径和管理制度整理成**有原文依据、可视化维护、可交给 Agent 使用的统一语义图谱**。
 
-已有表、字段说明、指标或关系图，就从它们继续；只有部分资料也能开始。你提供业务问题和材料，使用本 skill 的 Agent 整理模型、运行工具并解释结果。可选的本地工作台负责编辑、试算、保存和导出，本身不内置大模型。
+主线是：**加入材料 → 形成候选 → 人工核对 → 维护图谱 → 发布固定语义包 → 离线调用**。对象、术语、属性、关系、指标、规则和数据映射使用同一套语义资产；没有数据库或 SQL，也可以建模和交付。
 
-[MIT](LICENSE) · [安全边界](SECURITY.md) · [本版验证](references/v0.1.2-validation.md)
+工作台负责本地存储、文件解析、候选审阅、图谱编辑和导出。业务语义的理解由当前宿主 Agent 协助完成，工具不自带大模型，也不会在上传文件后自动调用 AI 或自动确认定义。
 
-## 它具体帮你做什么
+[MIT](LICENSE) · [工作台操作](workbench/README.md) · [离线调用合同](references/semantic-package.md) · [安全边界](SECURITY.md)
 
-| 你遇到的问题 | 用它得到什么 | 需要你判断什么 |
-| --- | --- | --- |
-| 表很多，不知道一个业务问题该用哪些 | 复用已有结构、关系和说明，形成当前问题的对象、字段、指标映射 | 真实业务身份、粒度和口径，不能靠同名字段猜 |
-| BI、报表、AI给出不同数字 | 在同一范围和快照中核对指标值与输入明细，定位过滤、NULL、去重或关联放大问题 | 哪个口径才是本次被认可的定义 |
-| 建好了语义，却不知道怎么给Agent用 | 带来源的指标上下文包，消费前核对是否过期；已有引擎可另做明确范围的接口联调 | 实际消费者、可见范围及尚未实现的能力 |
-| 改字段或公式后怕影响已有应用 | 引用/漂移检查、重算与历史证据；已过期结果不继续显示为当前通过 | 哪些业务变更已获授权、哪些要保留历史 |
+本版已验证合成材料的完整主链路、双批次更新与独立 Agent 读取；范围、实际结果和未验项见[开发验证记录](references/m1-m2-validation.md)。
 
-## 第一次：先完成一次练习
+## 从一份真实材料开始
 
-在解压后的 skill 目录执行；需要 Python 3.10+，依赖只有 PyYAML：
+需要 Python 3.10+。在工具目录运行；中文或含空格的路径请加引号：
 
 ```bash
 python -m pip install -r requirements.txt
-python scripts/start.py --project ./work/demo --demo
+python -X utf8 scripts/start.py --project "./work/ontology"
 ```
 
-打开终端打印的本机网址，首页点击 **“开始数值与明细练习”**，再点击执行。模型、模拟快照和字段已经准备好，不必先写 YAML。
+打开终端打印的本机网址，然后完成以下操作：
 
-这份练习解释为什么 A、A、NULL 三条输入，记录行数是3、非空计数是2、去重非空计数是1。查看明细、换指标、预览相关语义，然后在“交付与版本”下载结果。未填独立预期只记“完成计算”；练习通过不等于生产验收。
+1. 在 **知识材料** 粘贴一段业务原文，或上传已有文件，检查解析位置和警告。DDL 的明确结构和受支持的语义模型可直接形成结构候选；其他材料先保留原文与片段。
+2. 点击 **准备 Agent 任务**，把生成的指令交给当前宿主 Agent。Agent 读取该批次原文与现有图谱，提交带出处的候选。没有宿主时，也可以在图谱中手工新建知识并填写依据。
+3. 在 **待核对** 比较现有定义、候选和原文，可修改后接纳整组，也可暂缓或拒绝。上传成功和候选提交成功都不等于定义已确认。
+4. 在 **语义图谱** 搜索名称或别名，切换业务、指标与规则、数据映射视图；拖动节点整理布局，从连接点拖出关系并填写谓词、定义与依据。
+5. 在 **交付与调用** 选择知识范围，发布确认快照或导出草稿。下载 ZIP 后打开 `human-review.html` 核对，或让另一个 Agent 使用只读 CLI。
 
-关闭后继续同一个项目：
+以后使用相同的 `--project` 路径重开。项目保存在本机 SQLite；首次初始化可以加 `--ddl "./materials/schema.sql"` 或 `--model "./materials/model.json"`，文件仍进入材料和候选流程。已有项目请从页面增量加入材料，不重复使用初始化参数。
+
+可以向已安装本 skill 的 Agent 直接说：
+
+> 使用 ai-data-delivery。我要建立【领域】的语义图谱，资料在【路径】，项目保存在【目录】。请保留原文出处，先提出有依据的候选，帮我核对同名对象、关系和规则的适用范围；确认后生成可独立调用的语义包。不要把推测当作已确认知识。
+
+## 可以输入什么
+
+| 材料 | 当前读取能力 | 需要核对的边界 |
+| --- | --- | --- |
+| 粘贴原文、TXT、Markdown | 保留文字、行/段落位置；Markdown 保留标题路径 | 链接和文字中的命令不执行；业务含义由宿主提出候选或人工录入 |
+| SQLite/MySQL DDL | 解析受支持的 `CREATE TABLE`、列、主键及显式外键，保留复合键顺序和原文位置 | 不连接数据库，不执行 SQL；未知语法明确提示。外键只表示物理引用，不推断业务所有权 |
+| CSV、XLSX | 读取工作表、表头、行与单元格，支持选择工作表/表头行/区域 | 不重算公式；缺缓存值不当作 0，合并单元格不自动填充；术语、指标及规则清单仍需解释与核对 |
+| DOCX | 提取可读取段落、标题及表格单元格 | 图片、嵌入对象、复杂版式等列出限制；不伪造页码 |
+| 有文本层的 PDF | 按页提取文本并保留页码 | 不做 OCR；扫描页、加密内容需补充可读副本；表格结构、多栏顺序和图片内容需对照原页 |
+| JSON、YAML | 安全解析并保留原文；包含受支持 `semantic.assets` / `assets` 的模型产生候选 | 任意旧模型不会自动变成已确认图谱；不能理解的结构作为材料交给宿主处理 |
+
+每份文件最多 **32 MB**。解析会分别报告完成、部分完成、失败或待转换，保留可用片段和修复提示；“解析完成”只说明读取结果。完整限制和更新方法见[工作台操作](workbench/README.md)。
+
+## 如何维护一份持续变化的图谱
+
+材料有独立来源身份、内容修订和解析记录。相同内容默认复用，出处不同可以明确保留独立来源；同名新内容需要选择更新还是另建。来源变化时保留旧依据，并对受影响知识提出复核。
+
+候选和已确认知识分开保存。稳定 ID 用来维护引用，名称和别名用来查找；同名不自动合并。操作者可以比较含义、合并身份或说明为何保持分离。整组接纳会重新检查当前来源、目标及依赖，冲突时保留输入供核对。拖动布局与修改业务语义分别保存。
+
+## 给另一个 Agent 什么
+
+交付 ZIP 包含 `model.json`、必要来源片段 `sources.json`、范围和指纹清单 `manifest.json`、`human-review.html` 与调用说明。默认不含原始附件或项目数据库；私人项目备份另行下载。
+
+消费方需要这份包和本工具读取器，无需原项目或运行中的工作台：
 
 ```bash
-python scripts/start.py --project ./work/demo
+python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" verify
+python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" search --query "营运车辆"
+python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" get --id "从搜索结果取得的资产ID"
+python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" sources --id "从搜索结果取得的资产ID"
 ```
 
-不要再次带 `--demo` 覆盖项目。零售练习可用新目录加 `--demo retail`。首次启动不会申请数据库密码、调用外部模型或终止其他服务。
+调用方应检查返回的快照、实际范围、草稿/完整状态、歧义及截断信息，再读取定义和依据。固定快照不会随项目修改而变化；离线不能判断是否已有更新。文件指纹证明内容一致，不证明业务结论正确。邻域遍历、子图导出和程序接口见[离线调用合同](references/semantic-package.md)。
 
-## FDE：拿真实资料打通一个问题
+## 数值分析仍可按需使用
 
-向已安装本 skill 的 Agent 直接说：
+已有的单表指标试算、数值与明细核对、SQLite 约束检查、指标上下文包和本机演示引擎联调保留为次入口。在图谱页选择 **数值与明细核对**；在材料页选择 **打开数值试算资料**。这些工具使用自己的数值模型与快照，确认语义不会自动生成可执行 SQL，也不会自动同步数值口径。
 
-> 使用 ai-data-delivery。我需要回答【具体业务问题】，DDL/已有模型在【路径】，可用快照在【路径，可暂缺】。先复用已有结构，只补当前问题需要的定义；请给出可读口径、可执行验证与消费交接，说明未验证范围。项目保存到【目录】。
-
-Agent负责选择工具、准备输入与解释缺口；你核对映射和实际消费者。已有模型与独立SQLite快照时，也可直接打开：
+想体验 A、A、NULL 的行数/非空数/去重数差异，可在新目录启动合成练习：
 
 ```bash
-python scripts/start.py --project ./work/customer-a --model ./semantic.yaml --sample ./snapshot.sqlite --provenance deidentified
+python -X utf8 scripts/start.py --project "./work/numeric-demo" --demo
 ```
 
-只有SQLite/MySQL DDL时，将 `--model` 换成 `--ddl ./source.sql`，省略快照。`deidentified`只是你对样本来源的声明，不会自动脱敏。没有数据时可以建草案，但不会生成“数值验证通过”。
+打开工作台后进入 **数值与明细核对**。未填写独立预期只记计算完成，合成练习不代表生产验收。相关命令见[指标消费路径](references/metric-context.md)、[诊断手册](references/diagnosis-playbook.md)和[原有工具清单](references/tools.md)。
 
-完整但不强制的路径见 [FDE快速上手](references/quickstart-fde.md)。`rebuild.py` 是另行授权的高级本机服务辅助工具，首次使用和语义建模都不需要运行它。
+## 安装与开发状态
 
-## 数据产品经理：描述业务，直接看结果
+把完整目录安装到宿主支持的 skills 位置，再请 Agent 使用 `ai-data-delivery`。工作台和离线读取器也可独立使用；无需另装需求设计 skill。运行依赖为 PyYAML 与 pypdf，无需 Node、CDN 或 AI API 密钥。
 
-无需先学SQL或维护模型文件。可直接说：
+**v0.2.0-dev 是开发版本。1.0 前不承诺旧项目、模型格式或命令行为兼容。** 本轮以新项目开始；升级前保留原目录和私人备份，不把旧项目直接覆盖为新格式。历史验证记录仅适用于其标注的版本和场景，本说明不宣称已完成业务验收、生产部署或性能验证。
 
-> 使用 ai-data-delivery。我想统计【对象和指标】，范围是【主体/时间/状态】，现有资料在【路径】。请先用人话说明包含与排除，给我必要的候选解释，只问会改变结果的问题；把确认后的口径和实际结果放到我能查看的位置。
-
-你主要看三件事：**算谁、怎么算、结果由哪些记录组成**。对业务决定按实际授权确认；数据是否真实、计算是否正确仍需验证。修改文字描述不会自动改变计算公式，Agent/FDE应同步修改并重算。
-
-没有资料时也可以先梳理问题；不能据此声称已有数据库、接口或可执行结果。操作路径见 [产品经理快速上手](references/quickstart-pm.md)。
-
-## 交出去的是什么
-
-给人查看时，先打开交付ZIP中的 **00-human-review.html**，或在工作台直接下载“可视化验收页”：可展开思维导图串起问题、对象、指标、映射与证据，点开就是业务说明和预期/实际对照；FDE可展开技术定义。PM按业务范围与正反例核对，FDE按粒度、字段、关联与消费结果核对。具体见[如何人眼验收](references/human-review.md)。图由同一模型生成，不能拿它与模型互相一致就证明业务正确。
-
-工作台“交付与版本”可下载模型、可读字典、场景约定、确认记录、问题与验证证据；项目备份另含SQLite及导入附件。CLI也能输出指标数值/明细和按问题选择的Agent上下文包。
-
-上下文包是文件，不是生产API。源模型变化后，消费方需要重新执行检查；它不会自动撤回已经发出的文件。真正的问数服务、身份认证和行列权限仍由目标系统承担。见 [指标与上下文消费路径](references/metric-context.md) 与 [元数据到消费](references/metadata-to-consumption.md)。
-
-## 按需要继续
-
-- [工作台操作](workbench/README.md)：导入、建模、检查、历史与导出。
-- [模型合同](references/contract.md)、[补齐会话](references/onboarding.md)：具体字段、确认和映射。
-- [问题诊断](references/diagnosis-playbook.md)、[全部工具](references/tools.md)：遇到问题再查，不必先全部跑一遍。
-- [既有项目证据](references/evidence/traffic/README.md)、[大会机制取舍](references/conference-practices-2026.md)：按来源和证据范围理解，不把案例效果当收益承诺。
-- [领域起步包](starter_packs/README.md)、[标准边界](references/standards.md)：候选模型与规范适用性需核对。
-- [分阶段交付](references/delivery-playbook.md)、[大型项目故事地图](references/story-map.md)：供较大任务裁剪，不是所有任务的必经流程或工期保证。
-
-## 本版变化与安装
-
-v0.1.2统一包内、文档与后续市场发布版本；继承本地v0.0.12功能。新增一条首次启动入口，收拢FDE/PM路线，并修复环境继承、网络请求和服务生命周期的已知问题。当前验证和未验证范围见 [本版记录](references/v0.1.2-validation.md)。旧版记录保留为历史，不代表新包平台审计已经通过。
-
-把完整目录安装到宿主支持的 skills 位置，再请 Agent 使用 `ai-data-delivery`；具体安装方式以宿主为准。无需为了使用本 skill 另装 ai-delivery-spec。下载包保留所有运行工具和示例，开发测试目录只在源码仓库。
-
-维护者在源码仓库运行：
+维护者可按改动范围运行解析、知识流程、语义包及原有能力测试；源码中的完整检查入口为：
 
 ```bash
 python -m unittest discover -s tests -v
 python mocks/run_mock.py --all
-python maintainer/build_skill.py --out dist
 ```
 
-**English:** Chinese-first documentation; users may interact in any language. Give your agent a business question and existing materials, or run `scripts/start.py --project ./work/demo --demo` for a local synthetic walkthrough. This is a semantic delivery and verification toolkit, not a production query gateway, universal SQL compiler, OWL reasoner or permission service.
+更多背景：[大会机制取舍](references/conference-practices-2026.md)、[领域起步包](starter_packs/README.md)、[标准边界](references/standards.md)。这些是按需参考，不是建图前必须完成的流程。
+
+**English:** A local semantic workbench: import materials, review evidence-linked proposals, maintain one graph, publish fixed packages, and let an independent agent read them offline. The host supplies AI reasoning; the workbench does not include an LLM or automatically confirm knowledge.

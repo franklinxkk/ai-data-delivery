@@ -1,0 +1,5 @@
+company_id,vehicle_id,abnormal,valid
+E01,V01,1,1
+E01,V01,1,1
+E01,V02,0,1
+E02,V03,1,1

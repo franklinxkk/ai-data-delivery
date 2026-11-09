@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import uuid
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -49,11 +50,19 @@ def prepare(project, demo=None, model=None, ddl=None, sample=None, provenance='u
             service.store.change(service.store.read()['revision'],'local','标记合成演示与练习目标',label)
         else:
             for kind,path in inputs.items():
-                import_bytes(kind,path.name,path.read_bytes(),provenance if kind=='sample' else 'unknown')
+                if kind == 'sample':
+                    import_bytes(kind,path.name,path.read_bytes(),provenance)
+                    continue
+                result = service.knowledge.import_material({
+                    'revision':service.store.read()['revision'], 'operation_id':uuid.uuid4().hex,
+                    'filename':path.name, 'content_base64':base64.b64encode(path.read_bytes()).decode()})['result']
+                parsed = result['parsed']
+                if parsed['status'] in {'failed', 'needs_conversion'}:
+                    raise ValueError(f"{path.name} 未能提取可用内容：{parsed.get('warnings', [])}")
         project.mkdir(parents=True,exist_ok=True)
         os.link(service.store.path,project/'project.sqlite')  # Atomic create, fails if another initializer won.
     return Service(project),{'status':'prepared','project':str(project),'demo':demo,
-                             'boundary':'本机单人项目；演示不是生产验证。' if demo else ('已导入现有文件；未自动确认业务含义。' if inputs else '已创建空项目；可在工作台导入资料。')}
+                             'boundary':'本机单人项目；演示不是生产验证。' if demo else ('已登记材料与可提取的候选；请在工作台核对后写入图谱。' if model or ddl else ('已载入独立数值样本；尚未建立语义图谱。' if sample else '已创建空项目；可在工作台导入资料。'))}
 
 
 def main(argv=None):
@@ -61,8 +70,8 @@ def main(argv=None):
     p.add_argument('--project',required=True,help='保存工作成果的项目目录；重开时使用同一路径')
     source=p.add_mutually_exclusive_group()
     source.add_argument('--demo',nargs='?',const='traffic',choices=['traffic','retail'],help='可选合成演示，默认交通')
-    source.add_argument('--model',help='已有 YAML/JSON 语义模型')
-    source.add_argument('--ddl',help='已有 SQLite/MySQL CREATE TABLE 文件，只解析不执行')
+    source.add_argument('--model',help='登记 YAML/JSON 模型材料；semantic.assets 生成待核对候选，不覆盖图谱')
+    source.add_argument('--ddl',help='登记 CREATE TABLE 文件并生成物理结构候选，只解析不执行')
     p.add_argument('--sample',help='独立SQLite数据快照，可选')
     p.add_argument('--provenance',choices=['unknown','demo','deidentified','production'],default='unknown')
     p.add_argument('--prepare-only',action='store_true',help='仅准备项目，不启动服务')

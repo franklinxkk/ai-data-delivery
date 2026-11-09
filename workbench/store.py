@@ -41,7 +41,13 @@ class Store:
                   data_hash TEXT, kind TEXT, report TEXT);
                 CREATE TABLE IF NOT EXISTS attachments (
                   id TEXT PRIMARY KEY, filename TEXT, kind TEXT, sha256 TEXT, content BLOB);
+                CREATE TABLE IF NOT EXISTS operations (
+                  id TEXT PRIMARY KEY, request_hash TEXT NOT NULL, result TEXT NOT NULL, created TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS semantic_snapshots (
+                  id TEXT PRIMARY KEY, revision INTEGER NOT NULL, manifest TEXT NOT NULL, content BLOB NOT NULL);
+                CREATE TABLE IF NOT EXISTS project_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             """)
+            db.execute("INSERT OR IGNORE INTO project_meta VALUES ('project_id',?)", (uuid.uuid4().hex,))
             if not db.execute("SELECT 1 FROM revisions LIMIT 1").fetchone():
                 doc = {"name": "新的语义项目", "model": {"version": "draft-1", "datasets": [],
                        "relationships": [], "concepts": [], "metrics": []}, "scenarios": [],
@@ -86,6 +92,46 @@ class Store:
     def history(self):
         with self.connect() as db:
             return [dict(r) for r in db.execute("SELECT revision,created,actor,summary FROM revisions ORDER BY revision DESC LIMIT 100")]
+
+    def operation(self, operation_id):
+        with self.connect() as db:
+            row = db.execute("SELECT result FROM operations WHERE id=?", (operation_id,)).fetchone()
+        return json.loads(row["result"]) if row else None
+
+    def project_id(self):
+        with self.connect() as db:
+            return db.execute("SELECT value FROM project_meta WHERE key='project_id'").fetchone()["value"]
+
+    def knowledge_change(self, req, summary, mutate):
+        """One transaction for document, side effects and durable operation receipt.
+
+        Idempotent readback precedes revision checks. A lost HTTP response can thus
+        be retried even after later unrelated changes, without replaying a write.
+        """
+        operation_id = req.get("operation_id")
+        if not isinstance(operation_id, str) or not operation_id or len(operation_id) > 128:
+            raise ValueError("缺少有效操作身份，请重新打开操作入口")
+        request_hash = digest({k: v for k, v in req.items() if k not in {"revision", "operation_id"}})
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            receipt = db.execute("SELECT * FROM operations WHERE id=?", (operation_id,)).fetchone()
+            if receipt:
+                if receipt["request_hash"] != request_hash:
+                    raise Conflict("操作身份已用于另一份内容；请核对后发起新操作")
+                return json.loads(receipt["result"])
+            row = db.execute("SELECT * FROM revisions ORDER BY revision DESC LIMIT 1").fetchone()
+            if type(req.get("revision")) is not int or req["revision"] != row["revision"]:
+                raise Conflict("项目已更新；保留当前输入，刷新并核对受影响内容后重试")
+            document = json.loads(row["document"])
+            result = mutate(document, db)
+            rendered = encode(document)
+            revision = row["revision"]
+            if rendered != row["document"]:
+                revision += 1
+                db.execute("INSERT INTO revisions VALUES (?,?,?,?,?)", (revision, now(), "local", summary, rendered))
+            response = {"revision": revision, "result": result}
+            db.execute("INSERT INTO operations VALUES (?,?,?,?)", (operation_id, request_hash, encode(response), now()))
+        return response
 
     def restore(self, target, expected):
         old = self.read(target)["document"]

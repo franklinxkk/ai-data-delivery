@@ -10,7 +10,7 @@ import zipfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = {"SKILL.md", "README.md", "LICENSE", "SECURITY.md", "requirements.txt"}
+FILES = {"SKILL.md", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md", "requirements.txt"}
 DIRECTORIES = {"scripts", "references", "mocks", "examples", "starter_packs", "workbench"}
 
 
