@@ -4,12 +4,12 @@ const tr=(s,...v)=>window.UIText?window.UIText.t(s,...v):typeof s==='string'?s:s
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const token = $('meta[name="session-token"]').content;
-const menus = [['knowledge',tr('知识材料')],['review',tr('待核对')],['graph',tr('语义图谱')],['publish',tr('交付与调用')],['history',tr('项目历史')]];
+const menus = [['questions',tr('业务问题')],['knowledge',tr('知识材料')],['review',tr('待核对')],['graph',tr('语义图谱')],['publish',tr('交付与调用')],['history',tr('项目历史')]];
 const legacyMenus = [['home',tr('任务范围')],['data',tr('试算资料')],['model',tr('数值模型')],['check',tr('数值与明细核对')],['delivery',tr('项目备份')],['issues',tr('项目问题')]];
 const names = {datasets:tr('数据集'),entities:tr('业务对象'),relationships:tr('数据关联'),relations:tr('业务关系'),metrics:tr('指标'),templates:tr('明细模板'),concepts:tr('业务概念'),constraints:tr('数据约束')};
 const states = {pass:tr('已通过'),fail:tr('未通过'),error:tr('执行错误'),blocked:tr('存在阻断'),review:tr('待核对'),not_ready:tr('尚未验证'),attention:tr('需关注'),computed_only:tr('仅完成计算'),declared:tr('已声明'),declared_only:tr('仅结构声明'),needs_input:tr('待补齐'),unknown:tr('证据不足'),executed_only:tr('已调用，待核对'),model_mismatch:tr('引擎模型不一致')};
 Object.assign(states,{selected:tr('已选择，未执行'),consumer_not_completed:tr('消费者未完成')});
-let state, page = location.hash.slice(1) || 'knowledge', graphMode = 'entities', activeKind = 'entities', selected = null, connection = null, positions = {}, report = null, assetEdit = null;
+let state, page = location.hash.slice(1) || 'questions', graphMode = 'entities', activeKind = 'entities', selected = null, connection = null, positions = {}, report = null, assetEdit = null;
 let fieldRows = [];
 let bundleForm={metric:'',columns:[],limit:50,offset:0,expected:''};
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -31,9 +31,10 @@ const title = (heading, sub, action='') => `<div class="page-head"><div><span cl
 function go(next) { page=next;location.hash=next;selected=null;connection=null;render(); }
 function render() {
   if(!state)return;
-  if(![...menus,...legacyMenus].some(x=>x[0]===page))page='knowledge';
+  if(![...menus,...legacyMenus].some(x=>x[0]===page))page='questions';
   $('nav').innerHTML=menus.map(([id,label],i)=>btn(`<span class="num">0${i+1}</span><span class="nav-label">${label}</span>`,'navigate',`data-page="${id}"`,id===page?'active':'')).join('');
   $('#breadcrumb').textContent=tr('工作空间 / ')+[...menus,...legacyMenus].find(x=>x[0]===page)[1];
+  if(page==='questions'){$('#main').innerHTML=window.ScenarioWorkbench.render();return;}
   if(menus.some(x=>x[0]===page)){$('#main').innerHTML=window.KnowledgeWorkbench.render(page);window.KnowledgeWorkbench.mount();return;}
   $('#main').innerHTML=({home:homePage,data:dataPage,model:modelPage,check:checkPage,delivery:deliveryPage,issues:issuesPage}[page])();
   if(state.document.sample?.provenance==='demo')$('#main').insertAdjacentHTML('afterbegin',tr('<div class="notice warning">当前数据是模拟 / 演示快照，计算结果仅供练习或工具核对，不代表真实业务数据。</div>'));
@@ -246,4 +247,5 @@ document.addEventListener('pointerup',async e=>{if(!drag)return;const d=drag;dra
 document.addEventListener('dblclick',e=>{const n=e.target.closest('#graph [data-node]');if(n)editAsset(graphMode,n.dataset.node);});
 document.addEventListener('keydown',e=>{const n=e.target.closest('#graph [data-node]');if(n&&e.key==='Enter')editAsset(graphMode,n.dataset.node);});
 window.KnowledgeWorkbench.configure({api,reload,go,notify,legacyState:()=>state});
+window.ScenarioWorkbench.configure({api,reload,go,notify});
 reload().catch(e=>{$('#main').innerHTML=empty(tr('无法读取项目'),esc(e.message));});

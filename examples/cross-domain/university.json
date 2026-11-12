@@ -1,0 +1,538 @@
+{
+  "id": "university",
+  "domain": "高校信息化",
+  "synthetic": true,
+  "scope": {
+    "institution": "演练大学",
+    "scenario": "synthetic"
+  },
+  "source": {
+    "notice": "仅为合成验收练习；所有人名、企业、记录及规则均为虚构，不代表行业法规、客户制度或真实数据。",
+    "paragraphs": {
+      "person": "自然人由 person_id 标识；同一自然人可以同时具有学生和教职工角色，角色身份不应复制成两个自然人。",
+      "student": "学生角色由 student_id 标识并关联自然人；学籍状态属于角色，不代表自然人失效。",
+      "staff": "教职工角色由 staff_id 标识并关联自然人；同一人可兼具在校研究生与任课教师身份。",
+      "department": "组织部门用 department_id 标识，改名、合并与人员归属需保留有效期，不以当前部门覆盖历史统计。",
+      "term": "学期由 term_id 标识；同名课程在不同学期是不同开课实例。",
+      "course": "课程由 course_id 标识；课程名不保证唯一，课程定义与学期开课实例分开。",
+      "offering": "开课实例由 offering_id 标识并引用课程和学期；同课程在同学期可开多个教学班。",
+      "enrollment": "选课记录由 enrollment_id 标识并关联学生角色和开课实例；同人跨学期重修形成不同选课记录。",
+      "room": "教学场地用 room_id 标识；排课占用属于时段记录，不能把教室当前使用者当作所有历史时段使用者。",
+      "belongs": "自然人的部门归属带 valid_from 和 valid_to，以统计日读取有效记录；本练习时段采用左闭右开。",
+      "teaches": "教职工角色与开课实例的授课关系记录职责和有效时段，不自动授予系统中全校成绩访问权限。",
+      "headcount": "人数按指定学期的有效选课记录去重自然人 person_id；重修或多个角色不会增加自然人数。",
+      "attempts": "人次数按指定统计期的有效选课 enrollment_id 计数；同一人重修可产生多个人次，区别于自然人数。",
+      "grades": "成绩可见范围应由学校系统根据角色、任课关系和数据范围校验；本练习未提供跨院系访客访问规则。"
+    }
+  },
+  "assets": [
+    {
+      "id": "university.person",
+      "kind": "entity",
+      "name": "自然人",
+      "definition": "自然人由 person_id 标识；同一自然人可以同时具有学生和教职工角色，角色身份不应复制成两个自然人。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "person_id"
+        ]
+      },
+      "source_paragraph": "person"
+    },
+    {
+      "id": "university.student",
+      "kind": "entity",
+      "name": "学生角色",
+      "definition": "学生角色由 student_id 标识并关联自然人；学籍状态属于角色，不代表自然人失效。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "university.person"
+      ],
+      "properties": {
+        "identity": [
+          "student_id"
+        ]
+      },
+      "source_paragraph": "student"
+    },
+    {
+      "id": "university.staff",
+      "kind": "entity",
+      "name": "教职工角色",
+      "definition": "教职工角色由 staff_id 标识并关联自然人；同一人可兼具在校研究生与任课教师身份。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "university.person"
+      ],
+      "properties": {
+        "identity": [
+          "staff_id"
+        ]
+      },
+      "source_paragraph": "staff"
+    },
+    {
+      "id": "university.department",
+      "kind": "entity",
+      "name": "组织部门",
+      "definition": "组织部门用 department_id 标识，改名、合并与人员归属需保留有效期，不以当前部门覆盖历史统计。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "department_id"
+        ]
+      },
+      "source_paragraph": "department"
+    },
+    {
+      "id": "university.term",
+      "kind": "entity",
+      "name": "学期",
+      "definition": "学期由 term_id 标识；同名课程在不同学期是不同开课实例。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "term_id"
+        ]
+      },
+      "source_paragraph": "term"
+    },
+    {
+      "id": "university.course",
+      "kind": "entity",
+      "name": "课程",
+      "definition": "课程由 course_id 标识；课程名不保证唯一，课程定义与学期开课实例分开。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "course_id"
+        ]
+      },
+      "source_paragraph": "course"
+    },
+    {
+      "id": "university.offering",
+      "kind": "entity",
+      "name": "开课实例",
+      "definition": "开课实例由 offering_id 标识并引用课程和学期；同课程在同学期可开多个教学班。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "university.course",
+        "university.term"
+      ],
+      "properties": {
+        "identity": [
+          "offering_id"
+        ]
+      },
+      "source_paragraph": "offering"
+    },
+    {
+      "id": "university.enrollment",
+      "kind": "entity",
+      "name": "选课记录",
+      "definition": "选课记录由 enrollment_id 标识并关联学生角色和开课实例；同人跨学期重修形成不同选课记录。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "university.student",
+        "university.offering"
+      ],
+      "properties": {
+        "identity": [
+          "enrollment_id"
+        ]
+      },
+      "source_paragraph": "enrollment"
+    },
+    {
+      "id": "university.room",
+      "kind": "entity",
+      "name": "教学场地",
+      "definition": "教学场地用 room_id 标识；排课占用属于时段记录，不能把教室当前使用者当作所有历史时段使用者。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "room_id"
+        ]
+      },
+      "source_paragraph": "room"
+    },
+    {
+      "id": "university.belongs",
+      "kind": "relation",
+      "name": "部门归属",
+      "definition": "自然人的部门归属带 valid_from 和 valid_to，以统计日读取有效记录；本练习时段采用左闭右开。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "interval": "[valid_from,valid_to)"
+      },
+      "source_paragraph": "belongs",
+      "from": "university.person",
+      "to": "university.department",
+      "predicate": "部门归属",
+      "relation_type": "business"
+    },
+    {
+      "id": "university.teaches",
+      "kind": "relation",
+      "name": "授课",
+      "definition": "教职工角色与开课实例的授课关系记录职责和有效时段，不自动授予系统中全校成绩访问权限。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {},
+      "source_paragraph": "teaches",
+      "from": "university.staff",
+      "to": "university.offering",
+      "predicate": "授课",
+      "relation_type": "business"
+    },
+    {
+      "id": "university.headcount",
+      "kind": "metric",
+      "name": "人数",
+      "definition": "人数按指定学期的有效选课记录去重自然人 person_id；重修或多个角色不会增加自然人数。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "university.enrollment"
+      ],
+      "properties": {
+        "unit": "人",
+        "grain": "学校、学期",
+        "inclusions": "本学期有效选课涉及的自然人",
+        "exclusions": "退课记录和重复自然人",
+        "time_scope": "所选学期"
+      },
+      "source_paragraph": "headcount"
+    },
+    {
+      "id": "university.attempts",
+      "kind": "metric",
+      "name": "人次数",
+      "definition": "人次数按指定统计期的有效选课 enrollment_id 计数；同一人重修可产生多个人次，区别于自然人数。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "university.enrollment"
+      ],
+      "properties": {
+        "unit": "人次",
+        "grain": "学校、统计期",
+        "inclusions": "有效选课记录",
+        "exclusions": "退课和重复传输记录",
+        "time_scope": "所选统计期"
+      },
+      "source_paragraph": "attempts"
+    },
+    {
+      "id": "university.grades",
+      "kind": "rule",
+      "name": "成绩可见范围",
+      "definition": "成绩可见范围应由学校系统根据角色、任课关系和数据范围校验；本练习未提供跨院系访客访问规则。",
+      "domain": "高校信息化",
+      "scope": {
+        "institution": "演练大学",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "university.teaches",
+        "university.belongs"
+      ],
+      "properties": {
+        "condition": "请求成绩明细",
+        "requirement": "由目标系统校验授权范围",
+        "knowledge_gaps": [
+          "跨院系访客成绩访问范围未提供"
+        ]
+      },
+      "source_paragraph": "grades"
+    }
+  ],
+  "cases": [
+    {
+      "id": "university.person_roles",
+      "question": "一个人既是研究生又是教师，是两个人吗？",
+      "intent": "explain",
+      "asset_ids": [
+        "university.student",
+        "university.staff"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "university.student",
+        "university.staff",
+        "university.person"
+      ],
+      "expected_terms": [
+        "不应复制成两个",
+        "兼具"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "university.retake",
+      "question": "同一课程跨学期重修，应关联同一选课记录吗？",
+      "intent": "explain",
+      "asset_ids": [
+        "university.enrollment"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "university.enrollment",
+        "university.student",
+        "university.person",
+        "university.offering",
+        "university.course",
+        "university.term"
+      ],
+      "expected_terms": [
+        "不同选课记录",
+        "不同开课实例"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "university.history",
+      "question": "院系合并后历史学生归属要按新部门覆盖吗？",
+      "intent": "explain",
+      "asset_ids": [
+        "university.belongs"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "university.belongs",
+        "university.person",
+        "university.department"
+      ],
+      "expected_terms": [
+        "不以当前部门覆盖",
+        "统计日"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "university.counts",
+      "question": "人数和人次数分别怎么定义？",
+      "intent": "explain",
+      "asset_ids": [
+        "university.headcount",
+        "university.attempts"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "university.headcount",
+        "university.attempts",
+        "university.enrollment",
+        "university.student",
+        "university.person",
+        "university.offering",
+        "university.course",
+        "university.term"
+      ],
+      "expected_terms": [
+        "person_id",
+        "enrollment_id"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "university.numbers",
+      "question": "本学期有多少选课学生？",
+      "intent": "calculate",
+      "asset_ids": [
+        "university.headcount"
+      ],
+      "expected_status": "requires_execution",
+      "expected_required_ids": [
+        "university.headcount",
+        "university.enrollment",
+        "university.student",
+        "university.person",
+        "university.offering",
+        "university.course",
+        "university.term"
+      ],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "university.grades_gap",
+      "question": "跨院系访客可以看哪些成绩？",
+      "intent": "query",
+      "asset_ids": [
+        "university.grades"
+      ],
+      "expected_status": "needs_review",
+      "expected_required_ids": [
+        "university.grades",
+        "university.teaches",
+        "university.staff",
+        "university.person",
+        "university.offering",
+        "university.course",
+        "university.term",
+        "university.belongs",
+        "university.department"
+      ],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。",
+      "expected_gap_codes": [
+        "DECLARED_KNOWLEDGE_GAP"
+      ]
+    },
+    {
+      "id": "university.access",
+      "question": "我是老师，给我全校的成绩明细。",
+      "intent": "query",
+      "asset_ids": [
+        "university.teaches"
+      ],
+      "expected_status": "requires_execution",
+      "expected_required_ids": [
+        "university.teaches",
+        "university.staff",
+        "university.person",
+        "university.offering",
+        "university.course",
+        "university.term"
+      ],
+      "expected_terms": [
+        "不自动授予"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "university.discovery",
+      "question": "人数和人次数有什么区别？",
+      "intent": "explain",
+      "asset_ids": [],
+      "expected_status": "needs_selection",
+      "expected_required_ids": [],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。",
+      "expected_candidates": [
+        "university.headcount",
+        "university.attempts"
+      ]
+    }
+  ],
+  "observations": {
+    "roles": [
+      {
+        "person": "P1",
+        "role": "student"
+      },
+      {
+        "person": "P1",
+        "role": "staff"
+      },
+      {
+        "person": "P2",
+        "role": "student"
+      }
+    ],
+    "enrollments": [
+      {
+        "id": "E1",
+        "person": "P1",
+        "term": "T1",
+        "status": "active"
+      },
+      {
+        "id": "E2",
+        "person": "P1",
+        "term": "T2",
+        "status": "active"
+      },
+      {
+        "id": "E3",
+        "person": "P2",
+        "term": "T2",
+        "status": "active"
+      },
+      {
+        "id": "E4",
+        "person": "P2",
+        "term": "T2",
+        "status": "withdrawn"
+      }
+    ]
+  },
+  "expected_observations": {
+    "natural_people": 2,
+    "role_rows": 3,
+    "active_attempts_all_terms": 3,
+    "active_people_T2": 2,
+    "active_attempts_T2": 2
+  }
+}

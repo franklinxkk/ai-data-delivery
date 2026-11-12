@@ -602,7 +602,7 @@
   "现有问数引擎": "Existing query engine",
   "连接本机 Java 演示接口 /api/model 与 /api/ask，核对模型和完整结果。": "Connect to local Java demo endpoints /api/model and /api/ask to compare models and complete results.",
   "本机地址": "Local address",
-  "业务问题": "Business question",
+  "业务问题": "Business questions",
   "输入完整问题": "Enter the complete question",
   "完整预期结果（可留空）": "Complete expected result (optional)",
   "如 [[11,25]]": "For example [[11,25]]",
@@ -926,5 +926,13 @@
   "提交知识候选": "Submit knowledge candidates",
   "核对知识候选": "Review knowledge candidates",
   "发布知识快照": "Publish knowledge snapshot",
-  "新的语义项目": "New semantic project"
+  "新的语义项目": "New semantic project",
+  "尚无定义": "No definition yet",
+  "修改含义与详细配置": "Edit meaning and detailed settings",
+  "交付范围来自当前问题，刷新后保留。取消所有选择不会扩大为全库。": "Delivery retains this question’s scope after reload. Clearing selections does not expand it to the whole graph.",
+  "明确切换为全部业务语义": "Switch explicitly to all business semantics",
+  "当前问题没有选择定义，请先选择，或明确切换为全部业务语义。": "No definitions selected for this question. Select definitions or explicitly switch to all business semantics.",
+  "当前交付选择无法在刷新后恢复，请保持此页完成交付。": "This delivery selection cannot be recovered after reload. Keep this page open until delivery is complete.",
+  "尚未选择定义": "No definitions selected",
+  " · 尚未选择定义": " · No definitions selected"
 }

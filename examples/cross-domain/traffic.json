@@ -1,0 +1,600 @@
+{
+  "id": "traffic",
+  "domain": "交通",
+  "synthetic": true,
+  "scope": {
+    "tenant": "A",
+    "scenario": "synthetic"
+  },
+  "source": {
+    "notice": "仅为合成验收练习；所有人名、企业、记录及规则均为虚构，不代表行业法规、客户制度或真实数据。 交通模型适用于租户 A（展示名“演练运输企业甲”）；租户 B 的一行观察记录仅用于跨租户误计的反例，不属于 A 的业务范围。",
+    "paragraphs": {
+      "person": "自然人用 person_id 标识；同一人可在不同时段受雇于不同企业，不把手机号或姓名作为稳定身份。",
+      "vehicle": "车辆用 vehicle_id 标识；车牌展示值可能变更，车辆身份不以车牌作为唯一依据。",
+      "enterprise": "运输企业是承运或用工主体；车辆所有者、承运企业和驾驶员雇主不保证是同一企业。",
+      "route": "线路由 route_id 标识；线路可经过多个场地，同一场地可服务多条线路。",
+      "site": "场地由 site_id 标识；一个场地可作为线路始发站、途经站或终点站，角色属于线路与场地的关联。",
+      "hazard": "隐患是一项已观察到的不符合要求或不安全状态；关闭隐患表示该项整改完成，不表示相关风险已消失。",
+      "risk": "风险是风险事件发生的可能性与后果的评估对象；风险可关联多个隐患，不能用隐患条数代替风险等级。",
+      "trip": "来源行程唯一身份是 tenant_id、source_system、original_trip_no 三元组；保留 original_trip_no 展示；两系统同号行程先视为两个来源记录，除非另有已核实的业务关联。",
+      "employed": "自然人与运输企业之间的任职关系带 valid_from、valid_to；本练习任职时段为左闭右开，valid_to 缺省表示尚未记录终止；不能把现任雇主套用到历史行程。",
+      "drives": "驾驶关系关联自然人与来源行程，驾驶角色不自动推出车辆所有权或雇佣关系。",
+      "runs": "来源行程通过明确 route_id 引用线路；相同原行程编号不能跨来源推定同一线路。",
+      "visits": "线路与场地关联存储 stop_order 与 role，允许线路和场地多对多；同一场地两次停靠以不同 stop_order 区分。",
+      "exposes": "一个风险可关联多项隐患，一项隐患也可关联多个风险；关闭隐患不自动将风险级别清零。",
+      "responsibility": "核对行程责任时分别读取承运主体、车辆所有者及行程发生时有效的驾驶员任职；责任结论由本练习业务责任规则判断，外键只证明引用。",
+      "trip_count": "来源行程数按租户、来源系统与原行程编号去重；同来源重复采集只计一次，不跨来源自动合并。",
+      "risk_review": "风险复评需要明确评估方法与最新评估记录；本练习未提供由隐患整改推导新风险等级的算法。",
+      "legacy_rule": "本练习历史任职口径只适用于 2026 年上半年；对下半年不得沿用本版本，需要核对新版本。"
+    }
+  },
+  "assets": [
+    {
+      "id": "traffic.person",
+      "kind": "entity",
+      "name": "自然人",
+      "definition": "自然人用 person_id 标识；同一人可在不同时段受雇于不同企业，不把手机号或姓名作为稳定身份。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "person_id"
+        ]
+      },
+      "source_paragraph": "person"
+    },
+    {
+      "id": "traffic.vehicle",
+      "kind": "entity",
+      "name": "车辆",
+      "definition": "车辆用 vehicle_id 标识；车牌展示值可能变更，车辆身份不以车牌作为唯一依据。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "vehicle_id"
+        ]
+      },
+      "source_paragraph": "vehicle"
+    },
+    {
+      "id": "traffic.enterprise",
+      "kind": "entity",
+      "name": "运输企业",
+      "definition": "运输企业是承运或用工主体；车辆所有者、承运企业和驾驶员雇主不保证是同一企业。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "enterprise_id"
+        ]
+      },
+      "source_paragraph": "enterprise"
+    },
+    {
+      "id": "traffic.route",
+      "kind": "entity",
+      "name": "线路",
+      "definition": "线路由 route_id 标识；线路可经过多个场地，同一场地可服务多条线路。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "route_id"
+        ]
+      },
+      "source_paragraph": "route"
+    },
+    {
+      "id": "traffic.site",
+      "kind": "entity",
+      "name": "场地",
+      "definition": "场地由 site_id 标识；一个场地可作为线路始发站、途经站或终点站，角色属于线路与场地的关联。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "site_id"
+        ]
+      },
+      "source_paragraph": "site"
+    },
+    {
+      "id": "traffic.hazard",
+      "kind": "entity",
+      "name": "隐患",
+      "definition": "隐患是一项已观察到的不符合要求或不安全状态；关闭隐患表示该项整改完成，不表示相关风险已消失。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "hazard_id"
+        ]
+      },
+      "source_paragraph": "hazard"
+    },
+    {
+      "id": "traffic.risk",
+      "kind": "entity",
+      "name": "风险",
+      "definition": "风险是风险事件发生的可能性与后果的评估对象；风险可关联多个隐患，不能用隐患条数代替风险等级。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "risk_id"
+        ]
+      },
+      "source_paragraph": "risk"
+    },
+    {
+      "id": "traffic.trip",
+      "kind": "entity",
+      "name": "来源行程",
+      "definition": "来源行程唯一身份是 tenant_id、source_system、original_trip_no 三元组；保留 original_trip_no 展示；两系统同号行程先视为两个来源记录，除非另有已核实的业务关联。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "traffic.vehicle",
+        "traffic.enterprise"
+      ],
+      "properties": {
+        "identity": [
+          "tenant_id",
+          "source_system",
+          "original_trip_no"
+        ]
+      },
+      "source_paragraph": "trip"
+    },
+    {
+      "id": "traffic.employed",
+      "kind": "relation",
+      "name": "任职",
+      "definition": "自然人与运输企业之间的任职关系带 valid_from、valid_to；本练习任职时段为左闭右开，valid_to 缺省表示尚未记录终止；不能把现任雇主套用到历史行程。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "interval": "[valid_from,valid_to)"
+      },
+      "source_paragraph": "employed",
+      "from": "traffic.person",
+      "to": "traffic.enterprise",
+      "predicate": "任职",
+      "relation_type": "business"
+    },
+    {
+      "id": "traffic.drives",
+      "kind": "relation",
+      "name": "驾驶",
+      "definition": "驾驶关系关联自然人与来源行程，驾驶角色不自动推出车辆所有权或雇佣关系。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {},
+      "source_paragraph": "drives",
+      "from": "traffic.person",
+      "to": "traffic.trip",
+      "predicate": "驾驶",
+      "relation_type": "business"
+    },
+    {
+      "id": "traffic.runs",
+      "kind": "relation",
+      "name": "行经线路",
+      "definition": "来源行程通过明确 route_id 引用线路；相同原行程编号不能跨来源推定同一线路。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {},
+      "source_paragraph": "runs",
+      "from": "traffic.trip",
+      "to": "traffic.route",
+      "predicate": "行经线路",
+      "relation_type": "business"
+    },
+    {
+      "id": "traffic.visits",
+      "kind": "relation",
+      "name": "途经场地",
+      "definition": "线路与场地关联存储 stop_order 与 role，允许线路和场地多对多；同一场地两次停靠以不同 stop_order 区分。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "route_id",
+          "stop_order"
+        ],
+        "role": [
+          "origin",
+          "via",
+          "destination"
+        ]
+      },
+      "source_paragraph": "visits",
+      "from": "traffic.route",
+      "to": "traffic.site",
+      "predicate": "途经场地",
+      "relation_type": "business"
+    },
+    {
+      "id": "traffic.exposes",
+      "kind": "relation",
+      "name": "风险关联隐患",
+      "definition": "一个风险可关联多项隐患，一项隐患也可关联多个风险；关闭隐患不自动将风险级别清零。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {},
+      "source_paragraph": "exposes",
+      "from": "traffic.risk",
+      "to": "traffic.hazard",
+      "predicate": "风险关联隐患",
+      "relation_type": "business"
+    },
+    {
+      "id": "traffic.responsibility",
+      "kind": "rule",
+      "name": "行程责任核对",
+      "definition": "核对行程责任时分别读取承运主体、车辆所有者及行程发生时有效的驾驶员任职；责任结论由本练习业务责任规则判断，外键只证明引用。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "traffic.trip",
+        "traffic.employed",
+        "traffic.drives"
+      ],
+      "properties": {
+        "condition": "核对行程责任",
+        "requirement": "分别核对承运、所有、用工主体；禁止由单条外键推定责任"
+      },
+      "source_paragraph": "responsibility"
+    },
+    {
+      "id": "traffic.trip_count",
+      "kind": "metric",
+      "name": "来源行程数",
+      "definition": "来源行程数按租户、来源系统与原行程编号去重；同来源重复采集只计一次，不跨来源自动合并。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "traffic.trip"
+      ],
+      "properties": {
+        "unit": "条",
+        "grain": "租户、统计日",
+        "inclusions": "有效来源行程",
+        "exclusions": "同来源重复采集行",
+        "time_scope": "所选统计日"
+      },
+      "source_paragraph": "trip_count"
+    },
+    {
+      "id": "traffic.risk_review",
+      "kind": "rule",
+      "name": "风险复评",
+      "definition": "风险复评需要明确评估方法与最新评估记录；本练习未提供由隐患整改推导新风险等级的算法。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "traffic.exposes"
+      ],
+      "properties": {
+        "condition": "隐患整改后评估剩余风险",
+        "requirement": "由指定方法重新评估",
+        "knowledge_gaps": [
+          "剩余风险等级计算方法尚未给出"
+        ]
+      },
+      "source_paragraph": "risk_review"
+    },
+    {
+      "id": "traffic.legacy_rule",
+      "kind": "rule",
+      "name": "历史任职口径",
+      "definition": "本练习历史任职口径只适用于 2026 年上半年；对下半年不得沿用本版本，需要核对新版本。",
+      "domain": "交通",
+      "scope": {
+        "tenant": "A",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "traffic.employed"
+      ],
+      "properties": {
+        "condition": "2026 年上半年行程",
+        "requirement": "按历史有效任职读取雇主"
+      },
+      "source_paragraph": "legacy_rule",
+      "effective_from": "2026-01-01",
+      "effective_to": "2026-06-30"
+    }
+  ],
+  "cases": [
+    {
+      "id": "traffic.identity",
+      "question": "两家来源系统都传来原行程 007，是否只保留一条？",
+      "intent": "explain",
+      "asset_ids": [
+        "traffic.trip"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "traffic.trip",
+        "traffic.vehicle",
+        "traffic.enterprise"
+      ],
+      "expected_terms": [
+        "source_system",
+        "original_trip_no",
+        "不"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "traffic.responsibility_check",
+      "question": "司机转入企业乙后，六月行程的责任主体怎么核对？",
+      "intent": "explain",
+      "asset_ids": [
+        "traffic.responsibility"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "traffic.responsibility",
+        "traffic.trip",
+        "traffic.vehicle",
+        "traffic.enterprise",
+        "traffic.employed",
+        "traffic.person",
+        "traffic.drives"
+      ],
+      "expected_terms": [
+        "不能把现任雇主",
+        "不自动推出"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "traffic.network",
+      "question": "线路反复经过同一场地，站序和角色放在哪里？",
+      "intent": "explain",
+      "asset_ids": [
+        "traffic.visits",
+        "traffic.runs"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "traffic.visits",
+        "traffic.route",
+        "traffic.site",
+        "traffic.runs",
+        "traffic.trip",
+        "traffic.vehicle",
+        "traffic.enterprise"
+      ],
+      "expected_terms": [
+        "stop_order",
+        "多对多"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "traffic.hazard_risk",
+      "question": "隐患全部整改，是否就能认为风险为零？",
+      "intent": "explain",
+      "asset_ids": [
+        "traffic.exposes"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "traffic.exposes",
+        "traffic.risk",
+        "traffic.hazard"
+      ],
+      "expected_terms": [
+        "不自动",
+        "不能用隐患条数"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "traffic.count",
+      "question": "现在有多少来源行程？",
+      "intent": "calculate",
+      "asset_ids": [
+        "traffic.trip_count"
+      ],
+      "expected_status": "requires_execution",
+      "expected_required_ids": [
+        "traffic.trip_count",
+        "traffic.trip",
+        "traffic.vehicle",
+        "traffic.enterprise"
+      ],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "traffic.risk_gap",
+      "question": "整改后的剩余风险等级如何计算？",
+      "intent": "explain",
+      "asset_ids": [
+        "traffic.risk_review"
+      ],
+      "expected_status": "needs_review",
+      "expected_required_ids": [
+        "traffic.risk_review",
+        "traffic.exposes",
+        "traffic.risk",
+        "traffic.hazard"
+      ],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。",
+      "expected_gap_codes": [
+        "DECLARED_KNOWLEDGE_GAP"
+      ]
+    },
+    {
+      "id": "traffic.date",
+      "question": "七月是否仍适用上半年的任职口径？",
+      "intent": "explain",
+      "asset_ids": [
+        "traffic.legacy_rule"
+      ],
+      "expected_status": "needs_review",
+      "expected_required_ids": [
+        "traffic.legacy_rule",
+        "traffic.employed",
+        "traffic.person",
+        "traffic.enterprise"
+      ],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。",
+      "as_of": "2026-07-01",
+      "expected_gap_codes": [
+        "OUTSIDE_KNOWN_INTERVAL"
+      ]
+    },
+    {
+      "id": "traffic.discovery",
+      "question": "风险和隐患有什么关系？",
+      "intent": "explain",
+      "asset_ids": [],
+      "expected_status": "needs_selection",
+      "expected_required_ids": [],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。",
+      "expected_candidates": [
+        "traffic.risk",
+        "traffic.hazard"
+      ]
+    }
+  ],
+  "observations": {
+    "trip_rows": [
+      [
+        "A",
+        "dispatch",
+        "007"
+      ],
+      [
+        "A",
+        "dispatch",
+        "007"
+      ],
+      [
+        "A",
+        "gps",
+        "007"
+      ],
+      [
+        "B",
+        "dispatch",
+        "007"
+      ]
+    ],
+    "employment": [
+      {
+        "person": "P1",
+        "employer": "甲",
+        "from": "2026-01-01",
+        "to": "2026-07-01"
+      },
+      {
+        "person": "P1",
+        "employer": "乙",
+        "from": "2026-07-01",
+        "to": null
+      }
+    ],
+    "at_dates": [
+      "2026-06-30",
+      "2026-07-01"
+    ]
+  },
+  "expected_observations": {
+    "whole_fixture_raw_trip_rows": 4,
+    "whole_fixture_distinct_source_trips": 3,
+    "tenant_A_source_trips": 2,
+    "wrong_tenant_A_unfiltered_count": 3,
+    "wrong_original_number_only_count": 1,
+    "employer_on_dates": [
+      "甲",
+      "乙"
+    ]
+  }
+}

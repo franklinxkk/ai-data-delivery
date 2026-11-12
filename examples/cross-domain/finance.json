@@ -1,0 +1,458 @@
+{
+  "id": "finance",
+  "domain": "金融",
+  "synthetic": true,
+  "scope": {
+    "portfolio": "演练组合",
+    "scenario": "synthetic"
+  },
+  "source": {
+    "notice": "仅为合成验收练习；所有人名、企业、记录及规则均为虚构，不代表行业法规、客户制度或真实数据。",
+    "paragraphs": {
+      "party": "业务主体由 party_id 标识；借款人、账户持有人与担保人为不同角色，同一主体可具有多种角色。",
+      "account": "账户以机构代码与 account_id 形成唯一身份；账户是记账载体，不等同于持有人或借款合同。",
+      "contract": "借款合同由 contract_id 标识，需保留借款主体、合同币种以及基准日的本金余额；币种不同的余额不直接相加。",
+      "collateral": "担保物由 collateral_id 标识；同一担保物可对应多份合同，一份合同也可有多项担保，不能因连接担保重复计算合同余额。",
+      "secures": "合同与担保物为多对多关系，关联记录约定的担保范围与份额；关联本身不证明可直接从余额扣除全部评估值。",
+      "holds": "业务主体持有账户，允许联名持有；持有关系不自动授予读取账户交易的技术权限。",
+      "fx": "跨币种折算需明确目标币种、汇率来源、基准日与报价方向；本练习未提供实际汇率，不能按 1:1 或记忆中的汇率补齐。",
+      "gross": "合同本金余额是同一基准日、同一币种的合同余额之和，按 contract_id 去重后汇总；两份不同合同余额相同仍都要计入，不能用 SUM(DISTINCT amount) 替代合同去重。",
+      "converted": "折算本金余额将每个合同基准日原币余额按同日可用报价转换到指定目标币种后汇总，汇率缺失则不出完整合计。",
+      "risk": "风险敞口的定义取决于业务口径；本练习只明确合同本金余额，未给定净额结算、担保折扣及表外承诺转换规则，不能把本金余额直接标记为监管风险敞口。",
+      "access": "读取账户明细须由目标系统验证当前主体的授权、用途和数据范围；本体中的持有或审核角色定义本身不提供访问授权。"
+    }
+  },
+  "assets": [
+    {
+      "id": "finance.party",
+      "kind": "entity",
+      "name": "业务主体",
+      "definition": "业务主体由 party_id 标识；借款人、账户持有人与担保人为不同角色，同一主体可具有多种角色。",
+      "domain": "金融",
+      "scope": {
+        "portfolio": "演练组合",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "party_id"
+        ]
+      },
+      "source_paragraph": "party"
+    },
+    {
+      "id": "finance.account",
+      "kind": "entity",
+      "name": "账户",
+      "definition": "账户以机构代码与 account_id 形成唯一身份；账户是记账载体，不等同于持有人或借款合同。",
+      "domain": "金融",
+      "scope": {
+        "portfolio": "演练组合",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "finance.party"
+      ],
+      "properties": {
+        "identity": [
+          "institution_id",
+          "account_id"
+        ]
+      },
+      "source_paragraph": "account"
+    },
+    {
+      "id": "finance.contract",
+      "kind": "entity",
+      "name": "借款合同",
+      "definition": "借款合同由 contract_id 标识，需保留借款主体、合同币种以及基准日的本金余额；币种不同的余额不直接相加。",
+      "domain": "金融",
+      "scope": {
+        "portfolio": "演练组合",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "finance.party"
+      ],
+      "properties": {
+        "identity": [
+          "contract_id"
+        ]
+      },
+      "source_paragraph": "contract"
+    },
+    {
+      "id": "finance.collateral",
+      "kind": "entity",
+      "name": "担保物",
+      "definition": "担保物由 collateral_id 标识；同一担保物可对应多份合同，一份合同也可有多项担保，不能因连接担保重复计算合同余额。",
+      "domain": "金融",
+      "scope": {
+        "portfolio": "演练组合",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "collateral_id"
+        ]
+      },
+      "source_paragraph": "collateral"
+    },
+    {
+      "id": "finance.secures",
+      "kind": "relation",
+      "name": "合同担保关联",
+      "definition": "合同与担保物为多对多关系，关联记录约定的担保范围与份额；关联本身不证明可直接从余额扣除全部评估值。",
+      "domain": "金融",
+      "scope": {
+        "portfolio": "演练组合",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {},
+      "source_paragraph": "secures",
+      "from": "finance.contract",
+      "to": "finance.collateral",
+      "predicate": "合同担保关联",
+      "relation_type": "business"
+    },
+    {
+      "id": "finance.holds",
+      "kind": "relation",
+      "name": "持有账户",
+      "definition": "业务主体持有账户，允许联名持有；持有关系不自动授予读取账户交易的技术权限。",
+      "domain": "金融",
+      "scope": {
+        "portfolio": "演练组合",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {},
+      "source_paragraph": "holds",
+      "from": "finance.party",
+      "to": "finance.account",
+      "predicate": "持有账户",
+      "relation_type": "business"
+    },
+    {
+      "id": "finance.fx",
+      "kind": "rule",
+      "name": "汇率折算口径",
+      "definition": "跨币种折算需明确目标币种、汇率来源、基准日与报价方向；本练习未提供实际汇率，不能按 1:1 或记忆中的汇率补齐。",
+      "domain": "金融",
+      "scope": {
+        "portfolio": "演练组合",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "condition": "跨币种汇总",
+        "requirement": "核实来源、日期与报价方向",
+        "knowledge_gaps": [
+          "基准日的可用汇率尚未提供"
+        ]
+      },
+      "source_paragraph": "fx"
+    },
+    {
+      "id": "finance.gross",
+      "kind": "metric",
+      "name": "合同本金余额",
+      "definition": "合同本金余额是同一基准日、同一币种的合同余额之和，按 contract_id 去重后汇总；两份不同合同余额相同仍都要计入，不能用 SUM(DISTINCT amount) 替代合同去重。",
+      "domain": "金融",
+      "scope": {
+        "portfolio": "演练组合",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "finance.contract",
+        "finance.secures"
+      ],
+      "properties": {
+        "unit": "原币",
+        "grain": "组合、基准日、币种",
+        "inclusions": "有效合同的本金余额",
+        "exclusions": "连接担保造成的重复合同记录",
+        "time_scope": "指定基准日"
+      },
+      "source_paragraph": "gross"
+    },
+    {
+      "id": "finance.converted",
+      "kind": "metric",
+      "name": "折算本金余额",
+      "definition": "折算本金余额将每个合同基准日原币余额按同日可用报价转换到指定目标币种后汇总，汇率缺失则不出完整合计。",
+      "domain": "金融",
+      "scope": {
+        "portfolio": "演练组合",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "finance.gross",
+        "finance.fx"
+      ],
+      "properties": {
+        "unit": "目标币种",
+        "grain": "组合、基准日、目标币种",
+        "inclusions": "可验证汇率下的合同余额",
+        "exclusions": "未验证汇率不可假装零或默认 1",
+        "time_scope": "指定基准日"
+      },
+      "source_paragraph": "converted"
+    },
+    {
+      "id": "finance.risk",
+      "kind": "rule",
+      "name": "风险敞口口径",
+      "definition": "风险敞口的定义取决于业务口径；本练习只明确合同本金余额，未给定净额结算、担保折扣及表外承诺转换规则，不能把本金余额直接标记为监管风险敞口。",
+      "domain": "金融",
+      "scope": {
+        "portfolio": "演练组合",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "finance.gross"
+      ],
+      "properties": {
+        "condition": "请求风险敞口",
+        "requirement": "先明确口径与抵扣规则",
+        "knowledge_gaps": [
+          "净额结算、担保折扣与表外承诺转换规则未知"
+        ]
+      },
+      "source_paragraph": "risk"
+    },
+    {
+      "id": "finance.access",
+      "kind": "rule",
+      "name": "账户明细访问",
+      "definition": "读取账户明细须由目标系统验证当前主体的授权、用途和数据范围；本体中的持有或审核角色定义本身不提供访问授权。",
+      "domain": "金融",
+      "scope": {
+        "portfolio": "演练组合",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "finance.holds"
+      ],
+      "properties": {
+        "condition": "访问交易明细",
+        "requirement": "目标系统校验当前授权；不得从本体角色直接授予访问"
+      },
+      "source_paragraph": "access"
+    }
+  ],
+  "cases": [
+    {
+      "id": "finance.roles",
+      "question": "借款人、账户持有人和担保人怎么区分？",
+      "intent": "explain",
+      "asset_ids": [
+        "finance.party",
+        "finance.account",
+        "finance.contract",
+        "finance.secures"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "finance.party",
+        "finance.account",
+        "finance.contract",
+        "finance.secures",
+        "finance.collateral"
+      ],
+      "expected_terms": [
+        "不同角色",
+        "不等同于"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "finance.fanout",
+      "question": "合同关联两项担保后余额翻倍，怎么定义去重？",
+      "intent": "explain",
+      "asset_ids": [
+        "finance.gross"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "finance.gross",
+        "finance.contract",
+        "finance.party",
+        "finance.secures",
+        "finance.collateral"
+      ],
+      "expected_terms": [
+        "contract_id",
+        "SUM(DISTINCT amount)"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "finance.same_currency",
+      "question": "同日同币种的合同余额现在一共多少？",
+      "intent": "calculate",
+      "asset_ids": [
+        "finance.gross"
+      ],
+      "expected_status": "requires_execution",
+      "expected_required_ids": [
+        "finance.gross",
+        "finance.contract",
+        "finance.party",
+        "finance.secures",
+        "finance.collateral"
+      ],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "finance.fx_gap",
+      "question": "把人民币和美元余额折成同一币种合计。",
+      "intent": "calculate",
+      "asset_ids": [
+        "finance.converted"
+      ],
+      "expected_status": "needs_review",
+      "expected_required_ids": [
+        "finance.converted",
+        "finance.gross",
+        "finance.contract",
+        "finance.party",
+        "finance.secures",
+        "finance.collateral",
+        "finance.fx"
+      ],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。",
+      "expected_gap_codes": [
+        "DECLARED_KNOWLEDGE_GAP"
+      ]
+    },
+    {
+      "id": "finance.risk_gap",
+      "question": "这些余额减去担保物价值就是监管风险敞口吗？",
+      "intent": "explain",
+      "asset_ids": [
+        "finance.risk"
+      ],
+      "expected_status": "needs_review",
+      "expected_required_ids": [
+        "finance.risk",
+        "finance.gross",
+        "finance.contract",
+        "finance.party",
+        "finance.secures",
+        "finance.collateral"
+      ],
+      "expected_terms": [
+        "不能把本金余额直接标记"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。",
+      "expected_gap_codes": [
+        "DECLARED_KNOWLEDGE_GAP"
+      ]
+    },
+    {
+      "id": "finance.authorization",
+      "question": "我在本体中有账户持有人角色，直接读取交易明细。",
+      "intent": "query",
+      "asset_ids": [
+        "finance.access"
+      ],
+      "expected_status": "requires_execution",
+      "expected_required_ids": [
+        "finance.access",
+        "finance.holds",
+        "finance.party",
+        "finance.account"
+      ],
+      "expected_terms": [
+        "不提供访问授权"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "finance.scope",
+      "question": "查看另一个组合的余额。",
+      "intent": "explain",
+      "asset_ids": [
+        "finance.gross"
+      ],
+      "expected_status": "needs_review",
+      "expected_required_ids": [],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。",
+      "scope": {
+        "portfolio": "另一个组合"
+      },
+      "expected_error": "SELECTION_SCOPE_MISMATCH"
+    },
+    {
+      "id": "finance.discovery",
+      "question": "本金余额与风险敞口一样吗？",
+      "intent": "explain",
+      "asset_ids": [],
+      "expected_status": "needs_selection",
+      "expected_required_ids": [],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。",
+      "expected_candidates": [
+        "finance.gross",
+        "finance.risk"
+      ]
+    }
+  ],
+  "observations": {
+    "joined_contract_rows": [
+      {
+        "contract": "C1",
+        "currency": "CNY",
+        "date": "2026-11-01",
+        "amount": "100",
+        "collateral": "G1"
+      },
+      {
+        "contract": "C1",
+        "currency": "CNY",
+        "date": "2026-11-01",
+        "amount": "100",
+        "collateral": "G2"
+      },
+      {
+        "contract": "C2",
+        "currency": "CNY",
+        "date": "2026-11-01",
+        "amount": "100",
+        "collateral": "G2"
+      },
+      {
+        "contract": "C3",
+        "currency": "USD",
+        "date": "2026-11-01",
+        "amount": "50",
+        "collateral": "G3"
+      }
+    ]
+  },
+  "expected_observations": {
+    "CNY_contract_balance": "200",
+    "USD_contract_balance": "50",
+    "wrong_CNY_joined_sum": "300",
+    "wrong_CNY_sum_distinct_amount": "100",
+    "converted_total": null
+  }
+}

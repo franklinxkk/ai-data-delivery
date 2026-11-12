@@ -25,6 +25,12 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("state", help="Read the current project and material/candidate status")
     commands.add_parser("example", help="Prepare authored proposals after reviewing the equipment example DDL; never confirms knowledge")
+    scenario = commands.add_parser("scenario", help="Save a business question and selected knowledge, never confirm it")
+    scenario.add_argument("--file", required=True, help="JSON scenario object; omit ID for a new question")
+    check = commands.add_parser("check", help="Read current scenario context and gaps; no query, publication or answer validation")
+    check.add_argument("--scenario", required=True)
+    check.add_argument("--limit", type=int, default=50)
+    check.add_argument("--offset", type=int, default=0)
     material = commands.add_parser("import", help="Register material without overwriting the graph")
     material.add_argument("--file", required=True)
     material.add_argument("--domain", default="")
@@ -33,6 +39,7 @@ def main(argv=None):
     material.add_argument("--distinct-source", action="store_true")
     task = commands.add_parser("task", help="Read material fragments and current graph for the selected host task")
     task.add_argument("--batch", required=True)
+    task.add_argument("--scenario", help="Optional saved business question guiding this material task")
     task.add_argument("--action", choices=["prepare", "cancel", "resume"], default="prepare")
     proposal = commands.add_parser("propose", help="Submit evidence-linked candidate groups, never confirm them")
     proposal.add_argument("--batch", required=True)
@@ -55,7 +62,13 @@ def main(argv=None):
             result = service.import_material({**req, "filename": path.name, "content_base64": base64.b64encode(path.read_bytes()).decode(),
                 "domain": args.domain, "scope": args.scope, "language": args.language, "source_id": args.source_id, "distinct_source": args.distinct_source})
         elif args.command == "task":
-            result = service.task({**req, "batch_id": args.batch, "action": args.action, 'language': args.language})
+            result = service.task({**req, "batch_id": args.batch, "action": args.action, 'language': args.language,
+                                   "scenario_id": args.scenario})
+        elif args.command == "scenario":
+            result = service.scenario({**req, "scenario": json.loads(Path(args.file).read_text(encoding="utf-8-sig"))})
+        elif args.command == "check":
+            result = service.scenario_check({"revision": req["revision"], "scenario_id": args.scenario,
+                                             "limit": args.limit, "offset": args.offset})
         elif args.command == "example":
             result = service.example(req)
         else:

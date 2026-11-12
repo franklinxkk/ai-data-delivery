@@ -1,8 +1,10 @@
-# Semantic Workbench · v0.3.0
+# Semantic Workbench · v0.3.1-dev
 
 [简体中文](README.zh-CN.md) · [Quickstart](../README.md) · [Candidate contract](../references/m1-m2-contract.md)
 
 The local workbench stores materials, reviews proposals, edits one semantic graph and publishes independently readable snapshots. Your host Agent supplies reasoning; the workbench has no embedded model and does not automatically confirm uploaded knowledge.
+
+The default **Business questions** view saves a question, expectations and selected semantic IDs. **Save and check** discovers candidate meanings or reads the selected definitions with dependencies and gaps. It never claims to answer the question or execute data/action requests. See the [question workflow](../references/question-workflow.md). Materials, review and graph remain independently accessible. Question-scoped delivery retains its selection on reload; clearing it cannot silently publish the whole graph.
 
 ## Open a project and choose a language
 

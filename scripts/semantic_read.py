@@ -21,6 +21,15 @@ def make_parser():
     commands = p.add_subparsers(dest="command", required=True, parser_class=Parser)
     commands.add_parser("verify", help="Verify bytes, references, states and evidence, not business truth")
     commands.add_parser("describe", help="Discover read-only tools and execution boundaries")
+    resolve = commands.add_parser("resolve", help="Find question-related candidates, or read context for explicitly selected IDs; never answer or execute")
+    resolve.add_argument("--question", required=True)
+    resolve.add_argument("--id", action="append", dest="ids")
+    resolve.add_argument("--intent", choices=["explain", "calculate", "query", "act"], default="explain")
+    resolve.add_argument("--domain")
+    resolve.add_argument("--scope", help="Exact scope string, or a JSON object subset; not authorization")
+    resolve.add_argument("--as-of")
+    resolve.add_argument("--limit", type=int, default=50)
+    resolve.add_argument("--offset", type=int, default=0)
     context = commands.add_parser("context", help="Read required definitions, scopes, dependencies, evidence and gaps together")
     context.add_argument("--id", required=True, action="append", dest="ids")
     context.add_argument("--intent", choices=["explain", "calculate", "query", "act"], default="explain")
@@ -67,15 +76,19 @@ def main(argv=None):
             result = package.describe()
         elif args.command == "context":
             result = package.context(args.ids, intent=args.intent, as_of=args.as_of, limit=args.limit, offset=args.offset)
-        elif args.command == "search":
+        elif args.command in {"search", "resolve"}:
             scope = args.scope
             if scope and scope.lstrip().startswith("{"):
                 try:
                     scope = json.loads(scope)
                 except ValueError as exc:
                     raise PackageError("INVALID_INPUT", "--scope 不是有效 JSON 对象") from exc
-            result = package.search(args.query, domain=args.domain, kind=args.kind, scope=scope,
-                                    as_of=args.as_of, limit=args.limit, offset=args.offset)
+            if args.command == "resolve":
+                result = package.resolve(args.question, asset_ids=args.ids, intent=args.intent, domain=args.domain,
+                                         scope=scope, as_of=args.as_of, limit=args.limit, offset=args.offset)
+            else:
+                result = package.search(args.query, domain=args.domain, kind=args.kind, scope=scope,
+                                        as_of=args.as_of, limit=args.limit, offset=args.offset)
         elif args.command == "get":
             result = package.get(args.id, as_of=args.as_of)
         elif args.command == "sources":

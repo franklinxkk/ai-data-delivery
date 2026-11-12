@@ -1,5 +1,18 @@
 # Changelog
 
+Versioning: keep published tags unchanged; continue from `0.3.0` with patch increments (`0.3.1`, `0.3.2`, …). Unreleased previews use `-dev`. / 版本约定：保留已发布标签，后续默认递增补丁号，开发预览加 `-dev`，不重写历史版本。
+
+## 0.3.1-dev — 2026-11-12 (local development preview)
+
+- Start from a saved business question, expected examples and selected definitions; inspect task-specific dependencies and gaps without claiming an answer or executing data/actions. / 新增业务问题入口、保存重开、预期线索及只读准备检查。
+- Reuse existing transactional candidate review, scope-aware publication and offline packages. Show meaning, conditions and evidence before detailed editing fields. / 复用原候选核对和发布，先展示业务含义，详细配置收起。
+- Add scenario-aware host tasks and `semantic_read.py resolve --question`; explicit meaning selection produces required context with evidence and execution boundaries. / 宿主任务可聚焦问题，Agent 可从问题发现候选、明确选择后读取上下文。
+- Preserve source dispositions, optimistic concurrency and retry receipts. Restore scoped delivery after reload and refuse accidental empty-to-all expansion. / 保留处置与事务合同，修复范围交接及冲突恢复。
+- Fix typed scope matching for zero, false, null and missing keys; shorten bilingual instructions through relevant references. / 修复范围类型匹配并精简双语入口。
+- Exercise traffic, agriculture, university and finance semantics with 32 synthetic questions and 54 assets; fix short Chinese business terms missing compound labels. / 新增四域合成问题与反例，修复“批次怎么追溯”漏掉“产品批次”候选。
+- Export confirmed objects/relations to OGS 1.1.0 with explicit per-asset coverage and opaque semantic/evidence preservation; audit actual roundtrip losses. No database mapping, import or rule execution is inferred. / 新增有覆盖报告的 OGS 离线投影和往返损失检查。
+- No embedded LLM, production query gateway, authorization service or action executor. Existing v0.3.0 assets remain unchanged when scenarios are added. This is not a remote release. / 不增加嵌入模型或生产执行能力，未发布到远端。
+
 ## 0.3.0 — 2026-11-09
 
 - Add English and Simplified Chinese skill instructions, README, workbench UI and guides; preserve original knowledge when switching language. / 新增中英文技能、说明和工作台界面，切换不改写领域知识。

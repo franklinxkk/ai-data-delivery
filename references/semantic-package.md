@@ -92,11 +92,15 @@ python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.
 
 ## Agent 任务上下文
 
-先用 `describe` 发现工具与只读能力，`search` 消歧后调用：
+先用 `describe` 发现工具与只读能力。新增 `resolve --question "业务问题"` 可按名称、别名和定义推荐候选；即使只匹配一项，也返回 `needs_selection`，不自动认定含义。明确选择身份后，可在同一命令追加可重复的 `--id`，直接取得同源上下文；也可以沿用 `search` 消歧和 `context`：
 
 ```powershell
 python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.zip" context --id rule_maintenance --intent explain
 ```
+
+`resolve` 是词法发现与上下文交接，不是自然语言问答执行器。它返回 `decision`、`next_steps`、`selected_asset_ids`，已选身份时附带 `context`。状态为 `needs_selection`（待选身份）、`no_match`（未匹配）、`context_available`（可读取所选上下文）、`needs_review`（存在含义、日期或分页缺口）或 `requires_execution`（需要实际数据或执行器）。`answer_verified` 始终为 `false`，问题覆盖仍须独立核对。
+
+`resolve` 的候选分页在顶层，已选定义分页在 `context` 内；`request_complete` 只说明上下文结构，不能覆盖业务待决项。`calculate` 需真实输入数据和计算结果，`query`／`act` 需已授权连接或执行器。`domain/scope` 过滤不授予权限；选定根节点不匹配过滤条件会报错，依赖仍保留各自范围。JSON 范围匹配区分零、假、空值和缺失键。完整调用字段与示例见 [Agent 读取指引](agent-reader.md#start-with-a-question)。
 
 `--id` 可重复，输入必须是明确的身份。Python 对应 `package.context(["rule_maintenance"], intent="explain")`。`intent` 可为 `explain/calculate/query/act`；它只描述消费意图，不授予权限或触发业务。默认按整个必需依赖闭包返回，支持 `--as-of`、`--limit 1..500`、`--offset`；不自动扩大成全部邻接网络。
 

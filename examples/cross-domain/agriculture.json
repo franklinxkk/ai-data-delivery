@@ -1,0 +1,460 @@
+{
+  "id": "agriculture",
+  "domain": "农业",
+  "synthetic": true,
+  "scope": {
+    "farm": "演练农场",
+    "scenario": "synthetic"
+  },
+  "source": {
+    "notice": "仅为合成验收练习；所有人名、企业、记录及规则均为虚构，不代表行业法规、客户制度或真实数据。",
+    "paragraphs": {
+      "plot": "地块用 plot_id 标识；土地边界调整形成新的边界版本，历史种植季仍引用当时版本。",
+      "season": "种植季记录地块版本、作物与起止时间，同一地块跨季不能把产量混入同一生产周期。",
+      "batch": "产品批次用 batch_id 标识；混采可汇入同一批次，拆批产生新批次 ID，不能仅用当前批次编号覆盖上游来源。",
+      "input": "投入品按 product_id 标识，实际施用记录还需批号、数量、单位、地块与施用时间。",
+      "sensor": "传感器由 sensor_id 标识；读数必须保留测点、时间与单位，设备变更不改写历史读数来源。",
+      "harvest": "采收来源连接种植季与产品批次，并记录数量及单位；多季混采要保留各来源贡献量。",
+      "lineage": "批次流转连接父批次和子批次，记录实际转移质量；混合和拆分都保留独立关联，允许多对多，不以复制整批质量作为每个分支的质量。",
+      "applied": "地块的施用记录关联投入品并记录时间、数量和单位；作物许可、间隔期与剂量阈值必须来自适用依据，不能按名称猜测。",
+      "monitors": "传感器与地块建立带生效时段的测点绑定；解除后不覆盖历史读数归属。",
+      "threshold": "灌溉告警需按作物、种植阶段、土壤类型和测量单位确定阈值；本练习没有给定阈值。",
+      "yield": "季产量按地块边界版本与种植季汇总实际采收 kg；流转与拆批记录不重复累计为新产量。",
+      "trace": "追溯一批产品需沿批次流转逆向找到采收来源与种植季，分别报告各来源贡献；未知的混合比例不能假设平均分摊。"
+    }
+  },
+  "assets": [
+    {
+      "id": "agriculture.plot",
+      "kind": "entity",
+      "name": "地块",
+      "definition": "地块用 plot_id 标识；土地边界调整形成新的边界版本，历史种植季仍引用当时版本。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "plot_id",
+          "boundary_version"
+        ]
+      },
+      "source_paragraph": "plot"
+    },
+    {
+      "id": "agriculture.season",
+      "kind": "entity",
+      "name": "种植季",
+      "definition": "种植季记录地块版本、作物与起止时间，同一地块跨季不能把产量混入同一生产周期。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "agriculture.plot"
+      ],
+      "properties": {
+        "identity": [
+          "season_id"
+        ]
+      },
+      "source_paragraph": "season"
+    },
+    {
+      "id": "agriculture.batch",
+      "kind": "entity",
+      "name": "产品批次",
+      "definition": "产品批次用 batch_id 标识；混采可汇入同一批次，拆批产生新批次 ID，不能仅用当前批次编号覆盖上游来源。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "batch_id"
+        ]
+      },
+      "source_paragraph": "batch"
+    },
+    {
+      "id": "agriculture.input",
+      "kind": "entity",
+      "name": "农事投入品",
+      "definition": "投入品按 product_id 标识，实际施用记录还需批号、数量、单位、地块与施用时间。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "product_id"
+        ]
+      },
+      "source_paragraph": "input"
+    },
+    {
+      "id": "agriculture.sensor",
+      "kind": "entity",
+      "name": "传感器",
+      "definition": "传感器由 sensor_id 标识；读数必须保留测点、时间与单位，设备变更不改写历史读数来源。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "identity": [
+          "sensor_id"
+        ]
+      },
+      "source_paragraph": "sensor"
+    },
+    {
+      "id": "agriculture.harvest",
+      "kind": "relation",
+      "name": "采收来源",
+      "definition": "采收来源连接种植季与产品批次，并记录数量及单位；多季混采要保留各来源贡献量。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "amount_unit": "kg"
+      },
+      "source_paragraph": "harvest",
+      "from": "agriculture.season",
+      "to": "agriculture.batch",
+      "predicate": "采收来源",
+      "relation_type": "business"
+    },
+    {
+      "id": "agriculture.lineage",
+      "kind": "relation",
+      "name": "批次流转",
+      "definition": "批次流转连接父批次和子批次，记录实际转移质量；混合和拆分都保留独立关联，允许多对多，不以复制整批质量作为每个分支的质量。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {
+        "amount_unit": "kg",
+        "identity": [
+          "transfer_id"
+        ]
+      },
+      "source_paragraph": "lineage",
+      "from": "agriculture.batch",
+      "to": "agriculture.batch",
+      "predicate": "批次流转",
+      "relation_type": "business"
+    },
+    {
+      "id": "agriculture.applied",
+      "kind": "relation",
+      "name": "施用投入品",
+      "definition": "地块的施用记录关联投入品并记录时间、数量和单位；作物许可、间隔期与剂量阈值必须来自适用依据，不能按名称猜测。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {},
+      "source_paragraph": "applied",
+      "from": "agriculture.plot",
+      "to": "agriculture.input",
+      "predicate": "施用投入品",
+      "relation_type": "business"
+    },
+    {
+      "id": "agriculture.monitors",
+      "kind": "relation",
+      "name": "监测地块",
+      "definition": "传感器与地块建立带生效时段的测点绑定；解除后不覆盖历史读数归属。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [],
+      "properties": {},
+      "source_paragraph": "monitors",
+      "from": "agriculture.sensor",
+      "to": "agriculture.plot",
+      "predicate": "监测地块",
+      "relation_type": "business"
+    },
+    {
+      "id": "agriculture.threshold",
+      "kind": "rule",
+      "name": "灌溉告警阈值",
+      "definition": "灌溉告警需按作物、种植阶段、土壤类型和测量单位确定阈值；本练习没有给定阈值。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "agriculture.season",
+        "agriculture.monitors"
+      ],
+      "properties": {
+        "condition": "判定土壤读数是否触发灌溉告警",
+        "requirement": "先取得适用阈值与单位",
+        "knowledge_gaps": [
+          "土壤湿度阈值和适用作物阶段未提供"
+        ]
+      },
+      "source_paragraph": "threshold"
+    },
+    {
+      "id": "agriculture.yield",
+      "kind": "metric",
+      "name": "季产量",
+      "definition": "季产量按地块边界版本与种植季汇总实际采收 kg；流转与拆批记录不重复累计为新产量。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "agriculture.season",
+        "agriculture.harvest",
+        "agriculture.lineage"
+      ],
+      "properties": {
+        "unit": "kg",
+        "grain": "地块版本、种植季",
+        "inclusions": "实际采收质量",
+        "exclusions": "调拨、拆批和重复传输",
+        "time_scope": "种植季起止时间"
+      },
+      "source_paragraph": "yield"
+    },
+    {
+      "id": "agriculture.trace",
+      "kind": "rule",
+      "name": "批次追溯",
+      "definition": "追溯一批产品需沿批次流转逆向找到采收来源与种植季，分别报告各来源贡献；未知的混合比例不能假设平均分摊。",
+      "domain": "农业",
+      "scope": {
+        "farm": "演练农场",
+        "scenario": "synthetic"
+      },
+      "aliases": [],
+      "refs": [
+        "agriculture.lineage",
+        "agriculture.harvest"
+      ],
+      "properties": {
+        "condition": "批次追溯",
+        "requirement": "保留多来源和转移质量；未知比例明确缺口"
+      },
+      "source_paragraph": "trace"
+    }
+  ],
+  "cases": [
+    {
+      "id": "agriculture.season_identity",
+      "question": "同一块地两茬作物的产量能直接合起来吗？",
+      "intent": "explain",
+      "asset_ids": [
+        "agriculture.season"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "agriculture.season",
+        "agriculture.plot"
+      ],
+      "expected_terms": [
+        "跨季不能",
+        "boundary_version"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "agriculture.trace_mix",
+      "question": "混采再拆批后，如何追溯各地块和贡献质量？",
+      "intent": "explain",
+      "asset_ids": [
+        "agriculture.trace"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "agriculture.trace",
+        "agriculture.lineage",
+        "agriculture.batch",
+        "agriculture.harvest",
+        "agriculture.season",
+        "agriculture.plot"
+      ],
+      "expected_terms": [
+        "多来源",
+        "不能假设平均分摊"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "agriculture.measure",
+      "question": "土壤读数能直接和另一个设备的数比较吗？",
+      "intent": "explain",
+      "asset_ids": [
+        "agriculture.monitors"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "agriculture.monitors",
+        "agriculture.sensor",
+        "agriculture.plot"
+      ],
+      "expected_terms": [
+        "时间与单位",
+        "历史读数"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "agriculture.inputs",
+      "question": "施用投入品的剂量和间隔期能按名称猜吗？",
+      "intent": "explain",
+      "asset_ids": [
+        "agriculture.applied"
+      ],
+      "expected_status": "context_available",
+      "expected_required_ids": [
+        "agriculture.applied",
+        "agriculture.plot",
+        "agriculture.input"
+      ],
+      "expected_terms": [
+        "不能按名称猜测"
+      ],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "agriculture.yield_count",
+      "question": "这一季实际产量多少 kg？",
+      "intent": "calculate",
+      "asset_ids": [
+        "agriculture.yield"
+      ],
+      "expected_status": "requires_execution",
+      "expected_required_ids": [
+        "agriculture.yield",
+        "agriculture.season",
+        "agriculture.plot",
+        "agriculture.harvest",
+        "agriculture.batch",
+        "agriculture.lineage"
+      ],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "agriculture.missing_threshold",
+      "question": "土壤湿度 18 是否需要灌溉？",
+      "intent": "explain",
+      "asset_ids": [
+        "agriculture.threshold"
+      ],
+      "expected_status": "needs_review",
+      "expected_required_ids": [
+        "agriculture.threshold",
+        "agriculture.season",
+        "agriculture.plot",
+        "agriculture.monitors",
+        "agriculture.sensor"
+      ],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。",
+      "expected_gap_codes": [
+        "DECLARED_KNOWLEDGE_GAP"
+      ]
+    },
+    {
+      "id": "agriculture.action",
+      "question": "按告警阈值直接打开灌溉阀门。",
+      "intent": "act",
+      "asset_ids": [
+        "agriculture.monitors"
+      ],
+      "expected_status": "requires_execution",
+      "expected_required_ids": [
+        "agriculture.monitors",
+        "agriculture.sensor",
+        "agriculture.plot"
+      ],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。"
+    },
+    {
+      "id": "agriculture.discovery",
+      "question": "批次怎么追溯？",
+      "intent": "explain",
+      "asset_ids": [],
+      "expected_status": "needs_selection",
+      "expected_required_ids": [],
+      "expected_terms": [],
+      "acceptance_notes": "仅核对本题定义、依赖与反例；状态和定义可读不等于回答已获业务验收。",
+      "expected_candidates": [
+        "agriculture.batch",
+        "agriculture.trace"
+      ]
+    }
+  ],
+  "observations": {
+    "harvest_kg": [
+      {
+        "season": "S1",
+        "batch": "M",
+        "kg": 40
+      },
+      {
+        "season": "S2",
+        "batch": "M",
+        "kg": 60
+      }
+    ],
+    "transfers_kg": [
+      {
+        "parent": "M",
+        "child": "X",
+        "kg": 25
+      },
+      {
+        "parent": "M",
+        "child": "Y",
+        "kg": 75
+      }
+    ]
+  },
+  "expected_observations": {
+    "harvest_total_kg": 100,
+    "transfers_total_kg": 100,
+    "wrong_harvest_plus_transfer_kg": 200,
+    "X_origin_composition": "unknown_without_mix_rule"
+  }
+}
