@@ -1,8 +1,8 @@
-# AI Data Delivery · v0.3.1-dev
+# AI Data Delivery · v0.3.1
 
 **Start with a business question. Build the meanings it needs, then give an Agent the definitions, evidence and limits together.**
 
-Development preview. The published v0.3.0 remains the release baseline; subsequent versions use patch increments. This preview adds question-driven authoring, reader discovery, [four-domain exercises](examples/cross-domain/README.md) and bounded [OGS export/audit](references/neo4j-interop.md).
+Version 0.3.1 adds question-driven authoring, reader discovery, [four-domain exercises](examples/cross-domain/README.md) and bounded [OGS export/audit](references/neo4j-interop.md).
 
 [简体中文](README.zh-CN.md) · [Try the example](#try-it-with-included-materials) · [Workbench guide](workbench/README.md) · [Agent reader](references/agent-reader.md)
 
@@ -28,27 +28,28 @@ The sample supports: “Other labs are outside this package's scope. Eligibility
 
 ## Try it with included materials
 
-Requires **Python 3.10+**. Run inside this development source tree or the extracted preview package. A fresh clone of remote `main` may still contain the v0.3.0 baseline until this preview is published:
+Requires **Python 3.10+**. Clone the repository and enter it, or open the extracted clean package directory:
 
 ```bash
+git clone https://github.com/franklinxkk/ai-data-delivery.git
+cd ai-data-delivery
 python -m pip install -r requirements.txt
 python -X utf8 scripts/start.py --project "./work/equipment-en" --example equipment --language en
 ```
 
-If you received the clean `.skill`/ZIP package, extract it and run these commands inside its `ai-data-delivery` directory. The `.skill` file is a ZIP archive. To register it with a host Agent, place that directory in the host's supported skills location.
+If you received the clean `.skill`/ZIP package, extract it, skip the two Git commands, and run the Python commands inside its `ai-data-delivery` directory. The `.skill` file is a ZIP archive. To register it with a host Agent, place that directory in the host's supported skills location.
 
 Open the local URL printed in the terminal:
 
 1. In **Business questions**, enter “How many items are available to borrow in Lab L?”, choose the query intent and **Save question**. You can add the expected restriction: no current count without inventory records.
 2. In **Materials**, **Review table structure first** → inspect the DDL candidates and source → **Accept whole group**. Return to **Materials** → **Prepare example business proposals** → inspect scope, rules and mapping → **Accept whole group**.
 3. Return to the question, select **Available equipment count**, then **Save and check**. Read the definition, scope, evidence and missing inventory/connector information. This checks semantic context; it does not produce an inventory count or automatically verify your expected note.
-4. Use **Deliver selected semantics** to enter publication, then **Publish confirmed snapshot** → **Download semantic package**. You can also inspect/edit the same assets in **Semantic graph**; graph editing is optional for this task.
-5. Give the ZIP, the question and the reader to another Agent. The authoring workbench can be closed. For example:
+4. Use **Create question handoff → Download Agent package** to include the question, scope/date and expectations with the required semantics. For knowledge alone, use **Deliver selected semantics → Publish confirmed snapshot**. You can inspect/edit the same assets in **Semantic graph**.
+5. Give the question package and reader to another Agent. The authoring workbench can be closed. For example:
 
 ```bash
 python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" verify
-python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" resolve --question "How many items are available to borrow in Lab L?" --intent query
-python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" resolve --question "How many items are available to borrow in Lab L?" --id demo.available --intent query
+python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" task --detail summary
 python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" sources --id demo.available
 ```
 
@@ -59,6 +60,12 @@ The example includes text, DDL and **authored proposals**, so you can inspect th
 For Chinese materials and interface, use a new directory with `--example equipment --language zh`. The top-right language selector changes the interface; it preserves original materials and stored definitions. Save or clear unsaved input and close dialogs before switching. See the [中文步骤](README.zh-CN.md#直接跑通一份样例).
 
 ## Use your own knowledge
+
+Open **Question acceptance** to set required definitions, expected gaps and counterexamples; record actual observations with evidence. Changed sources/dependencies flag affected observations for rechecking and show impact paths. [Acceptance and handoff guide](references/question-delivery.md).
+
+![Actual 0.3.1 question checks and explicit Agent handoff](https://raw.githubusercontent.com/franklinxkk/ai-data-delivery/main/docs/images/question-acceptance-en.png)
+
+*Actual browser regression using the synthetic equipment exercise. “Operator recorded pass” is a saved test observation, not an independently verified business answer.*
 
 ```bash
 python -X utf8 scripts/start.py --project "./work/my-domain" --language en
@@ -95,10 +102,10 @@ The semantic ZIP contains `model.json`, `sources.json`, `manifest.json`, a bilin
 
 The host supplies semantic reasoning. This tool is not an OWL/SHACL reasoner, database query gateway, enterprise authorization system or action executor. Rules describe requirements; they do not execute them. Optional legacy numeric checks remain available under **Check numbers and details**; `--demo` is that separate exercise.
 
-The release baseline's tests are recorded in [v0.3.0 acceptance](references/v0.3.0-validation.md). That record does not validate this development preview. Consult [Changes](CHANGELOG.md) for the current validation record when available. No user-study accuracy/ease-of-use gains or new marketplace approval are claimed.
+See [v0.3.1 validation](references/v0.3.1-release-validation.md) for the actual source baseline, tested workflows and remaining limits. No user-study accuracy/ease-of-use gains or new marketplace approval are claimed.
 
-The preview adds optional question metadata without rewriting v0.3.0 semantic assets. Question text and expected notes are not automatically packaged; the recipient needs the actual question separately. **Other pre-1.0 historical formats are not guaranteed compatible.** Keep existing directories/backups; do not initialize examples over a working project.
+Knowledge-only export excludes question metadata. **Create question handoff** explicitly includes the chosen question and expectations in a bound `task.json`; private review notes stay local. **Pre-1.0 historical formats are not guaranteed compatible.** Keep existing directories/backups; do not initialize examples over a working project.
 
 [MIT license](LICENSE) · [Security boundaries](SECURITY.md) · [Changes](CHANGELOG.md) · [Candidate API contract](references/m1-m2-contract.md)
 
-[0.3.1-dev validation / 本次验证与未证明项](references/v0.3.1-validation.md)
+[0.3.1 validation / 本次验证与未证明项](references/v0.3.1-release-validation.md)

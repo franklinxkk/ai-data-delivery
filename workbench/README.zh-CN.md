@@ -1,4 +1,6 @@
-# 本地语义工作台 · v0.3.1-dev
+# 本地语义工作台 · v0.3.1
+
+**问题验收**支持预期定义、应披露缺口及有实际依据的样例核对记录；依赖变化后标记待复验并展示影响路径。**生成本问题的 Agent 包**将已保存请求与范围内语义一起交付，独立 Agent 可先用 `task --detail summary`，再回查来源。[操作与边界](../references/question-delivery.md#问题验收变更影响与-agent-交付)。
 
 [English guide](README.md) · [中文快速开始](../README.zh-CN.md)
 

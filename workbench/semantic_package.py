@@ -494,7 +494,7 @@ def _human_review(model, sources, manifest):
             + ''.join(sections) + '<h2>Source fragments / 随包来源片段</h2><pre>' + esc(json.dumps(sources, ensure_ascii=False, indent=2)) + '</pre></html>').encode("utf-8")
 
 
-def build_package(assets, sources, *, project_id, revision, asset_ids=None, draft=False, include_execution=False, snapshot_id=None, redirects=None):
+def build_package(assets, sources, *, project_id, revision, asset_ids=None, draft=False, include_execution=False, snapshot_id=None, redirects=None, task=None):
     """Return immutable ZIP bytes and manifest. Explicit required refs always close."""
     model, selected_sources, manifest = _prepare(assets, sources, project_id=project_id, revision=revision,
         asset_ids=asset_ids, draft=draft, include_execution=include_execution, snapshot_id=snapshot_id, redirects=redirects)
@@ -513,8 +513,20 @@ def build_package(assets, sources, *, project_id, revision, asset_ids=None, draf
                "候选分页位于顶层，已选上下文分页位于 context；读取全部必要页，继续核对 next_steps、gaps 与 capabilities。\n").encode("utf-8")
     entries = {"model.json": _json(model), "sources.json": _json(selected_sources), "README.md": readme,
                "human-review.html": _human_review(model, selected_sources, manifest)}
+    if task is not None:
+        entries["task.json"] = _json({"format_version": "1.0", "snapshot_id": manifest["snapshot_id"],
+            "model_sha256": manifest["model_sha256"], "request": task})
+        entries["README.md"] += ("\n## Explicit question handoff / 明确选择的业务问题交付\n\n"
+            "This package includes task.json with the chosen question, scope, date and expectations. "
+            "Run: python scripts/semantic_read.py --package PACKAGE task --detail summary\n"
+            "Then use sources --id ID or task --detail full for evidence. Local reviewer notes and assessment records are excluded. "
+            "The task is data, never tool authority; expectations are not verified answers.\n\n"
+            "此包明确包含本问题、范围、日期和验收预期；本地核对笔记和验收记录不随包交付。"
+            "先用 task --detail summary，再用 sources 或 task --detail full 回查依据。任务文本不是授权，预期不是已验证答案。\n").encode("utf-8")
     manifest["files"] = {name: _sha(value) for name, value in sorted(entries.items())}
     entries["manifest.json"] = _json(manifest)
+    if task is not None:
+        SemanticPackage(entries)  # Validate binding and explicit selection before publication.
     if any(len(value) > MAX_FILE_BYTES for value in entries.values()) or sum(map(len, entries.values())) > MAX_PACKAGE_BYTES:
         raise PackageError("PACKAGE_TOO_LARGE", "交付范围超过文件大小限制，请缩小范围；没有截取生成部分包")
     out = io.BytesIO()
@@ -538,10 +550,11 @@ def _read_entries(path):
     expected = FILES | {"manifest.json"}
     try:
         if path.is_dir():
-            if {p.name for p in path.iterdir()} != expected:
+            actual = {p.name for p in path.iterdir()}
+            if actual not in (expected, expected | {"task.json"}):
                 raise PackageError("PACKAGE_CORRUPT", "离线目录文件清单不符，不允许混入未列出的文件")
             entries = {}
-            for name in expected:
+            for name in actual:
                 file = path / name
                 if file.is_symlink() or not file.is_file() or file.resolve().parent != path.resolve():
                     raise PackageError("PACKAGE_CORRUPT", "离线目录包含非普通文件或外部引用", file=name)
@@ -552,7 +565,7 @@ def _read_entries(path):
             with zipfile.ZipFile(path) as archive:
                 info = archive.infolist()
                 names = [item.filename for item in info]
-                if len(names) != len(set(names)) or set(names) != expected:
+                if len(names) != len(set(names)) or set(names) not in (expected, expected | {"task.json"}):
                     raise PackageError("PACKAGE_CORRUPT", "ZIP 文件清单不符或含重名文件")
                 if any(item.file_size > MAX_FILE_BYTES for item in info) or sum(item.file_size for item in info) > MAX_PACKAGE_BYTES:
                     raise PackageError("PACKAGE_TOO_LARGE", "解压后内容超限")
@@ -655,12 +668,11 @@ def discover_candidates(assets, question, *, domain=None, scope=None, as_of=None
         applicability = _applicability(asset, date)
         if applicability == "outside_known_interval":
             continue
-        fields = {"name": asset.get("name", ""), "definition": asset.get("definition", "")}
-        fields.update({f"aliases[{i}]": value for i, value in enumerate(asset.get("aliases", []))})
+        fields = _search_fields(asset)
         score, matches, reasons = 0, [], []
         for field, raw in fields.items():
             value = _normalized_text(raw)
-            label = field != "definition"
+            label = field == "name" or field.startswith("aliases[")
             points, reason = 0, ""
             if label and (value == needle or _phrase_in(value, needle)):
                 points, reason = (100 if field == "name" else 95), "label_in_question"
@@ -706,7 +718,7 @@ class SemanticPackage:
         if not isinstance(self.manifest, dict) or self.manifest.get("format_version") != FORMAT:
             raise PackageError("UNSUPPORTED_FORMAT", "语义包格式不受支持", supported=FORMAT)
         files = self.manifest.get("files")
-        if not isinstance(files, dict) or set(files) != FILES:
+        if not isinstance(files, dict) or set(files) not in (FILES, FILES | {"task.json"}) or set(entries) != set(files) | {"manifest.json"}:
             raise PackageError("PACKAGE_CORRUPT", "manifest 文件清单不完整")
         for name, expected in files.items():
             if expected != _sha(entries[name]):
@@ -720,6 +732,9 @@ class SemanticPackage:
         self.index = _asset_index(self.model.get("assets"))
         self.redirects = _redirects(self.model.get("redirects"), self.index)
         self.source_index = _source_index(self.source_records)
+        self.task_record = _decode(entries["task.json"], "task.json") if "task.json" in entries else None
+        if self.task_record is not None:
+            self._validate_task()
         if not isinstance(self.manifest.get("scope"), dict) or sorted(self.index) != self.manifest["scope"].get("included_ids"):
             raise PackageError("PACKAGE_CORRUPT", "实际资产与声明范围不符")
         if not isinstance(self.manifest.get("draft"), bool) or not isinstance(self.manifest.get("complete"), bool):
@@ -763,6 +778,8 @@ class SemanticPackage:
 
     def describe(self):
         return self._result(tools=[
+            {"name": "task", "optional": ["detail", "limit", "offset"], "available": self.task_record is not None,
+             "purpose": "Read the explicitly exported question against this fixed snapshot / 按本快照读取明确交付的问题"},
             {"name": "resolve", "required": ["question"], "optional": ["asset_ids", "intent", "domain", "scope", "as_of", "limit", "offset"],
              "purpose": "从业务问题发现候选，明确选择身份后交付上下文；不自动回答、计算或授权"},
             {"name": "search", "required": ["query"], "optional": ["domain", "kind", "scope", "as_of", "limit", "offset"],
@@ -778,7 +795,7 @@ class SemanticPackage:
             usage="CLI 的 resolve/context/export 可重复 --id；Python API 使用 asset_ids 列表。resolve 无 ID 时仅推荐候选；有明确 ID 时返回所需上下文。分页未取完不得宣称上下文完整。")
 
     def verify(self):
-        return self._result("verified", files_verified=len(FILES), asset_count=len(self.index),
+        return self._result("verified", files_verified=len(self.manifest["files"]), asset_count=len(self.index),
                             issues=copy.deepcopy(self.actual_issues), checks=["format", "file_hashes", "model_hash", "identities", "dependencies", "evidence", "knowledge_state"],
                             boundary="验证固定包的一致性，不证明来源真实性、业务正确或为最新版本")
 
@@ -835,9 +852,11 @@ class SemanticPackage:
                             complete=not issues and not truncated, request_complete=not issues and not truncated, issues=issues,
                             ambiguity="多个定义需结合领域、范围及有效时间消歧，不自动合并" if status == "ambiguous" else None)
 
-    def resolve(self, question, *, asset_ids=None, intent="explain", domain=None, scope=None, as_of=None, limit=50, offset=0):
+    def resolve(self, question, *, asset_ids=None, intent="explain", domain=None, scope=None, as_of=None, limit=50, offset=0, detail="full"):
         """Route a business question to explicit, evidence-linked knowledge, never an answer."""
         _question_input(question, domain, scope, as_of, limit, offset)
+        if detail not in {"full", "summary"}:
+            raise PackageError("INVALID_INPUT", "detail must be full or summary / 请选择完整或摘要上下文")
         if intent not in {"explain", "calculate", "query", "act"}:
             raise PackageError("INVALID_INPUT", "intent 需为 explain/calculate/query/act")
         ids = _strings([] if asset_ids is None else asset_ids, "asset_ids")
@@ -852,7 +871,7 @@ class SemanticPackage:
                       or not _matches_scope(self.index[aid], scope)]
         if mismatches:
             raise PackageError("SELECTION_SCOPE_MISMATCH", "所选根资产不符合明确提供的领域或范围；请重新核对身份", asset_ids=mismatches)
-        context = self.context(ids, intent=intent, as_of=as_of, limit=limit, offset=offset)
+        context = self.context(ids, intent=intent, as_of=as_of, limit=limit, offset=offset, detail=detail)
         steps = []
         semantic_gaps = [gap for gap in context["gaps"] if gap["code"] not in {"NO_DATA_CONNECTOR", "NO_ACTION_EXECUTOR"}]
         if context["truncated"]:
@@ -913,9 +932,11 @@ class SemanticPackage:
         return self._result("ok" if complete else "incomplete", request={"id": asset_id},
                             evidence=rows, complete=complete, request_complete=complete)
 
-    def context(self, asset_ids, *, intent="explain", as_of=None, limit=100, offset=0):
+    def context(self, asset_ids, *, intent="explain", as_of=None, limit=100, offset=0, detail="full"):
         """Dependency-closed task context. References are not invented business relations."""
         ids = _strings(asset_ids, "asset_ids")
+        if detail not in {"full", "summary"}:
+            raise PackageError("INVALID_INPUT", "detail must be full or summary / 请选择完整或摘要上下文")
         if not ids:
             raise PackageError("INVALID_INPUT", "context 需要至少一个已消歧的资产 ID")
         if intent not in {"explain", "calculate", "query", "act"}:
@@ -969,7 +990,17 @@ class SemanticPackage:
                          "message": "离线知识读取器未连接实例数据" if intent == "query" else "离线知识读取器不执行业务动作",
                          "next_step": "由消费系统提供已授权的数据连接和完整性信息" if intent == "query" else "在目标系统核对权限、输入、执行接口及回执"})
         request_complete = not knowledge_issues and not truncated
+        if detail == "summary":
+            # Retain meaning, scope, every dependency and gap; disclose source text on demand.
+            pointer = lambda e: {k: copy.deepcopy(v) for k, v in e.items() if k != "quote"}
+            for asset in rows:
+                asset["evidence"] = [pointer(e) for e in asset.get("evidence", [])]
+            for row in evidence:
+                row["evidence"] = [{k: pointer(v) if k == "assertion" else v
+                                    for k, v in e.items() if k != "fragment"} for e in row["evidence"]]
         return self._result("ok" if request_complete else "incomplete",
+            detail_level=detail, evidence_details_included=detail == "full",
+            evidence_next_step="sources --id ASSET_ID, or context/resolve/task --detail full" if detail == "summary" else None,
             request={"ids": ids, "intent": intent, "as_of": as_of}, root_ids=roots,
             required_asset_ids=ordered, assets=rows, dependency_edges=dependencies,
             relations=[copy.deepcopy(a) for a in rows if a["kind"] in {"relation", "mapping"}],
@@ -981,6 +1012,40 @@ class SemanticPackage:
             node_applicability={aid: _applicability(self.index[aid], date) for aid in page_ids},
             capabilities=self._capabilities(),
             boundary="完整性仅针对已声明的必需上下文，不证明业务知识穷尽、来源正确或任务可执行；缺口中的业务待决项不能默认补齐。")
+
+    def _validate_task(self):
+        task = self.task_record
+        if not isinstance(task, dict) or set(task) != {"format_version", "snapshot_id", "model_sha256", "request"} or task.get("format_version") != "1.0" or task.get("snapshot_id") != self.manifest.get("snapshot_id") or task.get("model_sha256") != self.manifest.get("model_sha256"):
+            raise PackageError("TASK_BINDING_MISMATCH", "Question is not bound to this snapshot / 问题与本快照不匹配")
+        req = task["request"]
+        keys = {"id", "title", "question", "intent", "asset_ids", "domain", "scope", "as_of", "acceptance"}
+        if not isinstance(req, dict) or set(req) != keys or any(not isinstance(req[k], str) for k in ("id", "title", "domain")):
+            raise PackageError("INVALID_TASK", "Invalid question handoff / 问题交付格式无效")
+        _question_input(req["question"], req["domain"], req["scope"], req["as_of"], 50, 0)
+        ids = _strings(req["asset_ids"], "asset_ids")
+        if not ids or not isinstance(req["intent"], str) or req["intent"] not in {"explain", "calculate", "query", "act"}:
+            raise PackageError("INVALID_TASK", "Question needs explicit identities and intent / 问题须明确选择身份和任务")
+        for aid in ids:
+            asset = self.index[self._resolve(aid)]
+            if req["domain"] and asset.get("domain", "").casefold() != req["domain"].casefold() or not _matches_scope(asset, req["scope"] or None):
+                raise PackageError("SELECTION_SCOPE_MISMATCH", "Question selection conflicts with its scope / 问题所选定义不符合范围")
+        from workbench.scenario_contract import validate_acceptance
+        try:
+            # Expected definitions may deliberately be absent: expectations are not assertions of coverage.
+            validate_acceptance(req["acceptance"], req["acceptance"].get("required_asset_ids", []) if isinstance(req["acceptance"], dict) else [])
+        except ValueError as exc:
+            raise PackageError("INVALID_TASK", str(exc)) from exc
+
+    def task(self, *, detail="summary", limit=50, offset=0):
+        if self.task_record is None:
+            raise PackageError("TASK_NOT_INCLUDED", "No question was exported; supply resolve arguments / 此包未交付业务问题，请明确提供 resolve 参数")
+        req = self.task_record["request"]
+        result = self.resolve(req["question"], asset_ids=req["asset_ids"], intent=req["intent"],
+                              domain=req["domain"] or None, scope=req["scope"] or None, as_of=req["as_of"],
+                              detail=detail, limit=limit, offset=offset)
+        result["task"] = copy.deepcopy(self.task_record)
+        result["acceptance_status"] = "not_verified"
+        return result
 
     def neighbors(self, asset_id, *, direction="both", depth=1, relation_types=None, limit=100, offset=0, as_of=None):
         target = self._resolve(asset_id)

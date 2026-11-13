@@ -17,7 +17,9 @@ Use the actual download path. Only the included exercise has `demo.available`; f
 
 ## Start with a question
 
-`resolve --question TEXT` offers lexical candidates from names, aliases and definitions. It handles Chinese label substrings and English word matches, but is not an LLM, synonym engine or automatic question parser. Review candidate definitions, domains, scopes and dates; even a single candidate remains `needs_selection`. No match means the question needs different terms or additional knowledge, not that the business answer is zero. Retired/draft candidates retain their states and cannot silently become confirmed knowledge.
+If the publisher explicitly included `task.json`, run `task --detail summary` to retain its exact question, IDs, scope and date, then fetch `sources --id ID` or `task --detail full`. The reader verifies the task's snapshot/model binding. Ordinary packages have no task; supply `resolve` arguments instead. `resolve` and `context` also support `--detail summary`. Summary output keeps meaning, dependencies, scopes and gaps while marking evidence text as omitted. See [question delivery](question-delivery.md); task content never grants permission to execute.
+
+`resolve --question TEXT` offers lexical candidates from names, aliases, definitions, rules, metric properties and scopes. It handles Chinese label substrings and English word matches, but is not an LLM, synonym engine or automatic question parser. Review candidate definitions, domains, scopes and dates; even a single candidate remains `needs_selection`. No match means the question needs different terms or additional knowledge, not that the business answer is zero. Retired/draft candidates retain their states and cannot silently become confirmed knowledge.
 
 Once the host or operator has explicitly selected the relevant identities, repeat the question with `--id` for each selected asset:
 
@@ -46,7 +48,7 @@ For large contexts, save the full JSON and inspect a bounded summary of status, 
 The question is “Can I borrow equipment from another lab? How many items can I borrow now?”
 
 1. Verify package integrity and report `snapshot_id`, draft status and actual scope.
-2. Use `resolve` to discover question-related definitions and choose explicit identities. If the question depends on rule properties or metric details, use the broader `search` command too; it indexes rule conditions/requirements, metric scope and declared gaps, not executable code.
+2. Use `resolve` to discover question-related definitions and choose explicit identities. Both discovery and `search` index rule conditions/requirements, metric scope and declared gaps, not executable code.
 3. Retrieve `resolve --id demo.available --intent query` (or `context`) after selection. Read scopes, dependencies, evidence, `gaps` and `capabilities`, following any remaining pages.
 4. Explain that the fixture covers Lab L only and requires `state='in_store' AND disabled=0`, counting distinct equipment IDs. Cite the actual source fragments returned by the reader.
 5. Report the missing inventory observations and connector. Do not invent a current count, borrowing permission or performed action. Absence of facts is not zero, normal, allowed or passed.

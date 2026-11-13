@@ -122,6 +122,7 @@ def make_server(service, port=0):
                 routes.update({"/api/knowledge/" + name: action for name, action in {
                     "import": service.knowledge.import_material, "task": service.knowledge.task,
                     "scenario": service.knowledge.scenario, "scenario-check": service.knowledge.scenario_check,
+                    "scenario-assess": service.knowledge.scenario_assess, "impact": service.knowledge.impact,
                     "propose": service.knowledge.propose, "review": service.knowledge.review,
                     "edit": service.knowledge.edit, "merge": service.knowledge.merge,
                     "separate": service.knowledge.separate, "retire": service.knowledge.retire,

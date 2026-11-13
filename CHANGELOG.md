@@ -2,7 +2,13 @@
 
 Versioning: keep published tags unchanged; continue from `0.3.0` with patch increments (`0.3.1`, `0.3.2`, …). Unreleased previews use `-dev`. / 版本约定：保留已发布标签，后续默认递增补丁号，开发预览加 `-dev`，不重写历史版本。
 
-## 0.3.1-dev — 2026-11-12 (local development preview)
+## 0.3.1 — 2026-11-13
+
+- Unify question discovery with safe rule/metric/scope search; fix relative cross-domain output paths. / 统一问题入口和规则、指标、范围检索，修复四域样例相对路径。
+- Add explicit question criteria, operator observations and stale-evidence checks; trace source/definition changes to affected questions. / 新增问题验收条件、人工记录及过时检查，沿依赖定位来源／定义变化影响。
+- Add optional snapshot-bound question handoff and progressive context/evidence reading, with bilingual UI and guides. / 新增绑定快照的问题交付及摘要／完整依据读取，保持双语界面和说明。
+
+The question-driven foundation below was first submitted in `ab4be18` on 2026-11-12. / 以下问题驱动基础于 2026-11-12 首次提交。
 
 - Start from a saved business question, expected examples and selected definitions; inspect task-specific dependencies and gaps without claiming an answer or executing data/actions. / 新增业务问题入口、保存重开、预期线索及只读准备检查。
 - Reuse existing transactional candidate review, scope-aware publication and offline packages. Show meaning, conditions and evidence before detailed editing fields. / 复用原候选核对和发布，先展示业务含义，详细配置收起。
@@ -11,7 +17,7 @@ Versioning: keep published tags unchanged; continue from `0.3.0` with patch incr
 - Fix typed scope matching for zero, false, null and missing keys; shorten bilingual instructions through relevant references. / 修复范围类型匹配并精简双语入口。
 - Exercise traffic, agriculture, university and finance semantics with 32 synthetic questions and 54 assets; fix short Chinese business terms missing compound labels. / 新增四域合成问题与反例，修复“批次怎么追溯”漏掉“产品批次”候选。
 - Export confirmed objects/relations to OGS 1.1.0 with explicit per-asset coverage and opaque semantic/evidence preservation; audit actual roundtrip losses. No database mapping, import or rule execution is inferred. / 新增有覆盖报告的 OGS 离线投影和往返损失检查。
-- No embedded LLM, production query gateway, authorization service or action executor. Existing v0.3.0 assets remain unchanged when scenarios are added. This is not a remote release. / 不增加嵌入模型或生产执行能力，未发布到远端。
+- No embedded LLM, production query gateway, authorization service or action executor. Existing v0.3.0 assets remain unchanged when scenarios are added. / 不增加嵌入模型或生产执行能力。
 
 ## 0.3.0 — 2026-11-09
 

@@ -7,6 +7,7 @@ review the proposal in the workbench. No LLM, network or automatic confirmation.
 import argparse
 import base64
 import json
+import os
 from pathlib import Path
 import sys
 import uuid
@@ -31,6 +32,14 @@ def main(argv=None):
     check.add_argument("--scenario", required=True)
     check.add_argument("--limit", type=int, default=50)
     check.add_argument("--offset", type=int, default=0)
+    assess = commands.add_parser("assess", help="Record a local operator observation, evidence and checked fingerprint")
+    assess.add_argument("--file", required=True, help="JSON with scenario_id, case_id, basis_fingerprint, outcome, observed, evidence, actor")
+    impact = commands.add_parser("impact", help="Read registered source/definition changes and affected question paths")
+    impact.add_argument("--scenario")
+    handoff = commands.add_parser("handoff", help="Explicitly export a saved question with its dependency-closed semantic snapshot")
+    handoff.add_argument("--scenario", required=True)
+    handoff.add_argument("--out", required=True)
+    handoff.add_argument("--draft", action="store_true")
     material = commands.add_parser("import", help="Register material without overwriting the graph")
     material.add_argument("--file", required=True)
     material.add_argument("--domain", default="")
@@ -57,6 +66,28 @@ def main(argv=None):
             result = service.state()
         elif args.command == "receipt":
             result = {"receipt": store.operation(args.id)}
+        elif args.command == "impact":
+            result = service.impact({"scenario_id": args.scenario})
+        elif args.command == "assess":
+            data = json.loads(Path(args.file).read_text(encoding="utf-8-sig"))
+            result = service.scenario_assess({**data, **req})
+        elif args.command == "handoff":
+            path = Path(args.out)
+            if path.exists() or not path.parent.is_dir():
+                raise ValueError("Choose a new output file in an existing directory / 请在已有目录中指定新文件")
+            result = service.publish({**req, "scenario_id": args.scenario, "draft": args.draft})
+            created = False
+            try:
+                with path.open("xb") as stream:
+                    created = True
+                    stream.write(service.download(result["result"]["snapshot_id"]))
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            except OSError:
+                if created:
+                    path.unlink(missing_ok=True)
+                raise
+            result["output"] = str(path.resolve())
         elif args.command == "import":
             path = Path(args.file)
             result = service.import_material({**req, "filename": path.name, "content_base64": base64.b64encode(path.read_bytes()).decode(),

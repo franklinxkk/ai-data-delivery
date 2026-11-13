@@ -156,16 +156,22 @@ def make_project(fixture, directory):
 
 def run_domain(domain, output, *, cli=True):
     fixture = load_fixture(domain)
-    out = Path(output)
+    out = Path(output).resolve()
     out.mkdir(parents=True, exist_ok=False)
     service, call = make_project(fixture, out / "project")
     results = []
     for case in fixture["cases"]:
         fields = {k: copy.deepcopy(case[k]) for k in ("question", "intent", "asset_ids", "acceptance_notes", "scope", "as_of") if k in case}
+        if case["asset_ids"] and not case.get("expected_error"):
+            fields["acceptance"] = {"required_asset_ids": case["expected_required_ids"],
+                "required_gap_codes": case.get("expected_gap_codes", []),
+                "cases": [{"id": "business-example", "expectation": case["acceptance_notes"]}]}
         scenario = call("scenario", scenario={"title": case["id"], **fields})["scenario"]
         before = service.store.read()
         check = service.scenario_check({"scenario_id": scenario["id"]})
         validate_result(case, check, scenario=True)
+        if case["asset_ids"] and not case.get("expected_error"):
+            assert check["acceptance"]["context_contract"]["status"] == "passed", case["id"]
         assert service.store.read() == before, "Checks must not mutate source or expectations"
         results.append({"case_id": case["id"], "scenario_check": check})
     assert service.state()["snapshots"] == [], "Scenario checks never publish"
@@ -190,10 +196,50 @@ def run_domain(domain, output, *, cli=True):
             validate_result(case, read)
             result["independent_cli"] = read
     assert hashlib.sha256(package.read_bytes()).hexdigest() == before_hash
+    handoffs = []
+    from workbench.semantic_package import read_package
+    for case, result in zip(fixture["cases"], results):
+        if not case["asset_ids"] or case.get("expected_error"):
+            continue
+        scenario = result["scenario_check"]["scenario"]
+        delivered = call("publish", scenario_id=scenario["id"], draft=False)
+        task_path = out / (case["id"] + "-agent.zip")
+        task_path.write_bytes(service.download(delivered["snapshot_id"]))
+        reader = read_package(task_path)
+        full, brief = reader.task(detail="full"), reader.task()
+        validate_result(case, full)
+        for key in ("gaps", "business_scopes", "required_asset_ids", "dependency_edges", "capabilities"):
+            assert brief["context"][key] == full["context"][key], (case["id"], key)
+        if cli:
+            run = subprocess.run([sys.executable, "-X", "utf8", str(ROOT / "scripts/semantic_read.py"),
+                "--package", str(task_path), "task"], capture_output=True, text=True, encoding="utf-8", timeout=30, cwd=out)
+            assert run.returncode == 0, (case["id"], run.stdout, run.stderr)
+            assert json.loads(run.stdout)["task"] == brief["task"]
+        handoffs.append({"case_id": case["id"], "package": str(task_path),
+            "summary_bytes": len(json.dumps(brief, ensure_ascii=False).encode()),
+            "full_bytes": len(json.dumps(full, ensure_ascii=False).encode()), "independent_cli": cli})
     calculated = observations(fixture)
     assert calculated == fixture["expected_observations"], (domain, calculated, fixture["expected_observations"])
+    # Exercise operator-record lifecycle with explicitly labelled synthetic evidence, not customer acceptance.
+    sample = next(r["scenario_check"]["scenario"] for c, r in zip(fixture["cases"], results)
+                  if c["asset_ids"] and not c.get("expected_error"))
+    sample["acceptance"]["cases"] = [{"id": "reference-calculation", "expectation": json.dumps(fixture["expected_observations"], ensure_ascii=False)}]
+    sample = call("scenario", scenario=sample)["scenario"]
+    checked = service.scenario_check({"scenario_id": sample["id"]})
+    call("scenario_assess", scenario_id=sample["id"], case_id="reference-calculation", outcome="passed",
+         basis_fingerprint=checked["acceptance"]["basis_fingerprint"], actor="synthetic-test-operator",
+         observed=json.dumps(calculated, ensure_ascii=False), evidence="Maintainer toy oracle on supplied fixture rows; not an Agent query or customer approval")
+    assert service.scenario_check({"scenario_id": sample["id"]})["acceptance"]["cases"][0]["status"] == "passed"
+    source = service.state()["sources"][0]
+    imported = call("import_material", filename=source["name"], source_id=source["id"],
+                    text=fixture["source"]["notice"] + "\n\nRevised synthetic policy: definitions require another review.")
+    stale = service.scenario_check({"scenario_id": sample["id"]})
+    assert stale["acceptance"]["cases"][0]["status"] == "stale"
+    assert any(q["scenario_id"] == sample["id"] for q in imported["change_impact"]["impacted_questions"])
+    assert hashlib.sha256(package.read_bytes()).hexdigest() == before_hash, "Issued snapshots never change"
     report = {"domain": domain, "synthetic_only": True, "asset_count": len(fixture["assets"]),
         "cases_passed": len(results), "independent_cli": cli, "package": str(package.resolve()), "sha256": before_hash,
+        "question_handoffs": handoffs, "source_change_recheck": {"status": "stale", "impact": imported["change_impact"]},
         "reference_calculations": {"executed_by": "maintainer toy Python oracle, not semantic reader", "actual": calculated,
             "expected": fixture["expected_observations"]}, "results": results,
         "limits": ["Authored proposals, not extraction-quality evaluation", "No live database, Neo4j or production authorization",

@@ -12,7 +12,7 @@ For the supplied fictional equipment exercise:
 - Intent: `query` — the user wants records or a current count; choosing this intent does not enable execution.
 - Independent expectation from the supplied material: Lab L only, in storage, not disabled, distinct equipment IDs; without inventory observations, no current count can be reported. Other labs and disabled equipment are counterexamples.
 
-The scenario holds the question, selected asset IDs, optional filters/date and notes. Its expectations are **not** automatically evaluated. Definitions remain in `document.model.semantic.assets`; scenarios remain task metadata in `document.knowledge.scenarios`. Saving a question does not confirm, edit or publish any semantic asset. Reopening a v0.3.0 project does not insert fictional scenarios or rewrite existing semantics.
+The scenario holds the question, selected asset IDs, optional filters/date and notes. Optional declared context criteria are checked; example observations remain unverified until explicitly recorded. See [acceptance, impact and handoff](question-delivery.md). Definitions remain in `document.model.semantic.assets`; scenarios remain task metadata in `document.knowledge.scenarios`. Saving a question does not confirm, edit or publish any semantic asset. Reopening a v0.3.0 project does not insert fictional scenarios or rewrite existing semantics.
 
 场景中的“预期样例／例外”是人工预期，检查不会把它自动判为通过。需要真实数据验证时另走已授权执行环境，不能用生成模型反过来生成一个必然通过的答案。
 
@@ -55,7 +55,7 @@ Readiness is a read operation on the current saved question:
 python -X utf8 scripts/knowledge.py --project "./work/equipment" check --scenario SCENARIO_ID
 ```
 
-The result identifies the scenario and revision, contains the reader result, and states `answer_verified: false`, `published: false` and `acceptance.status: "not_verified"`. A check does not run SQL, call an LLM, execute business actions or create a snapshot. A later project revision requires a fresh check; an earlier result is not current evidence.
+The result identifies the scenario and revision, contains the reader result, and states `answer_verified: false`, `published: false` and a separate `acceptance` report (initially `not_verified`). A check does not run SQL, call an LLM, execute business actions or create a snapshot. A later project revision requires a fresh check; an earlier result is not current evidence.
 
 When meaning is missing, import authorized materials through the existing path and prepare the matching batch with the saved question:
 
@@ -106,7 +106,7 @@ Always inspect `next_steps`, `gaps`, `source_warnings`, `capabilities`, package 
 
 ## Deliver and reuse / 交付与持续修订
 
-From **Deliver selected semantics / 交付所选语义**, use the existing publication screen to review scope and publish. Required dependencies are added by the shared package builder. A scenario check never publishes automatically. Question text and acceptance notes are not automatically included in the semantic ZIP; give the recipient the actual question separately when it is needed. Semantic restrictions belong in reviewed assets/required rules so they travel with the package, not only in a private note.
+From **Deliver selected semantics / 交付所选语义**, use the existing publication screen to review scope and publish. Required dependencies are added by the shared package builder. A scenario check never publishes automatically. Question text and acceptance notes are not automatically included in a knowledge-only ZIP. Use **Create question handoff** to explicitly include the question, scope/date and acceptance expectations; private notes and observations stay local. The independent `task` reader retains the exact exported request; see [question delivery](question-delivery.md). Semantic restrictions belong in reviewed assets/required rules so they travel with the package, not only in a private note.
 
 The recipient does not need the authoring project or a running workbench:
 

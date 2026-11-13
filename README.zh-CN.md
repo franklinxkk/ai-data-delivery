@@ -1,8 +1,8 @@
-# AI Data Delivery · v0.3.1-dev
+# AI Data Delivery · v0.3.1
 
 **先说清要解决的业务问题，再补齐它需要的含义，把定义、依据和边界一起交给 Agent。**
 
-当前为开发预览。保留已发布的 v0.3.0，后续按补丁号递增。本预览增加业务问题入口、面向问题的读取路径、[四域练习](examples/cross-domain/README.md)与有限的 [OGS 导出／审计](references/neo4j-interop.md)。
+0.3.1 增加业务问题入口、面向问题的读取路径、[四域练习](examples/cross-domain/README.md)与有限的 [OGS 导出／审计](references/neo4j-interop.md)，并补齐问题验收、变更影响与 Agent 问题交付。
 
 [English](README.md) · [直接试用](#直接跑通一份样例) · [工作台说明](workbench/README.zh-CN.md) · [Agent 调用](references/semantic-package.md)
 
@@ -26,31 +26,38 @@
 
 ## 直接跑通一份样例
 
-需要 **Python 3.10+**。在本次开发源码目录或已解压的预览包目录运行。预览尚未发布前，直接克隆远端 `main` 可能仍取得 v0.3.0 基线：
+需要 **Python 3.10+**。克隆仓库后进入目录，或进入干净安装包的解压目录：
 
 ```bash
+git clone https://github.com/franklinxkk/ai-data-delivery.git
+cd ai-data-delivery
 python -m pip install -r requirements.txt
 python -X utf8 scripts/start.py --project "./work/equipment-zh" --example equipment --language zh
 ```
 
-若已取得干净 `.skill`／ZIP 安装包，解压后进入其中的 `ai-data-delivery` 目录，执行上述命令即可。`.skill` 是 ZIP 格式；安装到宿主 Agent 时，把完整目录放入该宿主支持的 skills 位置。
+若已取得干净 `.skill`／ZIP 安装包，解压后进入其中的 `ai-data-delivery` 目录，跳过两条 Git 命令，执行 Python 命令即可。`.skill` 是 ZIP 格式；安装到宿主 Agent 时，把完整目录放入该宿主支持的 skills 位置。
 
 打开终端打印的本机网址：
 
 1. 在 **业务问题** 输入“实验室 L 有多少台可借设备？”，选择查询意图，**保存问题**。可填写预期限制：没有库存记录时不能报当前台数。
 2. 在 **知识材料** 点击 **先核对表结构**，对照 DDL 原文后 **接纳整组**；返回 **知识材料**，**准备练习业务候选**，核对范围、规则及映射后 **接纳整组**。
 3. 返回问题，选择 **可借设备数**，**保存并检查**。查看定义、适用范围、依据，以及缺少库存数据／连接器的提示。这是在检查语义上下文，不会算出台数，也不会自动验证刚才填写的预期。
-4. 点击 **交付所选语义** 进入发布页，再 **发布确认快照、下载语义包**。需要细调时可在 **语义图谱** 编辑同一批资产；完成当前任务不要求先学图谱操作。
-5. 把 ZIP、实际问题和读取器交给另一个 Agent，原工作台可以关闭。例如：
+4. 点击 **生成本问题的 Agent 包 → 下载 Agent 包**，把问题、范围、日期和预期连同必需语义一起交付。只需知识时，沿用 **交付所选语义 → 发布确认快照**。需要细调时可在 **语义图谱** 编辑同一批资产。
+5. 把问题包和读取器交给另一个 Agent，原工作台可以关闭。例如：
 
 ```bash
 python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" verify
-python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" resolve --question "实验室 L 有多少台可借设备？" --intent query
-python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" resolve --question "实验室 L 有多少台可借设备？" --id demo.available --intent query
+python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" task --detail summary
 python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" sources --id demo.available
 ```
 
 把路径替换为实际下载文件。上下文应包含实验室 L 范围、可借规则、数据映射、原文依据，以及缺少库存数据和执行连接器的提示。包完整不等于可以执行问数。
+
+展开**问题验收**可设置预期定义、缺口和反例；填写实际结果与依据后记录核对结果。来源或依赖更新后，受影响记录标记待复验，并显示影响路径。完整操作见[问题验收、变更影响与交付](references/question-delivery.md#问题验收变更影响与-agent-交付)。
+
+![0.3.1 真实浏览器界面：修改图谱后，相关问题的记录待复验](https://raw.githubusercontent.com/franklinxkk/ai-data-delivery/main/docs/images/question-impact-zh.png)
+
+*合成设备练习的浏览器回归截图；待复验与原人工记录分别保留，不代表真实客户验收。*
 
 样例包含文本、DDL 和**预先编写的候选**，不用 AI 密钥即可体验完整流程；它不是通用文本抽取器，确认仍由你完成。重开时使用同一 `--project`，**去掉 `--example`**；初始化不会覆盖已有项目。
 
@@ -93,10 +100,10 @@ python -X utf8 scripts/start.py --project "./work/my-domain" --language zh
 
 语义理解由宿主 Agent 提供。本工具不是 OWL/SHACL 推理器、生产问数网关、企业权限系统或动作执行器。规则定义不等于规则已执行。原有数值工具保留在 **数值与明细核对**，`--demo` 是独立的数值练习。
 
-发行基线的验证见 [v0.3.0 验收记录](references/v0.3.0-validation.md)，不用于证明当前开发预览已通过。当前检查记录以[更新记录](CHANGELOG.md)的实际链接为准；不宣称已获得用户研究证明的易用性、准确率提升或新版平台审查通过。
+本版实际基线、已验证链路和未证明项见 [v0.3.1 验收记录](references/v0.3.1-release-validation.md)。不宣称已获得用户研究证明的易用性、准确率提升或新版平台审查通过。
 
-本预览增加可选问题信息，不重写 v0.3.0 语义资产。问题正文与预期不会自动进入语义包，需要时另把实际问题交给接收方。**其他 1.0 前历史格式不承诺兼容。** 保留目录与备份，不在已有工作项目上重新初始化样例。
+普通语义导出不带问题。**生成本问题的 Agent 包**明确包含本问题与预期，并将 `task.json` 绑定到快照；私人核对笔记留在本地。**1.0 前历史格式不承诺兼容。** 保留目录与备份，不在已有工作项目上重新初始化样例。
 
 [MIT](LICENSE) · [安全边界](SECURITY.zh-CN.md) · [更新记录](CHANGELOG.md) · [候选 API 合同](references/m1-m2-contract.md)
 
-[0.3.1-dev validation / 本次验证与未证明项](references/v0.3.1-validation.md)
+[0.3.1 validation / 本次验证与未证明项](references/v0.3.1-release-validation.md)

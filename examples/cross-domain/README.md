@@ -1,5 +1,9 @@
 # 四类业务语义练习
 
+The four synthetic exercises cover traffic, agriculture, universities and finance. Use the runnable maintainer command below with a new output directory; relative paths with spaces or Chinese characters are supported. Context criteria, independent question-package consumption, summary/full consistency and source-change rechecks are included. Fixture calculations and operator records are synthetic validation, not live Agent queries or customer sign-off. [English workflow](../../references/question-delivery.md).
+
+回归同时检查上下文预期、问题包的独立读取、摘要与完整内容一致性，以及来源更新后的待复验和旧包不变。合成操作者记录只验证保存与变化处理，参考计算不是生产 Agent 问数或客户验收。
+
 先选一个问题，把已有材料交给宿主 Agent；核对候选定义后，再用问题检查和交付包验证上下文。无需先绘制整张行业本体。这里的 JSON 是可复现的维护者夹具，不是要求业务人员填写的表单。
 
 全部材料、记录和规则均为**合成练习**，不代表真实客户制度、农业技术建议或金融监管口径。每个文件把来源段落、候选模型、独立问题预期和小样本观察数据放在一起；只有实际导入后，工具才绑定来源修订、提取与段落身份。候选不会自行确认。

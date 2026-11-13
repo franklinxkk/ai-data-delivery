@@ -162,8 +162,14 @@ class KnowledgeService:
         req = dict(req, _action=summary)
         def mutate(doc, db):
             sem, know = containers(doc)
+            before_sem, before_know = copy.deepcopy(sem), copy.deepcopy(know)
             result = fn(doc, sem, know, db)
             validate_graph(sem["assets"], know["sources"])
+            from workbench.scenario_contract import change_event
+            event = change_event(before_sem, before_know, sem, know, req["revision"] + 1, summary)
+            if event:
+                know.setdefault("change_events", []).append(event)
+                result["change_impact"] = event
             return result
         return self.store.knowledge_change(req, summary, mutate)
 
@@ -182,7 +188,7 @@ class KnowledgeService:
             value = req.get("scenario")
             if not isinstance(value, dict):
                 raise ValueError("scenario must be an object / 请提供业务问题")
-            allowed = {"id", "title", "question", "intent", "asset_ids", "domain", "scope", "as_of", "acceptance_notes"}
+            allowed = {"id", "title", "question", "intent", "asset_ids", "domain", "scope", "as_of", "acceptance_notes", "acceptance"}
             if set(value) - allowed:
                 raise ValueError("Unknown scenario fields / 业务问题含有未知字段")
             sid = value.get("id") or uid("scenario")
@@ -221,6 +227,8 @@ class KnowledgeService:
             if missing:
                 raise ValueError("Selected knowledge no longer exists / 所选知识不存在：" + ", ".join(missing))
             item["asset_ids"] = list(dict.fromkeys(ids))
+            from workbench.scenario_contract import validate_acceptance
+            item["acceptance"] = validate_acceptance(item.get("acceptance", {}), index | set(redirects))
             if previous is None:
                 know["scenarios"].append(item)
             else:
@@ -262,9 +270,43 @@ class KnowledgeService:
                       "request_complete": False, "answer_verified": False,
                       "selected_asset_ids": scenario["asset_ids"],
                       "next_steps": [{"code": exc.code, "message": str(exc)}]}
+        from workbench.scenario_contract import acceptance_report
         return {"scenario": scenario, "revision": state["revision"], "status": reader["decision"],
-                "reader": reader, "acceptance": {"status": "not_verified", "notes": scenario["acceptance_notes"]},
+                "reader": reader, "acceptance": acceptance_report(scenario, sem, know, reader),
                 "answer_verified": False, "published": False}
+
+    def scenario_assess(self, req):
+        """Record explicit local operator evidence; never manufacture an executed result."""
+        from workbench.scenario_contract import basis
+        def apply(doc, sem, know, db):
+            scenario = find(know["scenarios"], req.get("scenario_id"), "业务问题")
+            case = next((c for c in scenario.get("acceptance", {}).get("cases", []) if c["id"] == req.get("case_id")), None)
+            if case is None:
+                raise ValueError("Example no longer exists; reload / 样例已不存在，请重新读取")
+            current = basis(scenario, sem, know)
+            if req.get("basis_fingerprint") != current:
+                raise Conflict("Question or dependencies changed; check again / 问题或依赖已变化，请重新检查再记录")
+            if not isinstance(req.get("outcome"), str) or req["outcome"] not in {"passed", "failed"}:
+                raise ValueError("Choose passed or failed / 请选择通过或失败")
+            for key in ("observed", "evidence", "actor"):
+                if not isinstance(req.get(key), str) or not req[key].strip() or len(req[key]) > 8000:
+                    raise ValueError("Record observer, actual result and evidence / 请填写记录人、实际结果和依据，各至多 8000 字符")
+            record = {k: req[k] for k in ("scenario_id", "case_id", "outcome", "observed", "evidence", "actor")}
+            record.update(id=uid("assessment"), basis_fingerprint=current, created=now(), revision=req["revision"] + 1)
+            know.setdefault("assessments", []).append(record)
+            return {"assessment": record, "answer_verified": False}
+        return self._write(req, "记录问题验收依据", apply)
+
+    def impact(self, req=None):
+        state = self.store.read()
+        sem, know = containers(state["document"])
+        sid = (req or {}).get("scenario_id")
+        if sid:
+            find(know["scenarios"], sid, "业务问题")
+        events = [e for e in know.get("change_events", [])
+                  if not sid or any(q["scenario_id"] == sid for q in e["impacted_questions"])]
+        return {"revision": state["revision"], "events": copy.deepcopy(events),
+                "boundary": "Registered source and graph changes only / 仅检测已登记来源和图谱的变化；未连接数据库实时监听"}
 
     @staticmethod
     def problems(sem, know):
@@ -813,6 +855,15 @@ class KnowledgeService:
         from workbench.semantic_package import PackageError, build_package, package_preview
         def apply(doc, sem, know, db):
             selected = req.get("asset_ids") or None
+            task = None
+            if req.get("scenario_id"):
+                scenario = find(know["scenarios"], req["scenario_id"], "业务问题")
+                if not scenario["asset_ids"]:
+                    raise ValueError("Select definitions before handoff / 请先选择本问题的定义再交付")
+                selected = scenario["asset_ids"]
+                task = {k: copy.deepcopy(scenario[k]) for k in
+                        ("id", "title", "question", "intent", "asset_ids", "domain", "scope", "as_of")}
+                task["acceptance"] = copy.deepcopy(scenario.get("acceptance", {}))
             preview = package_preview(sem["assets"], know["sources"], project_id=self.store.project_id(),
                 revision=req["revision"], asset_ids=selected, draft=True,
                 include_execution=bool(req.get("include_execution")), redirects=sem.get("redirects", {}))
@@ -837,7 +888,7 @@ class KnowledgeService:
             snapshot_id = uid("snapshot")
             content, manifest = build_package(export_assets, know["sources"], project_id=self.store.project_id(),
                 revision=req["revision"], asset_ids=selected, draft=bool(req.get("draft")),
-                include_execution=bool(req.get("include_execution")), snapshot_id=snapshot_id, redirects=sem.get("redirects", {}))
+                include_execution=bool(req.get("include_execution")), snapshot_id=snapshot_id, redirects=sem.get("redirects", {}), task=task)
             db.execute("INSERT INTO semantic_snapshots VALUES (?,?,?,?)", (snapshot_id, req["revision"], encode(manifest), content))
             return {"snapshot_id": snapshot_id, "filename": snapshot_id + ".zip", "manifest": manifest,
                     "download_url": "/api/knowledge/download/" + snapshot_id}

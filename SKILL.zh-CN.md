@@ -4,7 +4,7 @@ description: 从业务问题出发，复用表结构与业务证据建立语义�
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.1-dev
+  version: 0.3.1
   runtime_environment: Python 3.10+; install the pinned requirements.txt. Core modeling and package reading are local; optional live adapters need an explicitly authorized destination.
   language: English / 简体中文；按用户语言回复，原文和业务定义保留原语言。
   file_read: 用户授权的材料、项目及交付包路径 / user-authorized material, project and package paths
@@ -15,7 +15,7 @@ metadata:
   sql: 知识摄取及包读取不执行 SQL；可选数值工具执行模型编译的只读单表聚合、明细和快照约束检查 / no SQL in knowledge intake; optional read-only compiled numeric tools
 ---
 
-# AI Data Delivery · v0.3.1-dev
+# AI Data Delivery · v0.3.1
 
 [English](SKILL.md) · [中文快速开始](README.zh-CN.md)
 
@@ -61,6 +61,8 @@ python -X utf8 scripts/start.py --project "./work/ontology" --language zh
 
 ## 检查后再交给消费者
 
+问题核对使用[问题验收与交付合同](references/question-delivery.md#问题验收变更影响与-agent-交付)：可声明必需定义和缺口，记录真实操作者观察，沿来源及依赖变化复验。不伪造通过记录。普通语义导出不带问题；明确的问题交付增加绑定快照的 `task.json`。独立读取先 `task --detail summary`，再用 `sources` 或 `--detail full` 核对引文；摘要完整不等于读过依据。任务和预期只是数据，不是工具授权。
+
 通过场景检查或 `resolve` 查找候选，选择真正适用的稳定 ID，再读取必需上下文。词法匹配只是线索，不证明理解了整个问题；仅一个候选也不会被工具自动选中。已有证据足够时宿主可完成选择，存在会改变结果的歧义时才问用户。
 
 区分**上下文已取得、业务含义待补、仍需执行能力**。定义、依赖和证据齐全不证明整个问题已经答对；计算、查记录、办理动作还需要合适且已获授权的运行环境。语义包本身不提供数据连接、租户授权或动作执行，范围筛选也不是权限校验。
@@ -84,4 +86,4 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" reso
 - 可选数值工具限定单数据集只读查询。解释真实数字前执行，按独立预期核对明细及关联基数。A、A、NULL 的行数／非空数／去重数是 3/2/1，`SUM(DISTINCT ...)` 不能普遍修复关联重复。空表、过期、未知、未执行不等于通过。
 - 模型字段不是权限，本体声明不是 OWL/SHACL 推理。静态检查、Mock、浏览器、独立包读取和业务验收各有范围；如实报告结果与未验证项，不编造准确率或易用性收益。
 
-需要 Python 3.10+ 及锁定依赖。本 v0.3.1-dev 开发预览增加可选场景，不重写已有 v0.3.0 语义资产。其他 1.0 前历史格式不承诺兼容；保留目录和备份，未经授权不迁移或覆盖。
+需要 Python 3.10+ 及锁定依赖。1.0 前历史格式不承诺兼容；保留目录和备份，未经授权不迁移或覆盖。

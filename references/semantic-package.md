@@ -28,6 +28,8 @@ python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.
 
 ## 包内文件
 
+明确选择“生成本问题的 Agent 包”时，可额外包含 `task.json`：问题、意图、所选身份、范围、日期及验收预期。文件指纹和快照／模型绑定一起核对，私人笔记和人工验收记录不包含。用 `task --detail summary` 读取，再用 `sources` 或 `--detail full` 回查；`resolve/context` 也支持摘要，默认完整。普通语义包仍不带问题。详见[问题交付](question-delivery.md#问题验收变更影响与-agent-交付)。
+
 | 文件 | 内容 |
 |---|---|
 | `model.json` | `schema_version: "1.0"`、资产列表 `assets`、旧 ID 到存续 ID 的 `redirects`。 |
@@ -92,7 +94,7 @@ python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.
 
 ## Agent 任务上下文
 
-先用 `describe` 发现工具与只读能力。新增 `resolve --question "业务问题"` 可按名称、别名和定义推荐候选；即使只匹配一项，也返回 `needs_selection`，不自动认定含义。明确选择身份后，可在同一命令追加可重复的 `--id`，直接取得同源上下文；也可以沿用 `search` 消歧和 `context`：
+先用 `describe` 发现工具与只读能力。新增 `resolve --question "业务问题"` 可按名称、别名、定义、范围及规则／指标业务字段推荐候选；即使只匹配一项，也返回 `needs_selection`，不自动认定含义。明确选择身份后，可在同一命令追加可重复的 `--id`，直接取得同源上下文；也可以沿用 `search` 消歧和 `context`：
 
 ```powershell
 python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.zip" context --id rule_maintenance --intent explain

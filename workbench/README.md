@@ -1,4 +1,4 @@
-# Semantic Workbench · v0.3.1-dev
+# Semantic Workbench · v0.3.1
 
 [简体中文](README.zh-CN.md) · [Quickstart](../README.md) · [Candidate contract](../references/m1-m2-contract.md)
 
@@ -18,6 +18,8 @@ Open the printed loopback URL. Use the same directory to reopen. `--language en|
 For a complete included exercise, add `--example equipment` with a **new** project path. Review the DDL group first, then return to Materials and prepare the authored business proposals. Review those before opening the graph and publishing. Remove `--example` when reopening; initialization refuses to overwrite projects. This fixture does not run AI or confirm knowledge automatically.
 
 ## Materials
+
+**Question acceptance** supports required definitions, disclosed gaps and example observations with actual evidence. Changed dependencies mark observations stale and display impact paths. **Create question handoff** exports the saved request with its scoped semantic snapshot; independent Agents can use `task --detail summary` then retrieve sources. [Detailed workflow and limits](../references/question-delivery.md).
 
 Paste text or upload files up to 32 MB each. Give material a useful name, domain and business scope; unknown domain/scope can be clarified later. Scope is retained with the source. Uploading and parsing do not confirm meaning.
 
