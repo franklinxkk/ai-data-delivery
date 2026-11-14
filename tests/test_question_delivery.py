@@ -155,6 +155,32 @@ class QuestionDeliveryTests(unittest.TestCase):
             read_package(plain_path).task()
         self.assertEqual(error.exception.code, "TASK_NOT_INCLUDED")
 
+    def test_handoff_rechecks_definition_date_after_prior_publication(self):
+        s = self.scenario()
+        self.call("publish", scenario_id=s["id"])
+        count = len(self.service.state()["snapshots"])
+        self.call("scenario", scenario={"id": s["id"], "as_of": "2026-11-14"})
+        with self.assertRaises(PackageError) as failure:
+            self.call("publish", scenario_id=s["id"])
+        self.assertEqual(failure.exception.code, "TASK_APPLICABILITY_UNRESOLVED")
+        self.assertEqual(len(self.service.state()["snapshots"]), count)
+        # Explicit discussion drafts preserve unresolved applicability.
+        pub = self.call("publish", scenario_id=s["id"], draft=True)
+        path = Path(self.temp.name) / "date-draft.zip"
+        path.write_bytes(self.service.download(pub["snapshot_id"]))
+        self.assertEqual(read_package(path).task()["decision"], "needs_review")
+        # A valid root cannot make its unknown dependency valid.
+        self.asset("vehicle", "营运车辆", refs=["permit"], effective_from="2026-01-01", effective_to="2026-12-31")
+        with self.assertRaises(PackageError):
+            self.call("publish", scenario_id=s["id"])
+        self.asset("permit", "有效许可", effective_from="2025-01-01", effective_to="2025-12-31")
+        with self.assertRaises(PackageError):
+            self.call("publish", scenario_id=s["id"])
+        self.asset("permit", "有效许可", effective_from="2026-01-01", effective_to="2026-12-31")
+        self.call("publish", scenario_id=s["id"])
+        # Knowledge-only publication has no question date to assert.
+        self.call("publish", asset_ids=["vehicle"])
+
     def test_mixed_snapshot_task_and_tampering_are_rejected(self):
         s = self.scenario()
         pub = self.call("publish", scenario_id=s["id"])

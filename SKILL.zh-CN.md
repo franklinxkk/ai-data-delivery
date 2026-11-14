@@ -4,7 +4,7 @@ description: 从业务问题出发，复用表结构与业务证据建立语义�
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.2
+  version: 0.3.3
   runtime_environment: Python 3.10+; install the pinned requirements.txt. Core modeling and package reading are local; optional live adapters need an explicitly authorized destination.
   language: English / 简体中文；按用户语言回复，原文和业务定义保留原语言。
   file_read: 用户授权的材料、项目及交付包路径 / user-authorized material, project and package paths
@@ -15,7 +15,7 @@ metadata:
   sql: 可选元数据连接器只执行固定只读目录 SQL，不查询业务行；文本及 DDL 摄取、包读取不执行 SQL；可选数值工具执行模型编译的只读单表聚合、明细和快照约束检查 / no SQL in knowledge intake; optional read-only compiled numeric tools
 ---
 
-# AI Data Delivery · v0.3.2
+# AI Data Delivery · v0.3.3
 
 [English](SKILL.md) · [中文快速开始](README.zh-CN.md)
 
@@ -59,7 +59,7 @@ python -X utf8 scripts/start.py --project "./work/ontology" --language zh
 
 提交前按[候选合同](references/m1-m2-contract.md)保留稳定 ID、来源修订、提取身份、片段和真实引文，不伪造人工声明或确认。指标保留单位、粒度、包含／排除及时间范围；规则保留条件和禁止要求。开头、章节与例外中的限制进入资产范围及必需 `refs`；结构化范围保留 0、false、null 的原类型。明确未知记入 `properties.knowledge_gaps`，不能补默认业务政策。
 
-宿主在已有授权内准备并读取任务、提交候选、回读回执与当前状态；只有操作者核对或人工编辑才能确认含义。保留拒绝、暂缓、取消和人工修正，不通过换 ID 绕过原处置。[宿主命令与恢复](references/question-workflow.md#host-commands)给出详细路径。
+宿主在已有授权内准备并读取任务、提交候选、回读回执与当前状态；只有操作者核对或人工编辑才能确认含义；已获授权的宿主可通过 `knowledge.py review/edit` 使用相同校验。保留拒绝、暂缓、取消和人工修正，不通过换 ID 绕过原处置。[宿主命令与恢复](references/question-workflow.md#host-commands)给出详细路径。
 
 ## 检查后再交给消费者
 
@@ -78,7 +78,7 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" reso
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" resolve --question "什么设备算可借设备？" --id ASSET_ID --intent explain
 ```
 
-使用实际检索所得 ID，核对 `package_complete`、`request_complete`、缺口、能力及剩余分页，不能把退出码 0 当业务验收。`neighbors` 只遍历业务关系，`context` 和已选 ID 的 `resolve` 带齐必需依赖。未给 `as_of` 是时间未指定，不是今天；离线最新性未知，读取器也不能撤销已复制的包。
+使用实际检索所得 ID，核对 `package_complete`、`request_complete`、缺口、能力及剩余分页，不能把退出码 0 当业务验收。`neighbors` 只遍历业务关系，`context` 和已选 ID 的 `resolve` 带齐必需依赖。`as_of` 检查定义有效期；取数截点写入已核对指标的 `time_scope`。未给 `as_of` 是时间未指定，不是今天；离线最新性未知，读取器也不能撤销已复制的包。
 
 连接数据库时只读取已授权端点和所选表的结构目录。仅在用户明确启用、且采集定义未被人工改动时，非唯一索引变化可机械同步；业务含义、改名及映射仍需核对。没有关联问题不代表没有业务影响。不得静默重提被拒绝候选、制造通过记录，或把被阻断的确认发布擅自改成草稿发布。详见[元数据流程](references/readonly-metadata.md)。
 

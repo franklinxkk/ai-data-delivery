@@ -229,7 +229,19 @@ window.KnowledgeWorkbench = (() => {
     for(const part of parts){if(line&&width(line+part)>146){lines.push(line.trim());line='';}for(const char of part){if(width(line+char)>146){lines.push(line.trim());line='';}line+=char;}}
     if(line.trim())lines.push(line.trim());if(lines.length>2){lines[1]=Array.from(lines[1]).slice(0,-1).join('')+'…';lines.length=2;}return lines.length?lines:[''];
   }
-  function nodeMarkup(a,i){const p=point(a,i),lines=nodeNameLines(a.name),nodeKind=({rule:tr('规则'),field:tr('字段')})[a.kind]||kinds[a.kind];
+  function nodeDisplayLines(a){
+    const p=a.properties||{},table=p.metadata_table,column=p.column;
+    // Catalog names include a shared connection prefix. Keep the distinguishing
+    // column/table visible; full identity remains in the title and inspector.
+    // Explicitly renamed display names keep their author's wording.
+    const clip=(text,end=false)=>{let chars=Array.from(text);const width=()=>chars.reduce((n,c)=>n+(c.codePointAt(0)>255?14:7),0);if(width()<=146)return text;while(chars.length&&width()>132){if(end)chars.shift();else chars.pop();}return end?'…'+chars.join(''):chars.join('')+'…';};
+    if(p.metadata_connection&&typeof table==='string'){
+      if(a.kind==='field'&&typeof column==='string'&&a.name.endsWith('.'+column))return [clip(column),clip(table,true)];
+      if(a.kind==='dataset'&&a.name.endsWith('.'+table))return nodeNameLines(table);
+    }
+    return nodeNameLines(a.name);
+  }
+  function nodeMarkup(a,i){const p=point(a,i),lines=nodeDisplayLines(a),nodeKind=({rule:tr('规则'),field:tr('字段')})[a.kind]||kinds[a.kind];
     return `<g data-kw-node="${esc(a.id)}" class="kw-node ${G.selected===a.id?'selected':''} kind-${esc(a.kind)} status-${esc(a.status)}" transform="translate(${p.x},${p.y})" tabindex="0" role="button" aria-label="${esc(a.name)}"><rect width="${NODE_WIDTH}" height="${NODE_HEIGHT}" rx="9"/><title>${esc(a.name+' · '+a.definition)}</title>${lines.map((line,j)=>`<text x="12" y="${lines.length>1?21+j*17:27}" class="kw-node-name">${esc(line)}</text>`).join('')}<text x="12" y="56">${esc(nodeKind)} · ${esc(statuses[a.status]||a.status)}${G.fixed.includes(a.id)?tr(' · 固定'):''}</text><circle class="kw-port" cx="${NODE_WIDTH}" cy="${NODE_HEIGHT/2}" r="5"/></g>`;
   }
   function drawGraph(fit=false){if(activePage!=='graph')return;const found=filteredAssets(),more=$('[data-kw="more"]');if(more)more.disabled=found.length<=G.limit;if(G.mode==='table'){$('#kw-asset-table').innerHTML=tr`<p class="privacy">共 ${found.length} 项，当前显示 ${Math.min(found.length,G.limit)} 项${found.length>G.limit?tr('；可继续加载更多。'):'。'}</p><table><thead><tr><th>知识</th><th>领域 / 范围</th><th>定义</th><th>状态</th></tr></thead><tbody>${found.slice(0,G.limit).map(a=>`<tr data-kw="select" data-id="${esc(a.id)}" tabindex="0" class="${G.selected===a.id?'selected':''}"><td><b>${esc(a.name)}</b><small>${esc(kinds[a.kind])}</small></td><td>${esc(a.domain)}<small>${esc(scopeText(a.scope))}</small></td><td>${esc(a.definition)}</td><td>${badge(a.status)}</td></tr>`).join('')}</tbody></table>${!found.length?empty(tr('没有匹配的知识'),tr('调整筛选或加入新的材料。')):''}`;return;}

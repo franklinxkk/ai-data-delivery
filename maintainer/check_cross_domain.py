@@ -197,12 +197,21 @@ def run_domain(domain, output, *, cli=True):
             result["independent_cli"] = read
     assert hashlib.sha256(package.read_bytes()).hexdigest() == before_hash
     handoffs = []
-    from workbench.semantic_package import read_package
+    from workbench.semantic_package import read_package, PackageError
     for case, result in zip(fixture["cases"], results):
         if not case["asset_ids"] or case.get("expected_error"):
             continue
         scenario = result["scenario_check"]["scenario"]
-        delivered = call("publish", scenario_id=scenario["id"], draft=False)
+        date_gap = bool(set(case.get("expected_gap_codes", [])) & {"APPLICABILITY_UNKNOWN", "OUTSIDE_KNOWN_INTERVAL"})
+        if date_gap:
+            before_count = len(service.state()["snapshots"])
+            try:
+                call("publish", scenario_id=scenario["id"], draft=False)
+                raise AssertionError("Unresolved requested definition date must block confirmed handoff")
+            except PackageError as exc:
+                assert exc.code == "TASK_APPLICABILITY_UNRESOLVED", exc
+            assert len(service.state()["snapshots"]) == before_count
+        delivered = call("publish", scenario_id=scenario["id"], draft=date_gap)
         task_path = out / (case["id"] + "-agent.zip")
         task_path.write_bytes(service.download(delivered["snapshot_id"]))
         reader = read_package(task_path)

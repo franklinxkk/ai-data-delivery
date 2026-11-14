@@ -2,6 +2,15 @@
 
 Versioning: keep published tags unchanged; continue from `0.3.0` with patch increments (`0.3.1`, `0.3.2`, …). Unreleased previews use `-dev`. / 版本约定：保留已发布标签，后续默认递增补丁号，开发预览加 `-dev`，不重写历史版本。
 
+## 0.3.3 — 2026-11-14
+
+- Add explicit host CLI review/edit with shared revision, provenance and rejection guards. / 新增宿主候选核对与维护命令，复用修订、证据和拒绝守卫。
+- Document exact confirmed property keys and local HTTP session discovery. / 补齐确认属性的准确字段与本地接口会话获取方法。
+- Distinguish definition applicability from data cutoff in bilingual guidance and the question form. / 在双语说明和问题界面区分定义适用日期与取数截点。
+- Recheck the complete dependency scope against the requested definition date on every confirmed question handoff, including after prior publication. / 每次确认问题交付均重检定义日期及完整依赖，修复首次发布后可绕过有效期检查的问题。
+- Show catalog column/table names before shared connection prefixes in graph nodes; retain full names in details. / 图谱节点优先显示实际字段与表名，详情仍保留完整身份。
+- Preserve directed `mapping` edges in Neo4j alongside relation edges, complete asset JSON and dependencies. / 修复 Neo4j 遗漏 mapping 有向边，继续保留完整资产与依赖。
+
 ## 0.3.2 — 2026-11-14
 
 - Add optional SQLite, PostgreSQL and MySQL catalog-only connectors with named environment credentials, explicit table scope and bilingual workbench/CLI controls. / 新增三种数据库只读元数据连接、凭据变量、明确选表及双语入口。

@@ -8,6 +8,20 @@ An asset has `id, kind, name, definition, domain, scope, aliases: [], status: dr
 
 Evidence: `{source_id, revision: integer, extraction_id, fragment_id, quote}`. Bind the returned extraction identity; a fragment appearing in several extractions must not be guessed. Manual assertions use `{type:"manual", quote, actor, created}`. Evidence is attached per asset/assertion, not merely to the project. An attribute or relation can be a separate asset to preserve its own evidence.
 
+### Required properties when confirming / 确认时必需的属性
+
+Use these exact keys inside `properties`; descriptive synonyms are not aliases. Draft proposals may omit them, but confirmation reports missing fields and leaves the group unchanged. Common required confirmation fields are nonempty `definition`, `domain`, `scope` and valid evidence.
+
+| Kind / 类型 | Exact keys / 准确字段名 | Meaning / 含义 |
+|---|---|---|
+| `metric` | `unit`, `grain`, `inclusions`, `exclusions`, `time_scope` | Unit, distinct/counting grain, included records, excluded records, data window or cutoff / 单位、去重或统计粒度、包含项、排除项、数据窗口或取数截点 |
+| `rule` | `condition`, `requirement` | When applicable; required or prohibited behavior / 成立前提；要求或禁止行为。Use singular keys, not `conditions` or `requirements`. |
+| `attribute`, `field` | `value_type` | Value type / 值类型 |
+
+For example: `"properties": {"condition": "Greenhouse H1, active plant with a known latest moisture value", "requirement": "Below 30 percent requires human review; missing readings remain unknown and do not authorize watering"}`. Other kinds have no additional required property keys; relation endpoint/type checks still apply. This example is fictional, not a default business policy.
+
+`effective_from/effective_to` describe a definition's validity interval. Scenario/reader `as_of` asks whether definitions (including dependencies) apply on that date; absent validity bounds remain unknown. It is **not** the data cutoff. Put a data cutoff/latest-record rule in `metric.properties.time_scope` and its reviewed rule/evidence. Leave `as_of` unspecified when no definition-applicability date was requested; never invent validity dates to clear a check. / 定义有效期与取数时间分开保存；不得为了通过检查虚构有效期。
+
 Business scope from introductions, section qualifiers and exceptions must be represented in the applicable asset `scope` and supported by its evidence. Shared scope can be an evidence-linked rule required through `refs`; do not substitute a draft/simulation label for business restrictions. Preserve negative requirements in the rule's normative fields. `properties.knowledge_gaps` is an optional unique list of nonempty strings describing explicitly unknown business information, not inferred defaults. These gaps are returned by the consumer context endpoint; their presence does not mean the stored definition is structurally invalid or authorize a business answer.
 
 Knowledge state lives in `document.knowledge = {sources:[], batches:[], groups:[], separations:[]}`. Source `{id,name,format,domain,scope,current_revision,revisions:[]}`; source revision `{revision,sha256,attachment_id,created,parsed,current_extraction,extractions:[{id,parsed,created}]}`. Re-extracting unchanged bytes with different options preserves the content revision and adds an extraction; existing evidence keeps its original extraction. Parser returns `{format,status:complete|partial|failed|needs_conversion,fragments:[{id,location,text}],warnings:[],structure:{...}}`. Text fragments have line/paragraph locations, DDL fragments statement locations, Office cell/paragraph and PDF page locations. Parser does not mutate project or call LLM/network. Source import returns deterministic DDL/structured suggestions via backend and can create host jobs for unstructured semantics.

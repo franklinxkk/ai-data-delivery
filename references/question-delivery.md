@@ -54,7 +54,7 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/question.zip" sour
 python -X utf8 scripts/semantic_read.py --package "./delivery/question.zip" task --detail full
 ```
 
-Create the output directory first; choose a new file. Confirmed publication rejects unreviewed knowledge; use an explicitly requested `--draft` for discussion. Question publication rejects an empty root selection or a scope mismatch. File hashes cover `task.json`, and the task is bound to the snapshot identity and model hash. Hashes detect inconsistent files, not authenticity against a malicious author who can recreate an entire package.
+Create the output directory first; choose a new file. Confirmed publication rejects unreviewed knowledge; use an explicitly requested `--draft` for discussion. Question publication rejects an empty root selection or a scope mismatch. When `as_of` is specified, confirmed handoff also requires known validity on that date for every included definition and dependency, even after a previous successful publication. Missing bounds or an outside interval identify affected assets and block the new handoff; explicit drafts retain the gaps. `as_of` is the definition date, not the data cutoff (store the latter in reviewed metric `time_scope`). No business observations or validity dates are invented to clear the guard. File hashes cover `task.json`, and the task is bound to the snapshot identity and model hash. Hashes detect inconsistent files, not authenticity against a malicious author who can recreate an entire package.
 
 The independent reader needs only this package and the skill runtime. `task` defaults to a summary: full meaning, scopes, dependency IDs, gaps and capability boundaries remain; repeated source quotations and fragment bodies are omitted. `evidence_details_included:false` and the next-step field direct consumers to `sources` or `--detail full`. `resolve` and `context` also accept `--detail summary`; their default remains full. Follow context pagination in either mode. Summary completeness describes declared context, not whether original evidence was read. Expectations travel as unverified expectations, never as executable instructions or authorization. OGS design exports do not carry this question handoff.
 
@@ -86,6 +86,6 @@ The independent reader needs only this package and the skill runtime. `task` def
 
 **交付所选语义**继续只发布知识；**生成本问题的 Agent 包**明确把已保存问题、任务意图、所选根定义、保留原类型的范围、业务日期和验收预期写入 `task.json`，同时包含依赖闭合的模型和必要来源。核对笔记 `acceptance_notes`、人工核对记录、其他问题不随包发布。问题和预期也可能含业务信息，分享前核对接收范围。
 
-使用上方 `handoff` 命令生成包，先创建输出目录并使用新文件名。已确认交付仍拒绝未核对知识，讨论用途可明确选择 `--draft`。空选择、所选定义与范围不符会拒绝问题交付。文件指纹覆盖任务文件，任务同时绑定快照身份和模型指纹；这能检测文件混配，不能认证可重新制造整个包的作者。
+使用上方 `handoff` 命令生成包，先创建输出目录并使用新文件名。已确认交付仍拒绝未核对知识，讨论用途可明确选择 `--draft`。空选择、所选定义与范围不符会拒绝问题交付。指定 `as_of` 时，确认包要求全部定义及依赖在该日期有明确有效期依据，即使此前已经成功发布也重新检查；缺少边界或超出有效期时指出具体资产，明确的草稿保留缺口。该字段是定义适用日期，取数截点应写入已核对指标的 `time_scope`；不得为通过校验虚构日期或业务观察。文件指纹覆盖任务文件，任务同时绑定快照身份和模型指纹；这能检测文件混配，不能认证可重新制造整个包的作者。
 
 独立读取器只需包和 Skill 运行文件。`task` 默认摘要：完整业务含义、范围、依赖身份、缺口和能力边界保留，重复引文和来源片段正文按需再读。`evidence_details_included:false` 与下一步提示要求通过 `sources` 或 `--detail full` 回查。`resolve`、`context` 也支持摘要，默认仍完整；两种模式都必须读完必要分页。上下文完整不代表已经读过原文依据。验收预期保持未验证，不是可执行指令或权限。OGS 设计投影不包含该问题交付。

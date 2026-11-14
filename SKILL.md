@@ -4,7 +4,7 @@ description: Build business-question-driven semantic models from existing data d
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.2
+  version: 0.3.3
   language: English and 简体中文; respond in the user's language, retaining original knowledge and quotes.
   runtime_environment: Python 3.10+ with pinned requirements.txt; no LLM or API key bundled.
   file_read: User-authorized material, project and semantic package paths.
@@ -15,7 +15,7 @@ metadata:
   sql: Optional metadata connectors issue fixed read-only catalog SQL, never business-row queries; no SQL in text/DDL intake or package reading; optional numeric tools compile bounded read-only single-dataset queries.
 ---
 
-# AI Data Delivery · v0.3.2
+# AI Data Delivery · v0.3.3
 
 [中文说明](SKILL.zh-CN.md) · [Quickstart](README.md) · [中文快速开始](README.zh-CN.md)
 
@@ -57,7 +57,7 @@ Group candidates by business topic. Explain **what needs deciding, the source or
 
 Before proposing, read the [candidate contract](references/m1-m2-contract.md). Preserve stable IDs, source revisions, extraction IDs, fragment IDs and supporting quotes. Never fabricate manual assertions, confirmation or provenance. Metrics retain unit, grain, inclusions/exclusions and time scope; rules retain conditions and prohibitions. Preserve scope from introductions and exceptions through assets and required `refs`, including structured zero/false/null values. Record explicit unknowns in `properties.knowledge_gaps` without invented defaults.
 
-Prepare/read the host task, submit proposals and reread the receipt/current state within existing authorization. Only operator review/manual editing confirms meaning. Preserve rejection, deferral, cancellation and manual corrections; changed IDs must not bypass a disposition. [Host commands and recovery](references/question-workflow.md#host-commands) provide the detailed path.
+Prepare/read the host task, submit proposals and reread the receipt/current state within existing authorization. Only operator review/manual editing confirms meaning; an authorized host can use `knowledge.py review` and `edit` through the same guards. Preserve rejection, deferral, cancellation and manual corrections; changed IDs must not bypass a disposition. [Host commands and recovery](references/question-workflow.md#host-commands) provide the detailed path.
 
 ## Check, then hand off
 
@@ -78,7 +78,7 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" reso
 python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" resolve --question "What counts as available equipment?" --id ASSET_ID --intent explain
 ```
 
-Use actual discovered IDs. Inspect `package_complete`, `request_complete`, gaps, capabilities and all remaining pages; exit code zero is not business acceptance. `neighbors` follows business edges; `context` and selected `resolve` include required dependencies. No `as_of` means unspecified, not today. Offline freshness is unknown; this reader cannot revoke copied packages.
+Use actual discovered IDs. Inspect `package_complete`, `request_complete`, gaps, capabilities and all remaining pages; exit code zero is not business acceptance. `neighbors` follows business edges; `context` and selected `resolve` include required dependencies. `as_of` checks definition validity, not the data cutoff; put data windows in reviewed metric `time_scope`. No `as_of` means unspecified, not today. Offline freshness is unknown; this reader cannot revoke copied packages.
 
 ## Preserve operational boundaries
 

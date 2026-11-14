@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Host-agent tools for material intake and evidence-linked proposals.
 
-Read a prepared task, propose against its source revision, then let the operator
-review the proposal in the workbench. No LLM, network or automatic confirmation.
+Read a prepared task and propose against its source revision. Review/edit commands
+record explicit operator decisions through the same guards as the workbench.
+No LLM or automatic confirmation. Metadata commands use the configured catalog.
 """
 import argparse
 import base64
@@ -15,6 +16,7 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from workbench.store import Store, Conflict
 from workbench.knowledge import KnowledgeService
+from workbench.semantic_package import PackageError
 
 
 def main(argv=None):
@@ -61,6 +63,14 @@ def main(argv=None):
     proposal.add_argument("--batch", required=True)
     proposal.add_argument("--file", required=True)
     proposal.add_argument("--partial", action="store_true")
+    review = commands.add_parser("review", help="Record an explicitly authorized operator decision; never auto-accept proposals")
+    review.add_argument("--group", required=True)
+    review.add_argument("--action", required=True, choices=["accept", "reject", "defer"])
+    review.add_argument("--reason", required=True)
+    review.add_argument("--assets", help="Optional JSON array of revised assets within this group")
+    edit = commands.add_parser("edit", help="Maintain an asset through normal graph guards; draft unless explicitly confirmed")
+    edit.add_argument("--file", required=True, help="Complete semantic asset JSON")
+    edit.add_argument("--confirm", action="store_true", help="Only when the operator has authorized confirmation")
     receipt = commands.add_parser("receipt", help="Read the durable result of an earlier operation")
     receipt.add_argument("id")
     args = parser.parse_args(argv)
@@ -114,6 +124,15 @@ def main(argv=None):
                                              "limit": args.limit, "offset": args.offset})
         elif args.command == "example":
             result = service.example(req)
+        elif args.command == "review":
+            assets = json.loads(Path(args.assets).read_text(encoding="utf-8-sig")) if args.assets else []
+            if not isinstance(assets, list):
+                raise ValueError("Revised assets must be a JSON array / 修订资产须为 JSON 数组")
+            if not args.reason.strip():
+                raise ValueError("Describe the operator decision / 请填写操作者的核对理由")
+            result = service.review({**req, "group_id": args.group, "action": args.action, "reason": args.reason, "assets": assets})
+        elif args.command == "edit":
+            result = service.edit({**req, "asset": json.loads(Path(args.file).read_text(encoding="utf-8-sig")), "confirm": args.confirm})
         else:
             data = json.loads(Path(args.file).read_text(encoding="utf-8-sig"))
             groups = data if isinstance(data, list) else data.get("groups")
@@ -121,7 +140,8 @@ def main(argv=None):
         print(json.dumps({"ok": True, "operation_id": operation_id, "result": result}, ensure_ascii=False, allow_nan=False))
         return 0
     except (ValueError, OSError, TypeError) as exc:
-        print(json.dumps({"ok": False, "operation_id": operation_id, "status": "conflict" if isinstance(exc, Conflict) else "error", "error": str(exc)}, ensure_ascii=False))
+        print(json.dumps({"ok": False, "operation_id": operation_id, "status": "conflict" if isinstance(exc, Conflict) else "error", "error": str(exc),
+                          **({"details": exc.as_dict()} if isinstance(exc, PackageError) else {})}, ensure_ascii=False))
         return 2
 
 

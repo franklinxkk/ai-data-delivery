@@ -38,7 +38,7 @@ def export_neo4j(package):
                 refs.append([a['id'],target])
             else:
                 missing.append({'from':a['id'],'to':raw})
-        if a['kind']=='relation':
+        if a['kind'] in {'relation', 'mapping'}:
             start,end = (package.redirects.get(a[k],a[k]) for k in ('from','to'))
             if start in package.index and end in package.index:
                 relations.append([a['id'],start,end,a.get('predicate',''),a.get('relation_type','business')])

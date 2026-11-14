@@ -1,8 +1,8 @@
-# AI Data Delivery · v0.3.2
+# AI Data Delivery · v0.3.3
 
 **Start with a business question. Build the meanings it needs, then give an Agent the definitions, evidence and limits together.**
 
-Version 0.3.2 connects SQLite, PostgreSQL and MySQL catalogs to reviewed changes, affected-question regression and guarded publication. Export the same graph as an independent Agent package or importable Neo4j CSV/Cypher. [Try the metadata workflow](references/readonly-metadata.md).
+Version 0.3.3 connects SQLite, PostgreSQL and MySQL catalogs to reviewed changes, affected-question regression and guarded publication. Export the same graph as an independent Agent package or importable Neo4j CSV/Cypher. [Try the metadata workflow](references/readonly-metadata.md).
 
 [简体中文](README.zh-CN.md) · [Try the example](#try-it-with-included-materials) · [Workbench guide](workbench/README.md) · [Agent reader](references/agent-reader.md)
 
@@ -13,6 +13,8 @@ In **Business questions**, write what the business needs to understand, count, r
 ![The actual English workbench: equipment-loan semantics, rules and physical mapping](https://raw.githubusercontent.com/franklinxkk/ai-data-delivery/main/docs/images/equipment-en.png)
 
 *v0.3.0 graph view from the included synthetic exercise; the new question entry is not shown here. Solid arrows represent relationships; dotted lines represent required definition references. This is a maintained semantic model, not a production inventory dashboard.*
+
+v0.3.3 adds direct host review/edit, checks definition dates on every question handoff, and preserves mapping edges in Neo4j. Three independent model runs covered four synthetic domains each. [Actual results and screenshots](references/v0.3.3-release-validation.md).
 
 ## One small example, end to end
 
@@ -102,13 +104,13 @@ The semantic ZIP contains `model.json`, `sources.json`, `manifest.json`, a bilin
 
 The host supplies semantic reasoning. This tool is not an OWL/SHACL reasoner, database query gateway, enterprise authorization system or action executor. Rules describe requirements; they do not execute them. Optional legacy numeric checks remain available under **Check numbers and details**; `--demo` is that separate exercise.
 
-See [v0.3.2 validation](references/v0.3.2-release-validation.md) for the actual source baseline, tested workflows and remaining limits. No user-study accuracy/ease-of-use gains or new marketplace approval are claimed.
+See [v0.3.3 three-model validation](references/v0.3.3-release-validation.md) for the actual source baseline, tested workflows and remaining limits. No user-study accuracy/ease-of-use gains or new marketplace approval are claimed.
 
 Knowledge-only export excludes question metadata. **Create question handoff** explicitly includes the chosen question and expectations in a bound `task.json`; private review notes stay local. **Pre-1.0 historical formats are not guaranteed compatible.** Keep existing directories/backups; do not initialize examples over a working project.
 
 [MIT license](LICENSE) · [Security boundaries](SECURITY.md) · [Changes](CHANGELOG.md) · [Candidate API contract](references/m1-m2-contract.md)
 
-[0.3.2 validation / 本次验证与未证明项](references/v0.3.2-release-validation.md)
+[0.3.3 validation / 本次验证与未证明项](references/v0.3.3-release-validation.md)
 
 ## Track a database change through release
 

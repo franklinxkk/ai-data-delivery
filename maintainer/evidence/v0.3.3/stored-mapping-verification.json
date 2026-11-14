@@ -1,0 +1,94 @@
+[
+  {
+    "domain": "plants",
+    "namespace": "2cec9bcbca269f05cc61c27a344f42d91e66d8aafae06be15be5565679753e33",
+    "expected": [
+      [
+        "astra.plants.rule",
+        "astra.plants.value_mapping",
+        "meta_07cbbcd45c15a3e8f284c84d",
+        "reads renamed value from",
+        "maps_to"
+      ]
+    ],
+    "actual": [
+      [
+        "astra.plants.rule",
+        "astra.plants.value_mapping",
+        "meta_07cbbcd45c15a3e8f284c84d",
+        "reads renamed value from",
+        "maps_to"
+      ]
+    ],
+    "passed": true
+  },
+  {
+    "domain": "traffic",
+    "namespace": "3b9846899fa074ab18c7d83aed171f8526889ea4a72211666e8a7abebbe7c676",
+    "expected": [
+      [
+        "astra.traffic.rule",
+        "astra.traffic.value_mapping",
+        "meta_00152c91ed12759d274778b7",
+        "reads renamed value from",
+        "maps_to"
+      ]
+    ],
+    "actual": [
+      [
+        "astra.traffic.rule",
+        "astra.traffic.value_mapping",
+        "meta_00152c91ed12759d274778b7",
+        "reads renamed value from",
+        "maps_to"
+      ]
+    ],
+    "passed": true
+  },
+  {
+    "domain": "university",
+    "namespace": "3e25d44e7b009ddf013a5f29170acea7b26d0912a635941fa0aecb4a26e7fe2b",
+    "expected": [
+      [
+        "astra.university.rule",
+        "astra.university.value_mapping",
+        "meta_137a3a60cefcc6ab800d903f",
+        "reads renamed value from",
+        "maps_to"
+      ]
+    ],
+    "actual": [
+      [
+        "astra.university.rule",
+        "astra.university.value_mapping",
+        "meta_137a3a60cefcc6ab800d903f",
+        "reads renamed value from",
+        "maps_to"
+      ]
+    ],
+    "passed": true
+  },
+  {
+    "domain": "finance",
+    "namespace": "ee4d4569348ca2acd68c31990615159c678fef17fcefa398dfea48be7f7ffa9c",
+    "expected": [
+      [
+        "astra.finance.rule",
+        "astra.finance.value_mapping",
+        "meta_6a5c57592dfe40312269b3f8",
+        "reads renamed value from",
+        "maps_to"
+      ]
+    ],
+    "actual": [
+      [
+        "astra.finance.rule",
+        "astra.finance.value_mapping",
+        "meta_6a5c57592dfe40312269b3f8",
+        "reads renamed value from",
+        "maps_to"
+      ]
+    ],
+    "passed": true
+  }
+]

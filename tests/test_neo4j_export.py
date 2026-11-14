@@ -21,6 +21,25 @@ def example(project='one',draft=False):
 
 
 class Neo4jExportTests(unittest.TestCase):
+    def test_mapping_keeps_directed_edge_and_its_asset_and_dependencies(self):
+        items = [asset('rule', 'rule', 'Business rule', properties={'condition':'H1', 'requirement':'Review'}),
+                 asset('column', 'field', 'renamed_measure', properties={'value_type':'decimal'}),
+                 asset('mapping', 'mapping', 'Reviewed mapping',
+                       **{'from':'rule', 'to':'old_column', 'predicate':'maps to', 'relation_type':'maps_to'})]
+        raw, _ = build_package(items, [], project_id='mapping-test', revision=2, asset_ids=['mapping'], redirects={'old_column':'column'})
+        with zipfile.ZipFile(io.BytesIO(raw)) as z:
+            package = SemanticPackage({n:z.read(n) for n in z.namelist()})
+        exported, manifest = export_neo4j(package)
+        with zipfile.ZipFile(io.BytesIO(exported)) as z:
+            rows = list(csv.DictReader(io.StringIO(z.read('relationships.csv').decode())))
+            self.assertEqual([(r['id'], r['from_id'], r['to_id'], r['relation_type']) for r in rows],
+                             [('mapping', 'rule', 'column', 'maps_to')])
+            assets = list(csv.DictReader(io.StringIO(z.read('assets.csv').decode())))
+            self.assertEqual({r['id']:json.loads(r['asset_json']) for r in assets}, package.index)
+            refs = list(csv.DictReader(io.StringIO(z.read('references.csv').decode())))
+            self.assertEqual({(r['from_id'], r['to_id']) for r in refs}, {('mapping','rule'), ('mapping','column')})
+        self.assertEqual(manifest['counts']['relationships'], 1)
+
     def test_json_and_direction_survive_csv_without_code_interpolation(self):
         _,package=example();raw,manifest=export_neo4j(package)
         with zipfile.ZipFile(io.BytesIO(raw)) as z:

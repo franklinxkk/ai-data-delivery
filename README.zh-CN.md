@@ -1,8 +1,8 @@
-# AI Data Delivery · v0.3.2
+# AI Data Delivery · v0.3.3
 
 **先说清要解决的业务问题，再补齐它需要的含义，把定义、依据和边界一起交给 Agent。**
 
-0.3.2 接入 SQLite、PostgreSQL、MySQL 只读目录，跑通“结构变化→影响定位→修订候选→问题回归→发布”。同一图谱可交给独立 Agent，也可导出为 Neo4j CSV/Cypher 导入包。[试用元数据链路](references/readonly-metadata.md)。
+0.3.3 接入 SQLite、PostgreSQL、MySQL 只读目录，跑通“结构变化→影响定位→修订候选→问题回归→发布”。同一图谱可交给独立 Agent，也可导出为 Neo4j CSV/Cypher 导入包。[试用元数据链路](references/readonly-metadata.md)。
 
 [English](README.md) · [直接试用](#直接跑通一份样例) · [工作台说明](workbench/README.zh-CN.md) · [Agent 调用](references/semantic-package.md)
 
@@ -11,6 +11,8 @@
 ![真实中文工作台：设备借用的业务定义、规则和数据映射](https://raw.githubusercontent.com/franklinxkk/ai-data-delivery/main/docs/images/equipment-zh.png)
 
 *v0.3.0 合成样例的图谱视图；图中未展示新增的业务问题入口。实线箭头表示关系，虚线表示定义引用；这是语义模型，不是生产库存看板。*
+
+0.3.3 新增宿主直接核对与编辑，每次问题交付均重检定义日期，修复 Neo4j 遗漏映射边。三个独立模型各跑了四个合成领域。[实际结果与截图](references/v0.3.3-release-validation.md)。
 
 ## 一份材料最后能带来什么
 
@@ -100,13 +102,13 @@ python -X utf8 scripts/start.py --project "./work/my-domain" --language zh
 
 语义理解由宿主 Agent 提供。本工具不是 OWL/SHACL 推理器、生产问数网关、企业权限系统或动作执行器。规则定义不等于规则已执行。原有数值工具保留在 **数值与明细核对**，`--demo` 是独立的数值练习。
 
-本版实际基线、已验证链路和未证明项见 [v0.3.2 验收记录](references/v0.3.2-release-validation.md)。不宣称已获得用户研究证明的易用性、准确率提升或新版平台审查通过。
+本版实际基线、已验证链路和未证明项见 [v0.3.3 三模型验收记录](references/v0.3.3-release-validation.md)。不宣称已获得用户研究证明的易用性、准确率提升或新版平台审查通过。
 
 普通语义导出不带问题。**生成本问题的 Agent 包**明确包含本问题与预期，并将 `task.json` 绑定到快照；私人核对笔记留在本地。**1.0 前历史格式不承诺兼容。** 保留目录与备份，不在已有工作项目上重新初始化样例。
 
 [MIT](LICENSE) · [安全边界](SECURITY.zh-CN.md) · [更新记录](CHANGELOG.md) · [候选 API 合同](references/m1-m2-contract.md)
 
-[0.3.2 validation / 本次验证与未证明项](references/v0.3.2-release-validation.md)
+[0.3.3 validation / 本次验证与未证明项](references/v0.3.3-release-validation.md)
 
 ## 从数据库变化到重新发布
 

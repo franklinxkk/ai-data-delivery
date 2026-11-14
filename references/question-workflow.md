@@ -47,7 +47,9 @@ Example `question.json`, **only for an initialized equipment exercise whose defi
 }
 ```
 
-Use `asset_ids: []` when relevant definitions have not yet been selected. Other optional fields are `domain`, `scope` (string or object), and `as_of` (business date `YYYY-MM-DD`). Use the returned `id` for later updates. Updating a scenario preserves omitted fields; explicitly change a field only when intended. Question metadata is not provenance for a new business assertion.
+Use `asset_ids: []` when relevant definitions have not yet been selected. Other optional fields are `domain`, `scope` (string or object), and `as_of` (definition-applicability date `YYYY-MM-DD`). `as_of` checks the validity intervals of the selected definitions and their dependencies; missing bounds remain unknown. A data cutoff or latest-record rule belongs in the reviewed metric's `properties.time_scope` and evidence, not this filter. Leave `as_of` unspecified unless definition applicability is being requested; do not invent validity dates to clear a check. / `as_of` 是定义适用日期，取数截点写入指标时间范围及依据；未提供的定义有效期不能自动补齐。
+
+Use the returned `id` for later updates. Updating a scenario preserves omitted fields; explicitly change a field only when intended. Question metadata is not provenance for a new business assertion.
 
 Readiness is a read operation on the current saved question:
 
@@ -89,6 +91,22 @@ Candidate group summaries should make these points visible in business language:
 These are explanations of the **existing candidate group**, not a second approval object. The operator can inspect original passages, edit candidates, accept the whole dependency-complete group, defer or reject. Reuse prior confirmed decisions; do not request separate confirmation for every field. Relationship mappings inferred from a foreign key still require business evidence before becoming ownership or responsibility claims.
 
 核对卡先说“这个决定会怎样改变结果”，技术字段放在可展开的详细编辑中。缺口只限制依赖它的部分；没有当前库存不妨碍交付“可借”的定义，也不能被解释成库存为零。
+
+### Authorized host review and maintenance / 已授权的宿主核对与维护
+
+When the operator has already authorized a specific review or correction, the host can use the same transaction guards without opening a server or reverse-engineering browser tokens:
+
+```bash
+python -X utf8 scripts/knowledge.py --project "./work/equipment" --revision PROJECT_REVISION --operation-id OPERATION_ID review --group GROUP_ID --action accept --reason "Operator reviewed the stated meaning and evidence"
+python -X utf8 scripts/knowledge.py --project "./work/equipment" review --group GROUP_ID --action defer --reason "The operator needs the missing source before accepting"
+python -X utf8 scripts/knowledge.py --project "./work/equipment" edit --file "./work/revised-asset.json"
+```
+
+`review` requires an explicit action and reason. `--assets` optionally supplies a JSON array of revised assets belonging to that group; unrelated IDs are rejected. `edit` saves a draft unless `--confirm` is explicitly supplied under operator authorization. Both reuse ordinary evidence, dependency, fingerprint, revision and receipt checks. These commands do not authorize the host to invent approval or pass an observation. Never automatically retry a rejected group as accepted.
+
+已有操作者授权时，可直接用 `review` 记录明确的接纳、拒绝或暂缓理由；`--assets` 可提交本组内修订资产。`edit --file` 默认保存草稿，只有操作者明确授权确认时才加 `--confirm`。仍执行相同的依据、依赖、版本及回执检查，不需要反查浏览器实现。命令可用不等于获得批准，不可伪造通过记录。
+
+For a host that explicitly needs HTTP, open the local workbench URL printed by `start.py`, read the same-origin page's `meta[name="session-token"]`, and send its value as `X-Workbench-Token` on API requests. A browser on that page can use `document.querySelector('meta[name="session-token"]').content`; the page's `Origin` must remain the same local origin. The token is server-session scoped; do not copy it into source materials, shared files or external requests. Prefer the CLI when no browser session is needed. / HTTP 集成须从已打开的同源本机页面读取会话 meta，使用 `X-Workbench-Token` 头，保持同源；令牌只用于当前服务会话，不写入材料或分享文件。无需浏览器时优先用 CLI。
 
 ## Interpret checks / 怎样读检查结果
 

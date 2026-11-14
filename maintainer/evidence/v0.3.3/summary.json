@@ -1,0 +1,68 @@
+{
+  "date": "2026-11-14",
+  "baseline_commit": "6cdc35d86de321a97d272551426fdddd1136f94e",
+  "final_test_archive_sha256": "89bdad94f1921bdc3b41a70bccf749e8ab4af4fa4d12d52e94426d2fa0e1b09f",
+  "test_archive_development_preview": true,
+  "models": [
+    "gpt-6.1-terra",
+    "gpt-6.1-sol",
+    "gpt-6-astra"
+  ],
+  "author_flows": 12,
+  "cross_consumer_flows": 12,
+  "cold_rotation": {
+    "terra": "sol",
+    "sol": "astra",
+    "astra": "terra"
+  },
+  "python": {
+    "run": 448,
+    "passed": 443,
+    "skipped": 5,
+    "skip_reason": "Windows symbolic-link privilege unavailable"
+  },
+  "outcomes": {
+    "plants": {
+      "known_count": 1,
+      "known_ids": [
+        2
+      ],
+      "unknown_ids": [
+        4
+      ]
+    },
+    "traffic": {
+      "known_count": 1,
+      "known_ids": [
+        1
+      ],
+      "unknown_ids": [
+        4
+      ]
+    },
+    "university": {
+      "known_count": 1,
+      "known_ids": [
+        2
+      ],
+      "unknown_ids": [
+        4
+      ]
+    },
+    "finance": {
+      "known_positive_subtotal_cny": "100",
+      "unknown_ids": [
+        4
+      ],
+      "complete_total": null
+    }
+  },
+  "business_query_by_skill": false,
+  "answer_verified": false,
+  "final_graph_screenshots": {
+    "plants": "docs/images/v033-plants.png",
+    "traffic": "docs/images/v033-traffic.png",
+    "university": "docs/images/v033-university.png",
+    "finance": "docs/images/v033-finance.png"
+  }
+}

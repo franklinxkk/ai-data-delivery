@@ -526,7 +526,19 @@ def build_package(assets, sources, *, project_id, revision, asset_ids=None, draf
     manifest["files"] = {name: _sha(value) for name, value in sorted(entries.items())}
     entries["manifest.json"] = _json(manifest)
     if task is not None:
-        SemanticPackage(entries)  # Validate binding and explicit selection before publication.
+        checked = SemanticPackage(entries)  # Validate binding and explicit selection before publication.
+        if not draft and task.get("as_of"):
+            # Prior catalog publication may clear dirty scope. Recheck this
+            # handoff's date across its full closure, without paging shortcuts.
+            date = _date(task["as_of"], "as_of")
+            issues = [{"code": "APPLICABILITY_UNKNOWN" if status == "unknown" else "OUTSIDE_KNOWN_INTERVAL",
+                       "asset_id": aid, "asset_name": asset["name"], "as_of": task["as_of"]}
+                      for aid, asset in checked.index.items()
+                      if (status := _applicability(asset, date)) in {"unknown", "outside_known_interval"}]
+            if issues:
+                raise PackageError("TASK_APPLICABILITY_UNRESOLVED",
+                    "Review definition validity for the requested date, or explicitly export a draft / 请核对该日期的定义有效期，或明确导出草稿",
+                    issues=issues)
     if any(len(value) > MAX_FILE_BYTES for value in entries.values()) or sum(map(len, entries.values())) > MAX_PACKAGE_BYTES:
         raise PackageError("PACKAGE_TOO_LARGE", "交付范围超过文件大小限制，请缩小范围；没有截取生成部分包")
     out = io.BytesIO()

@@ -1,0 +1,214 @@
+[
+  {
+    "domain": "plants",
+    "check_status": "requires_execution",
+    "acceptance": "recorded_pass",
+    "answer_verified": false,
+    "regression_status": "not_applicable",
+    "business_assets_exactly_unchanged": true,
+    "reader_status": "requires_execution",
+    "reader_gaps": [
+      {
+        "code": "NO_DATA_CONNECTOR",
+        "message": "离线知识读取器未连接实例数据",
+        "next_step": "由消费系统提供已授权的数据连接和完整性信息"
+      }
+    ],
+    "request_complete": true,
+    "expected_mapping": {
+      "from_id": "astra.plants.rule",
+      "to_id": "meta_07cbbcd45c15a3e8f284c84d",
+      "relation_id": "astra.plants.value_mapping",
+      "predicate": "reads renamed value from"
+    },
+    "export_relationship_count": 1,
+    "export_relationship_type": "maps_to",
+    "live_runs": [
+      {
+        "snapshot_id": "snapshot_0dea3db1aa024f26",
+        "asset_count": 12,
+        "relationships": [
+          {
+            "from_id": "astra.plants.rule",
+            "to_id": "meta_07cbbcd45c15a3e8f284c84d",
+            "relation_id": "astra.plants.value_mapping",
+            "predicate": "reads renamed value from"
+          }
+        ]
+      },
+      {
+        "snapshot_id": "snapshot_0dea3db1aa024f26",
+        "asset_count": 12,
+        "relationships": [
+          {
+            "from_id": "astra.plants.rule",
+            "to_id": "meta_07cbbcd45c15a3e8f284c84d",
+            "relation_id": "astra.plants.value_mapping",
+            "predicate": "reads renamed value from"
+          }
+        ]
+      }
+    ],
+    "directed_mapping_matches": true,
+    "idempotent_live_result": true
+  },
+  {
+    "domain": "traffic",
+    "check_status": "requires_execution",
+    "acceptance": "recorded_pass",
+    "answer_verified": false,
+    "regression_status": "not_applicable",
+    "business_assets_exactly_unchanged": true,
+    "reader_status": "requires_execution",
+    "reader_gaps": [
+      {
+        "code": "NO_DATA_CONNECTOR",
+        "message": "离线知识读取器未连接实例数据",
+        "next_step": "由消费系统提供已授权的数据连接和完整性信息"
+      }
+    ],
+    "request_complete": true,
+    "expected_mapping": {
+      "from_id": "astra.traffic.rule",
+      "to_id": "meta_00152c91ed12759d274778b7",
+      "relation_id": "astra.traffic.value_mapping",
+      "predicate": "reads renamed value from"
+    },
+    "export_relationship_count": 1,
+    "export_relationship_type": "maps_to",
+    "live_runs": [
+      {
+        "snapshot_id": "snapshot_7a83838b6f3f48dc",
+        "asset_count": 12,
+        "relationships": [
+          {
+            "from_id": "astra.traffic.rule",
+            "to_id": "meta_00152c91ed12759d274778b7",
+            "relation_id": "astra.traffic.value_mapping",
+            "predicate": "reads renamed value from"
+          }
+        ]
+      },
+      {
+        "snapshot_id": "snapshot_7a83838b6f3f48dc",
+        "asset_count": 12,
+        "relationships": [
+          {
+            "from_id": "astra.traffic.rule",
+            "to_id": "meta_00152c91ed12759d274778b7",
+            "relation_id": "astra.traffic.value_mapping",
+            "predicate": "reads renamed value from"
+          }
+        ]
+      }
+    ],
+    "directed_mapping_matches": true,
+    "idempotent_live_result": true
+  },
+  {
+    "domain": "university",
+    "check_status": "requires_execution",
+    "acceptance": "recorded_pass",
+    "answer_verified": false,
+    "regression_status": "not_applicable",
+    "business_assets_exactly_unchanged": true,
+    "reader_status": "requires_execution",
+    "reader_gaps": [
+      {
+        "code": "NO_DATA_CONNECTOR",
+        "message": "离线知识读取器未连接实例数据",
+        "next_step": "由消费系统提供已授权的数据连接和完整性信息"
+      }
+    ],
+    "request_complete": true,
+    "expected_mapping": {
+      "from_id": "astra.university.rule",
+      "to_id": "meta_137a3a60cefcc6ab800d903f",
+      "relation_id": "astra.university.value_mapping",
+      "predicate": "reads renamed value from"
+    },
+    "export_relationship_count": 1,
+    "export_relationship_type": "maps_to",
+    "live_runs": [
+      {
+        "snapshot_id": "snapshot_fdb8e2e4434c4390",
+        "asset_count": 14,
+        "relationships": [
+          {
+            "from_id": "astra.university.rule",
+            "to_id": "meta_137a3a60cefcc6ab800d903f",
+            "relation_id": "astra.university.value_mapping",
+            "predicate": "reads renamed value from"
+          }
+        ]
+      },
+      {
+        "snapshot_id": "snapshot_fdb8e2e4434c4390",
+        "asset_count": 14,
+        "relationships": [
+          {
+            "from_id": "astra.university.rule",
+            "to_id": "meta_137a3a60cefcc6ab800d903f",
+            "relation_id": "astra.university.value_mapping",
+            "predicate": "reads renamed value from"
+          }
+        ]
+      }
+    ],
+    "directed_mapping_matches": true,
+    "idempotent_live_result": true
+  },
+  {
+    "domain": "finance",
+    "check_status": "requires_execution",
+    "acceptance": "recorded_pass",
+    "answer_verified": false,
+    "regression_status": "not_applicable",
+    "business_assets_exactly_unchanged": true,
+    "reader_status": "requires_execution",
+    "reader_gaps": [
+      {
+        "code": "NO_DATA_CONNECTOR",
+        "message": "离线知识读取器未连接实例数据",
+        "next_step": "由消费系统提供已授权的数据连接和完整性信息"
+      }
+    ],
+    "request_complete": true,
+    "expected_mapping": {
+      "from_id": "astra.finance.rule",
+      "to_id": "meta_6a5c57592dfe40312269b3f8",
+      "relation_id": "astra.finance.value_mapping",
+      "predicate": "reads renamed value from"
+    },
+    "export_relationship_count": 1,
+    "export_relationship_type": "maps_to",
+    "live_runs": [
+      {
+        "snapshot_id": "snapshot_c5175a0dff5a460a",
+        "asset_count": 12,
+        "relationships": [
+          {
+            "from_id": "astra.finance.rule",
+            "to_id": "meta_6a5c57592dfe40312269b3f8",
+            "relation_id": "astra.finance.value_mapping",
+            "predicate": "reads renamed value from"
+          }
+        ]
+      },
+      {
+        "snapshot_id": "snapshot_c5175a0dff5a460a",
+        "asset_count": 12,
+        "relationships": [
+          {
+            "from_id": "astra.finance.rule",
+            "to_id": "meta_6a5c57592dfe40312269b3f8",
+            "relation_id": "astra.finance.value_mapping",
+            "predicate": "reads renamed value from"
+          }
+        ]
+      }
+    ],
+    "directed_mapping_matches": true,
+    "idempotent_live_result": true
+  }
+]
