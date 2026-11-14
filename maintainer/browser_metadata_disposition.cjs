@@ -1,0 +1,21 @@
+const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),cp=require('child_process'),assert=require('assert/strict');
+const folder=path.resolve(process.argv[2]),python=process.env.TEST_PYTHON,origin=JSON.parse(fs.readFileSync(path.join(folder,'project/server.json'))).url;
+(async()=>{const browser=await chromium.launch({executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});try{
+ const page=await browser.newPage({viewport:{width:1600,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const nav=id=>page.locator(`nav [data-page="${id}"]`).click();
+ const post=async(route,action)=>{const waiting=page.waitForResponse(r=>r.url().endsWith('/'+route)&&r.request().method()==='POST');await action();const response=await waiting;assert.equal(response.status(),200,JSON.stringify(await response.json()));await page.waitForTimeout(100);return (await response.json()).result;};
+ const scan=()=>post('metadata-scan',()=>page.locator('[data-md=scan]').click());
+ const state=()=>page.evaluate(async()=>await(await fetch('/api/knowledge/state',{headers:{'X-Workbench-Token':document.querySelector('meta[name=session-token]').content}})).json());
+ await page.goto(origin+'/?lang=en#connections');await page.locator('#md-form').waitFor();
+ await page.locator('[data-md-field=name]').fill('Rejected candidate boundary');await page.locator('[data-md-field=path]').fill(path.join(folder,'source.db'));await page.locator('[data-md-field=tables]').fill('plant\ncare');
+ await post('metadata-connect',()=>page.locator('#md-form button[type=submit]').click());await scan();await nav('review');
+ await page.locator('[data-group-reason]').fill('Synthetic operator rejects pending definitions');await post('review',()=>page.locator('[data-mode=reject]').click());
+ cp.execFileSync(python,['-X','utf8','-c','import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); d.execute("ALTER TABLE care ADD COLUMN operator_name TEXT"); d.commit(); d.close()',path.join(folder,'source.db')]);
+ await nav('connections');const observed=await scan();assert(observed.scan.requires_explicit_refresh);assert.equal(observed.scan.group_ids.length,0);
+ assert.equal((await state()).groups.filter(g=>g.status==='rejected'&&!g.superseded_by).length,1);
+ assert.match(await page.locator('main').innerText(),/Previously rejected candidates stay rejected/);
+ await post('metadata-scan',()=>page.locator('[data-md=refresh]').click());await nav('review');await page.locator('[data-group-reason]').fill('Explicit new observation reviewed by synthetic operator');await post('review',()=>page.locator('[data-mode=accept]').click());
+ assert((await state()).assets.some(a=>a.properties?.column==='operator_name'));
+ await nav('connections');await page.screenshot({path:path.join(folder,'disposition.png'),fullPage:true});assert.deepEqual(errors,[]);
+ const result={checks:['Rejected group stays rejected when another table changes','New observation retained without silently reproposing','Explicit refresh produces complete reviewable candidates','UI acceptance preserves both tables and new field'],errors};fs.writeFileSync(path.join(folder,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

@@ -91,7 +91,11 @@ class MetadataService:
             candidates, source_refs = [], []
             current = {a["id"]: a for a in sem["assets"]}
             unresolved = [g for g in know["groups"] if g.get("metadata_connection") == conn["id"] and not g.get("superseded_by") and g["status"] != "accepted"]
+            hold_proposals = any(g['status'] == 'rejected' for g in unresolved) and not req.get('refresh_review')
+            scan['requires_explicit_refresh'] = bool(hold_proposals)
             carry = {conn["asset_tables"][c["target_id"]] for g in unresolved for c in g["candidates"] if c["target_id"] in conn["asset_tables"]}
+            if req.get('refresh_review'):
+                carry.update(conn['asset_tables'][aid] for aid in conn['dirty_asset_ids'] if aid in conn['asset_tables'])
             for name, table in observed["tables"].items():
                 old = previous["tables"].get(name) if previous else None
                 if previous and digest(old) == digest(table) and name not in carry:
@@ -132,9 +136,9 @@ class MetadataService:
             sem["assets"] = list(current.values())
             mark_dependents(sem["assets"], scan["changed_asset_ids"])
             # Old scan proposals based on superseded source revisions remain historical, never auto-accepted.
-            for group in unresolved:
+            for group in unresolved if not hold_proposals else []:
                 group["status"], group["superseded_by"] = "stale", scan["id"]
-            if candidates:
+            if candidates and not hold_proposals:
                 batch = {"id": uid("batch"), "status": "review", "sources": source_refs, "base_revision": req["revision"], "created": now()}
                 know["batches"].append(batch)
                 scan["group_ids"] = self.knowledge._add_groups([{"summary": "Review database structure changes / 核对数据库结构变化", "candidates": candidates}], batch, sem, know)

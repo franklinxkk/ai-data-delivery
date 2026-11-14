@@ -1,0 +1,9 @@
+{
+  "checks": [
+    "Rejected group stays rejected when another table changes",
+    "New observation retained without silently reproposing",
+    "Explicit refresh produces complete reviewable candidates",
+    "UI acceptance preserves both tables and new field"
+  ],
+  "errors": []
+}

@@ -180,6 +180,20 @@ class MetadataTests(unittest.TestCase):
         revised=self.call('metadata_scan',connection_id=self.conn,refresh_review=True)
         self.assertNotEqual(revised['scan']['group_ids'],r['scan']['group_ids']);self.accept(revised)
 
+    def test_other_table_changes_do_not_revive_rejected_candidates(self):
+        self.accept(self.scan())
+        self.sql('ALTER TABLE plant ADD COLUMN humidity REAL')
+        rejected=self.scan();gid=rejected['scan']['group_ids'][0]
+        self.call('review',group_id=gid,action='reject',reason='Do not repropose without explicit operator request')
+        self.sql('ALTER TABLE care ADD COLUMN operator_name TEXT')
+        observed=self.scan()
+        self.assertTrue(observed['scan']['requires_explicit_refresh'])
+        self.assertEqual(observed['scan']['group_ids'],[])
+        previous=next(g for g in self.s.state()['groups'] if g['id']==gid)
+        self.assertEqual(previous['status'],'rejected');self.assertNotIn('superseded_by',previous)
+        explicit=self.call('metadata_scan',connection_id=self.conn,refresh_review=True);self.accept(explicit)
+        self.assertTrue({asset_id(self.conn,'care','operator_name'),asset_id(self.conn,'plant','humidity')} <= {a['id'] for a in self.s.state()['assets']})
+
     def test_physical_identity_cannot_be_merged_away_from_connection(self):
         self.accept(self.scan())
         with self.assertRaisesRegex(ValueError,'物理身份'):
