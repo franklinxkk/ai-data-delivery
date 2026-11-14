@@ -1,8 +1,8 @@
-# AI Data Delivery · v0.3.1
+# AI Data Delivery · v0.3.2
 
 **Start with a business question. Build the meanings it needs, then give an Agent the definitions, evidence and limits together.**
 
-Version 0.3.1 adds question-driven authoring, reader discovery, [four-domain exercises](examples/cross-domain/README.md) and bounded [OGS export/audit](references/neo4j-interop.md).
+Version 0.3.2 connects SQLite, PostgreSQL and MySQL catalogs to reviewed changes, affected-question regression and guarded publication. Export the same graph as an independent Agent package or importable Neo4j CSV/Cypher. [Try the metadata workflow](references/readonly-metadata.md).
 
 [简体中文](README.zh-CN.md) · [Try the example](#try-it-with-included-materials) · [Workbench guide](workbench/README.md) · [Agent reader](references/agent-reader.md)
 
@@ -102,10 +102,18 @@ The semantic ZIP contains `model.json`, `sources.json`, `manifest.json`, a bilin
 
 The host supplies semantic reasoning. This tool is not an OWL/SHACL reasoner, database query gateway, enterprise authorization system or action executor. Rules describe requirements; they do not execute them. Optional legacy numeric checks remain available under **Check numbers and details**; `--demo` is that separate exercise.
 
-See [v0.3.1 validation](references/v0.3.1-release-validation.md) for the actual source baseline, tested workflows and remaining limits. No user-study accuracy/ease-of-use gains or new marketplace approval are claimed.
+See [v0.3.2 validation](references/v0.3.2-release-validation.md) for the actual source baseline, tested workflows and remaining limits. No user-study accuracy/ease-of-use gains or new marketplace approval are claimed.
 
 Knowledge-only export excludes question metadata. **Create question handoff** explicitly includes the chosen question and expectations in a bound `task.json`; private review notes stay local. **Pre-1.0 historical formats are not guaranteed compatible.** Keep existing directories/backups; do not initialize examples over a working project.
 
 [MIT license](LICENSE) · [Security boundaries](SECURITY.md) · [Changes](CHANGELOG.md) · [Candidate API contract](references/m1-m2-contract.md)
 
-[0.3.1 validation / 本次验证与未证明项](references/v0.3.1-release-validation.md)
+[0.3.2 validation / 本次验证与未证明项](references/v0.3.2-release-validation.md)
+
+## Track a database change through release
+
+[Run the SQLite example or connect PostgreSQL/MySQL](references/readonly-metadata.md). Only explicitly enabled nonunique-index metadata synchronization is automatic. New/removed/renamed fields, constraints and business mappings require review; affected questions must be current before publication.
+
+![Actual v0.3.2 metadata review and regression page](https://raw.githubusercontent.com/franklinxkk/ai-data-delivery/main/docs/images/metadata-en.png)
+
+Neo4j is optional. The delivery page and `scripts/neo4j_export.py` generate importable CSV + fixed Cypher, retaining stable IDs, relationship direction, scope and evidence in separate snapshot namespaces.

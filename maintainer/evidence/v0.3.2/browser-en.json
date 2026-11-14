@@ -1,0 +1,11 @@
+{
+  "language": "en",
+  "checks": [
+    "Profile saved and reopened through UI",
+    "Catalog scan created proposals, UI review confirmed them",
+    "Saved question, declared context regression and confirmed handoff",
+    "Changed structure blocks handoff before review",
+    "Reviewed revision, repeated affected regression and downloaded semantic/Neo4j packages"
+  ],
+  "errors": []
+}

@@ -1,0 +1,158 @@
+{
+  "version": [
+    [
+      "Neo4j Kernel",
+      [
+        "5.26.33"
+      ]
+    ]
+  ],
+  "passed": 12,
+  "results": [
+    {
+      "fixture": "mysql-agriculture",
+      "namespace": "29c50b0d6b611f7cf8bb5ecd8e634a7c8beef7883f28e25fbf234923b1ef72d9",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 4,
+        "references": 3,
+        "relationships": 0,
+        "evidence": 6
+      }
+    },
+    {
+      "fixture": "mysql-finance",
+      "namespace": "85357a07e9997c247ad4d9ab58890b3e3e80a1dfb874ccd0b215d88fa0e06c3d",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 7,
+        "references": 6,
+        "relationships": 1,
+        "evidence": 12
+      }
+    },
+    {
+      "fixture": "mysql-traffic",
+      "namespace": "8012eafbd3550927c22495ce21a3a6580850f1daf23289e42c113d531f7c9226",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 5,
+        "references": 4,
+        "relationships": 0,
+        "evidence": 8
+      }
+    },
+    {
+      "fixture": "mysql-university",
+      "namespace": "4b8d593ca9287f12e95150b597f024d7c8e5420e3c351f81dc1f4f7731ef686d",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 5,
+        "references": 4,
+        "relationships": 0,
+        "evidence": 8
+      }
+    },
+    {
+      "fixture": "postgresql-agriculture",
+      "namespace": "f67469e51a2697742cd9587ca3a3f69645d8f70c1cd3287aa1a1daaa2884344b",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 4,
+        "references": 3,
+        "relationships": 0,
+        "evidence": 6
+      }
+    },
+    {
+      "fixture": "postgresql-finance",
+      "namespace": "dcf932b483c7835d199a880c8416b9a14d8556221b75b531ab22f133e4ec9e34",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 7,
+        "references": 6,
+        "relationships": 1,
+        "evidence": 12
+      }
+    },
+    {
+      "fixture": "postgresql-traffic",
+      "namespace": "c534f30a0cb16bfe1ea73898963e929b98f6d8d84d34193aa4ef398fa14395c1",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 5,
+        "references": 4,
+        "relationships": 0,
+        "evidence": 8
+      }
+    },
+    {
+      "fixture": "postgresql-university",
+      "namespace": "cadbfa29fd0120ce6a7c2057d8f65b006f27fcd5ea755e5760c18512452f78e9",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 5,
+        "references": 4,
+        "relationships": 0,
+        "evidence": 8
+      }
+    },
+    {
+      "fixture": "sqlite-agriculture",
+      "namespace": "d27eb863b83afa39bb71b54a1170fd955167034b5de8b54f2367f64c2f6ed6b2",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 4,
+        "references": 3,
+        "relationships": 0,
+        "evidence": 6
+      }
+    },
+    {
+      "fixture": "sqlite-finance",
+      "namespace": "c1dd0baa8a020d62188cd518d58346a40ba3aaa7e24fdeb1ac8fa143d045f029",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 7,
+        "references": 6,
+        "relationships": 1,
+        "evidence": 12
+      }
+    },
+    {
+      "fixture": "sqlite-traffic",
+      "namespace": "8054e99dd3ba398c43a46a4c8ec7a3df48671a7e2b88ee0e8c8f2392e3684881",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 5,
+        "references": 4,
+        "relationships": 0,
+        "evidence": 8
+      }
+    },
+    {
+      "fixture": "sqlite-university",
+      "namespace": "4d2efd82ccde7440ef239ce3427aa5681f2d94df0faae865f1465c69ba04efc1",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 5,
+        "references": 4,
+        "relationships": 0,
+        "evidence": 8
+      }
+    }
+  ],
+  "scope": "isolated loopback Neo4j; CSV/Cypher import, byte-equivalent JSON, directed relationships, evidence and sequential idempotency"
+}

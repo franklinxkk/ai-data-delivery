@@ -1,0 +1,38 @@
+{
+  "version": [
+    [
+      "Neo4j Kernel",
+      [
+        "5.26.33"
+      ]
+    ]
+  ],
+  "passed": 2,
+  "results": [
+    {
+      "fixture": "draft",
+      "namespace": "c95e18d415d83cc9c0a3a03c609d6675185abceafed3ac3d7b2c8acb73bcf4ec",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 3,
+        "references": 2,
+        "relationships": 1,
+        "evidence": 3
+      }
+    },
+    {
+      "fixture": "hostile",
+      "namespace": "9b028d7051180efad730683a0e181421b5c5819a950b6de3a6093a2f32d6f2cb",
+      "status": "passed",
+      "reimports": 2,
+      "counts": {
+        "assets": 3,
+        "references": 2,
+        "relationships": 1,
+        "evidence": 3
+      }
+    }
+  ],
+  "scope": "isolated loopback Neo4j; CSV/Cypher import, byte-equivalent JSON, directed relationships, evidence and sequential idempotency"
+}

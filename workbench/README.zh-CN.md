@@ -1,4 +1,4 @@
-# 本地语义工作台 · v0.3.1
+# 本地语义工作台 · v0.3.2
 
 **问题验收**支持预期定义、应披露缺口及有实际依据的样例核对记录；依赖变化后标记待复验并展示影响路径。**生成本问题的 Agent 包**将已保存请求与范围内语义一起交付，独立 Agent 可先用 `task --detail summary`，再回查来源。[操作与边界](../references/question-delivery.md#问题验收变更影响与-agent-交付)。
 
@@ -140,3 +140,7 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" neig
 本机页面和 API 使用同源检查及临时会话令牌，CLI 直接访问明确指定的本机项目；这不是多人权限或企业认证系统。知识解析、语义包读取不联网、不执行材料指令。原有消费者适配须明确配置地址，按其受控端点规则调用。
 
 v0.3.0 的操作说明不等于验收报告。维护者可按受影响范围运行 `tests/test_knowledge_parsers.py`、`tests/test_knowledge_flow.py`、`tests/test_semantic_package.py` 及原有工作台测试；完整入口为 `python -m unittest discover -s tests -v`。日常使用无需先跑所有检查；测试、真实页面操作、业务验收与生产部署应分别记录，不沿用旧版测试数或收益结论。
+
+## 数据库连接与 Neo4j
+
+“数据库连接”支持 SQLite、PostgreSQL、MySQL 明确选表、按需读取、变化前后核对、影响路径、问题回归与发布保护，不查询业务行。[连接配置、凭据、自动/人工规则及可运行样例](../references/readonly-metadata.md)。交付页可为已保存快照下载 Neo4j CSV＋固定 Cypher；Neo4j 仍是可选出口。

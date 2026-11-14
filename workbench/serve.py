@@ -77,6 +77,13 @@ def make_server(service, port=0):
                     return self.response(200, service.knowledge.state())
                 if path.startswith("/api/knowledge/download/"):
                     sid = path.rsplit("/", 1)[-1]
+                    if urlsplit(self.path).query == 'format=neo4j':
+                        import io, zipfile
+                        from workbench.semantic_package import SemanticPackage
+                        from workbench.neo4j_export import export_neo4j
+                        with zipfile.ZipFile(io.BytesIO(service.knowledge.download(sid))) as z:
+                            content, _ = export_neo4j(SemanticPackage({n:z.read(n) for n in z.namelist()}))
+                        return self.response(200, content, "application/zip", sid + "-neo4j.zip")
                     return self.response(200, service.knowledge.download(sid), "application/zip", sid + ".zip")
                 if path.startswith("/api/knowledge/source/"):
                     attachment = service.store.attachment(path.rsplit("/", 1)[-1])
@@ -93,7 +100,7 @@ def make_server(service, port=0):
                     return self.response(200, body, "text/html; charset=utf-8", download_session=True)
                 if path == "/ui-en.js":
                     return self.response(200, b"window.UI_EN=" + (STATIC / "ui-en.json").read_bytes() + b";", "text/javascript; charset=utf-8")
-                if path in {"/app.js", "/i18n.js", "/style.css", "/knowledge.js", "/knowledge.css", "/scenarios.js", "/graph-layout.js", "/vendor/elk.bundled.js"}:
+                if path in {"/app.js", "/i18n.js", "/style.css", "/knowledge.js", "/knowledge.css", "/scenarios.js", "/metadata.js", "/graph-layout.js", "/vendor/elk.bundled.js"}:
                     return self.response(200, (STATIC / path[1:]).read_bytes(), "text/javascript; charset=utf-8" if path.endswith("js") else "text/css; charset=utf-8")
                 self.response(404, {"error": "页面不存在"})
             except PermissionError as exc:
@@ -120,6 +127,8 @@ def make_server(service, port=0):
                           "/api/layout": lambda r: service.store.save_layout(r["positions"]),
                           "/api/restore": lambda r: service.store.restore(r["target"], r["revision"])}
                 routes.update({"/api/knowledge/" + name: action for name, action in {
+                    "metadata-connect": service.knowledge.metadata_connect, "metadata-scan": service.knowledge.metadata_scan,
+                    "metadata-regress": service.knowledge.metadata_regress,
                     "import": service.knowledge.import_material, "task": service.knowledge.task,
                     "scenario": service.knowledge.scenario, "scenario-check": service.knowledge.scenario_check,
                     "scenario-assess": service.knowledge.scenario_assess, "impact": service.knowledge.impact,

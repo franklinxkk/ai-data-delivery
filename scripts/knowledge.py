@@ -25,6 +25,13 @@ def main(argv=None):
     parser.add_argument("--operation-id", help="Reuse this ID with identical input after an uncertain result")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("state", help="Read the current project and material/candidate status")
+    connection = commands.add_parser("connect", help="Register a metadata-only connection; credentials use environment variable names")
+    connection.add_argument("--file", required=True, help="Connection profile JSON, never a password or SQL")
+    for command in ("scan", "regress"):
+        item = commands.add_parser(command, help="Read selected catalog / check affected question contracts")
+        item.add_argument("--connection", required=True)
+        if command == "scan":
+            item.add_argument("--refresh-review", action="store_true", help="Explicitly regenerate unresolved candidates against current graph and a fresh catalog observation")
     commands.add_parser("example", help="Prepare authored proposals after reviewing the equipment example DDL; never confirms knowledge")
     scenario = commands.add_parser("scenario", help="Save a business question and selected knowledge, never confirm it")
     scenario.add_argument("--file", required=True, help="JSON scenario object; omit ID for a new question")
@@ -64,6 +71,11 @@ def main(argv=None):
     try:
         if args.command == "state":
             result = service.state()
+        elif args.command == "connect":
+            result = service.metadata_connect({**req, "connection": json.loads(Path(args.file).read_text(encoding="utf-8-sig"))})
+        elif args.command in {"scan", "regress"}:
+            result = getattr(service, "metadata_" + args.command)({**req, "connection_id": args.connection,
+                **({"refresh_review": args.refresh_review} if args.command == "scan" else {})})
         elif args.command == "receipt":
             result = {"receipt": store.operation(args.id)}
         elif args.command == "impact":

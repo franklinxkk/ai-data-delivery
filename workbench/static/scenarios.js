@@ -116,5 +116,5 @@ window.ScenarioWorkbench=(()=>{
     }catch(err){notice=err.message;const target=$('#sq-error');if(target)target.textContent=notice;else C.notify(notice);}
     finally{b.disabled=false;busy=false;}
   });
-  return {configure,update,render,isDirty:()=>dirty};
+  return {configure,update,render,open,isDirty:()=>dirty};
 })();

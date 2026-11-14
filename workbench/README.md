@@ -1,4 +1,4 @@
-# Semantic Workbench · v0.3.1
+# Semantic Workbench · v0.3.2
 
 [简体中文](README.zh-CN.md) · [Quickstart](../README.md) · [Candidate contract](../references/m1-m2-contract.md)
 
@@ -86,3 +86,7 @@ Private backups are separate and include original materials and SQLite. Restore 
 **Check numbers and details** opens the retained numeric tools; **Open numeric sample data** manages their snapshots. They use separate numeric models. `--demo` starts that older exercise, distinct from the ontology quickstart. Confirming semantic definitions does not create SQL or synchronize numeric models.
 
 This is a local, single-user tool. It is not a database authorization system, production query gateway or business action executor. Source instructions do not authorize tools. See [security](../SECURITY.md). Before 1.0 there is no guarantee of compatibility with old projects or formats.
+
+## Database connections and Neo4j
+
+The new **Database connections** page supports explicit SQLite/PostgreSQL/MySQL catalog observations, before/after review, dependency paths, current question regression and guarded publication. It never queries business rows. [Profiles, credentials, automatic/manual rules and runnable example](../references/readonly-metadata.md). The delivery page can download Neo4j CSV + fixed Cypher for each issued snapshot; Neo4j stays optional.

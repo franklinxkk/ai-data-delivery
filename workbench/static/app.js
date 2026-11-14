@@ -4,7 +4,7 @@ const tr=(s,...v)=>window.UIText?window.UIText.t(s,...v):typeof s==='string'?s:s
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const token = $('meta[name="session-token"]').content;
-const menus = [['questions',tr('业务问题')],['knowledge',tr('知识材料')],['review',tr('待核对')],['graph',tr('语义图谱')],['publish',tr('交付与调用')],['history',tr('项目历史')]];
+const menus = [['questions',tr('业务问题')],['knowledge',tr('知识材料')],['review',tr('待核对')],['graph',tr('语义图谱')],['publish',tr('交付与调用')],['history',tr('项目历史')],['connections',tr('数据库连接')]];
 const legacyMenus = [['home',tr('任务范围')],['data',tr('试算资料')],['model',tr('数值模型')],['check',tr('数值与明细核对')],['delivery',tr('项目备份')],['issues',tr('项目问题')]];
 const names = {datasets:tr('数据集'),entities:tr('业务对象'),relationships:tr('数据关联'),relations:tr('业务关系'),metrics:tr('指标'),templates:tr('明细模板'),concepts:tr('业务概念'),constraints:tr('数据约束')};
 const states = {pass:tr('已通过'),fail:tr('未通过'),error:tr('执行错误'),blocked:tr('存在阻断'),review:tr('待核对'),not_ready:tr('尚未验证'),attention:tr('需关注'),computed_only:tr('仅完成计算'),declared:tr('已声明'),declared_only:tr('仅结构声明'),needs_input:tr('待补齐'),unknown:tr('证据不足'),executed_only:tr('已调用，待核对'),model_mismatch:tr('引擎模型不一致')};
@@ -34,6 +34,7 @@ function render() {
   if(![...menus,...legacyMenus].some(x=>x[0]===page))page='questions';
   $('nav').innerHTML=menus.map(([id,label],i)=>btn(`<span class="num">0${i+1}</span><span class="nav-label">${label}</span>`,'navigate',`data-page="${id}"`,id===page?'active':'')).join('');
   $('#breadcrumb').textContent=tr('工作空间 / ')+[...menus,...legacyMenus].find(x=>x[0]===page)[1];
+  if(page==='connections'){$('#main').innerHTML=window.MetadataWorkbench.render();return;}
   if(page==='questions'){$('#main').innerHTML=window.ScenarioWorkbench.render();return;}
   if(menus.some(x=>x[0]===page)){$('#main').innerHTML=window.KnowledgeWorkbench.render(page);window.KnowledgeWorkbench.mount();return;}
   $('#main').innerHTML=({home:homePage,data:dataPage,model:modelPage,check:checkPage,delivery:deliveryPage,issues:issuesPage}[page])();
@@ -248,4 +249,5 @@ document.addEventListener('dblclick',e=>{const n=e.target.closest('#graph [data-
 document.addEventListener('keydown',e=>{const n=e.target.closest('#graph [data-node]');if(n&&e.key==='Enter')editAsset(graphMode,n.dataset.node);});
 window.KnowledgeWorkbench.configure({api,reload,go,notify,legacyState:()=>state});
 window.ScenarioWorkbench.configure({api,reload,go,notify});
+window.MetadataWorkbench.configure({api,reload,go,notify});
 reload().catch(e=>{$('#main').innerHTML=empty(tr('无法读取项目'),esc(e.message));});

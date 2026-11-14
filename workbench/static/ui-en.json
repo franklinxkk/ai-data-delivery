@@ -934,5 +934,6 @@
   "当前问题没有选择定义，请先选择，或明确切换为全部业务语义。": "No definitions selected for this question. Select definitions or explicitly switch to all business semantics.",
   "当前交付选择无法在刷新后恢复，请保持此页完成交付。": "This delivery selection cannot be recovered after reload. Keep this page open until delivery is complete.",
   "尚未选择定义": "No definitions selected",
-  " · 尚未选择定义": " · No definitions selected"
+  " · 尚未选择定义": " · No definitions selected",
+  "数据库连接": "Database connections"
 }

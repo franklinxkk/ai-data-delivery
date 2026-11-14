@@ -1,0 +1,8 @@
+invalid pdf header: b'broke'
+EOF marker not found
+EOF marker not found
+----------------------------------------------------------------------
+[PASS] environment probe
+Ran 442 tests in 52.314s
+
+OK (skipped=5)

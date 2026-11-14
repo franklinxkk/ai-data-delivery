@@ -2,6 +2,14 @@
 
 Versioning: keep published tags unchanged; continue from `0.3.0` with patch increments (`0.3.1`, `0.3.2`, …). Unreleased previews use `-dev`. / 版本约定：保留已发布标签，后续默认递增补丁号，开发预览加 `-dev`，不重写历史版本。
 
+## 0.3.2 — 2026-11-14
+
+- Add optional SQLite, PostgreSQL and MySQL catalog-only connectors with named environment credentials, explicit table scope and bilingual workbench/CLI controls. / 新增三种数据库只读元数据连接、凭据变量、明确选表及双语入口。
+- Reuse evidence-linked candidate review; trace catalog changes to dependent questions, preserve unresolved candidates, and require current regression before confirmed publication. / 复用候选核对，定位问题影响，保留未核对候选，发布前重检结构与回归依据。
+- Allow explicitly enabled nonunique-index-only synchronization of untouched physical definitions; keep identity, mapping and business changes under review. / 可授权机械同步非唯一索引，其余身份、映射及业务变化需核对。
+- Export verified snapshots as Neo4j CSV and fixed Cypher, retaining directed relations, stable identities, full JSON and evidence in isolated snapshot namespaces. / 新增可导入 Neo4j 的文件包，保留方向、身份、完整语义与证据，隔离不同快照。
+- Add a runnable metadata exercise. Pre-1.0 format compatibility is not guaranteed. / 新增可运行元数据练习；1.0 前不承诺旧格式兼容。
+
 ## 0.3.1 — 2026-11-13
 
 - Unify question discovery with safe rule/metric/scope search; fix relative cross-domain output paths. / 统一问题入口和规则、指标、范围检索，修复四域样例相对路径。

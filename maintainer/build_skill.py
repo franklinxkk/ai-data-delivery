@@ -10,7 +10,7 @@ import zipfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = {"SKILL.md", "SKILL.zh-CN.md", "README.md", "README.zh-CN.md", "SECURITY.zh-CN.md", "CHANGELOG.md", "LICENSE", "SECURITY.md", "requirements.txt"}
+FILES = {"SKILL.md", "SKILL.zh-CN.md", "README.md", "README.zh-CN.md", "SECURITY.zh-CN.md", "CHANGELOG.md", "LICENSE", "SECURITY.md", "requirements.txt", "requirements-connectors.txt"}
 DIRECTORIES = {"scripts", "references", "examples", "starter_packs", "workbench"}
 # These source-only tools must not re-enter an installed skill, even when a
 # dirty preview's git index still contains their old runtime locations.

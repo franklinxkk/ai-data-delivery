@@ -1,0 +1,118 @@
+{
+  "passed": 12,
+  "results": [
+    {
+      "engine": "sqlite",
+      "version": "3.49.1",
+      "domain": "agriculture",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "9df54742850404c80b900ae9b1018cd0993a15d6ed4f9a7f73a852267023af3c"
+    },
+    {
+      "engine": "sqlite",
+      "version": "3.49.1",
+      "domain": "traffic",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "e24d164999e82265e98ef94a34b233ce7e69e4ec27a2583e7ccf4d427413202e"
+    },
+    {
+      "engine": "sqlite",
+      "version": "3.49.1",
+      "domain": "university",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "43172bee680925cafd2f4c21b4e721cef64de90a2f2067fbca601ce0c0c6015b"
+    },
+    {
+      "engine": "sqlite",
+      "version": "3.49.1",
+      "domain": "finance",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "41f96dd55a96d7c3d970f223f670fae2fe9f2e9a7c204ce2f94723a88034f56b"
+    },
+    {
+      "engine": "postgresql",
+      "version": "18.7",
+      "domain": "agriculture",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "aefc1e086a972ce6739c02d7abb3415b9710adf8c8e0e77078df9fea8112373f"
+    },
+    {
+      "engine": "postgresql",
+      "version": "18.7",
+      "domain": "traffic",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "2fbfe22d284eb585a00cd7131a9c8d1a1a9165541d78065faf04a943ba5cec1f"
+    },
+    {
+      "engine": "postgresql",
+      "version": "18.7",
+      "domain": "university",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "e2e3b3fae0f431a11bbc2feb7985d222d2eba999c6c5fcc68107bb31c444a3f0"
+    },
+    {
+      "engine": "postgresql",
+      "version": "18.7",
+      "domain": "finance",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "4b8544bce34c9410297e1921d53aaa98b021f5650fab92bc254d1b65e483beb8"
+    },
+    {
+      "engine": "mysql",
+      "version": "8.4.13",
+      "domain": "agriculture",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "d95c0bec1204c4a76edb4b58db9ea8f803b09021d76d8bcc1a1d6c616e9db1a4"
+    },
+    {
+      "engine": "mysql",
+      "version": "8.4.13",
+      "domain": "traffic",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "efeb895e1c9b06377b315d00dbd266122a0d579e53d986434e6b301c7b9ba2cd"
+    },
+    {
+      "engine": "mysql",
+      "version": "8.4.13",
+      "domain": "university",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "c37be89fc4da240266592a23ccb2ac848f1a2dcd5ab0e0f82a8f6546282e692a"
+    },
+    {
+      "engine": "mysql",
+      "version": "8.4.13",
+      "domain": "finance",
+      "status": "passed",
+      "business_rows_read": 0,
+      "answer_verified": false,
+      "package_sha256": "c6ec9e51d5df14490ee7a8dc7bdc296a3f40909fae45aa4b3483212cf2b09af2"
+    }
+  ],
+  "limits": [
+    "Synthetic databases, not production acceptance",
+    "Checks context and recorded observations, not business answers",
+    "Neo4j file generation; database import has its own test"
+  ]
+}

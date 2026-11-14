@@ -1,8 +1,8 @@
-# AI Data Delivery · v0.3.1
+# AI Data Delivery · v0.3.2
 
 **先说清要解决的业务问题，再补齐它需要的含义，把定义、依据和边界一起交给 Agent。**
 
-0.3.1 增加业务问题入口、面向问题的读取路径、[四域练习](examples/cross-domain/README.md)与有限的 [OGS 导出／审计](references/neo4j-interop.md)，并补齐问题验收、变更影响与 Agent 问题交付。
+0.3.2 接入 SQLite、PostgreSQL、MySQL 只读目录，跑通“结构变化→影响定位→修订候选→问题回归→发布”。同一图谱可交给独立 Agent，也可导出为 Neo4j CSV/Cypher 导入包。[试用元数据链路](references/readonly-metadata.md)。
 
 [English](README.md) · [直接试用](#直接跑通一份样例) · [工作台说明](workbench/README.zh-CN.md) · [Agent 调用](references/semantic-package.md)
 
@@ -100,10 +100,18 @@ python -X utf8 scripts/start.py --project "./work/my-domain" --language zh
 
 语义理解由宿主 Agent 提供。本工具不是 OWL/SHACL 推理器、生产问数网关、企业权限系统或动作执行器。规则定义不等于规则已执行。原有数值工具保留在 **数值与明细核对**，`--demo` 是独立的数值练习。
 
-本版实际基线、已验证链路和未证明项见 [v0.3.1 验收记录](references/v0.3.1-release-validation.md)。不宣称已获得用户研究证明的易用性、准确率提升或新版平台审查通过。
+本版实际基线、已验证链路和未证明项见 [v0.3.2 验收记录](references/v0.3.2-release-validation.md)。不宣称已获得用户研究证明的易用性、准确率提升或新版平台审查通过。
 
 普通语义导出不带问题。**生成本问题的 Agent 包**明确包含本问题与预期，并将 `task.json` 绑定到快照；私人核对笔记留在本地。**1.0 前历史格式不承诺兼容。** 保留目录与备份，不在已有工作项目上重新初始化样例。
 
 [MIT](LICENSE) · [安全边界](SECURITY.zh-CN.md) · [更新记录](CHANGELOG.md) · [候选 API 合同](references/m1-m2-contract.md)
 
-[0.3.1 validation / 本次验证与未证明项](references/v0.3.1-release-validation.md)
+[0.3.2 validation / 本次验证与未证明项](references/v0.3.2-release-validation.md)
+
+## 从数据库变化到重新发布
+
+[运行 SQLite 样例，或连接 PostgreSQL/MySQL](references/readonly-metadata.md)。仅明确启用后的非唯一索引元数据可以自动同步；表字段增减、改名、约束及业务映射需要人工核对。受影响问题的回归依据必须为当前版本。
+
+![v0.3.2 实际工作台：元数据变化、问题影响与回归](https://raw.githubusercontent.com/franklinxkk/ai-data-delivery/main/docs/images/metadata-zh.png)
+
+Neo4j 是可选出口。交付页和 `scripts/neo4j_export.py` 生成 CSV＋固定 Cypher 导入包，保留稳定身份、关系方向、范围和证据，并按快照隔离。

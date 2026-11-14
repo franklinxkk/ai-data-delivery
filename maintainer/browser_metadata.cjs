@@ -1,0 +1,46 @@
+// Real UI lifecycle on an isolated SQLite fixture; fixture DDL runs outside shipped runtime.
+const {chromium}=require('playwright'),fs=require('fs'),path=require('path'),assert=require('assert/strict'),cp=require('child_process');
+const folder=path.resolve(process.argv[2]),lang=process.argv[3]||'en',python=process.env.TEST_PYTHON;
+if(!python)throw Error('Set TEST_PYTHON');
+const origin=JSON.parse(fs.readFileSync(path.join(folder,'project/server.json'))).url;
+const pick=(en,zh)=>lang==='zh'?zh:en;
+(async()=>{const browser=await chromium.launch({executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:1600,height:1100},acceptDownloads:true}),errors=[],checks=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ const state=()=>page.evaluate(async()=>await(await fetch('/api/knowledge/state',{headers:{'X-Workbench-Token':document.querySelector('meta[name=session-token]').content}})).json());
+ const nav=id=>page.locator(`nav [data-page="${id}"]`).click();
+ const post=async(route,act,status=200)=>{const reply=page.waitForResponse(r=>r.url().endsWith('/'+route)&&r.request().method()==='POST');await act();const res=await reply;assert.equal(res.status(),status,JSON.stringify(await res.json()));await page.waitForTimeout(100);};
+ const md=action=>page.locator(`[data-md="${action}"]`).first().click();
+ const review=async()=>{await nav('review');await page.locator('[data-group-reason]').first().fill('Synthetic browser operator checked catalog, not business truth');await post('review',()=>page.getByRole('button',{name:pick('Accept whole group','接纳整组'),exact:true}).first().click());};
+ await page.goto(origin+'/?lang='+lang+'#connections');await page.locator('#md-form').waitFor();
+ await page.locator('[data-md-field=name]').fill('Plants / 植物');await page.locator('[data-md-field=path]').fill(path.join(folder,'source.db'));
+ await page.locator('[data-md-field=tables]').fill('plant');await page.locator('[data-md-field=auto_indexes]').check();
+ await post('metadata-connect',()=>page.locator('#md-form button[type=submit]').click());
+ await page.reload();await page.locator('[data-md=scan]').waitFor();assert.equal((await state()).connections.length,1);checks.push('Profile saved and reopened through UI');
+ await post('metadata-scan',()=>md('scan'));assert.equal((await state()).assets.length,0);await review();
+ let data=await state();const field=data.assets.find(a=>a.properties?.column==='moisture');assert(field);checks.push('Catalog scan created proposals, UI review confirmed them');
+ await nav('questions');await page.locator('[data-sq-field=title]').fill('Plant metadata question / 植物问题');
+ await page.locator('[data-sq-field=question]').fill('Which declared column describes moisture?');
+ await page.locator('#sq-filter').fill('moisture');await page.locator(`[data-sq-asset="${field.id}"]`).check();
+ await page.locator('#sq-acceptance summary').click();await page.locator(`[data-sq-required="${field.id}"]`).check();
+ await post('scenario',()=>page.locator('[data-sq=save]').click());
+ await nav('connections');await post('metadata-regress',()=>md('regress'));
+ assert.equal((await state()).metadata_regressions.at(-1).status,'passed');
+ await nav('questions');await post('publish',()=>page.locator('[data-sq=handoff]').click());checks.push('Saved question, declared context regression and confirmed handoff');
+ // An external test administrator changes the source structure; the connector never issues DDL.
+ cp.execFileSync(python,['-X','utf8','-c','import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); d.execute("ALTER TABLE plant ADD COLUMN humidity REAL"); d.commit(); d.close()',path.join(folder,'source.db')]);
+ await nav('connections');await post('metadata-scan',()=>md('scan'));data=await state();assert.equal(data.metadata_scans.at(-1).affected_questions.length,1);
+ await page.screenshot({path:path.join(folder,`metadata-impact-${lang}.png`),fullPage:true});
+ await nav('questions');await post('publish',()=>page.locator('[data-sq=handoff]').click(),400);checks.push('Changed structure blocks handoff before review');
+ await review();await nav('connections');await post('metadata-regress',()=>md('regress'));assert.equal((await state()).metadata_regressions.at(-1).status,'passed');
+ await page.locator('details').filter({has:page.locator('[data-md=question]')}).first().locator(':scope > summary').click();
+ await page.locator('[data-md=question]').first().click();assert.equal(await page.locator('[data-sq-field=title]').inputValue(),'Plant metadata question / 植物问题');
+ await post('publish',()=>page.locator('[data-sq=handoff]').click());
+ await nav('publish');const download=page.waitForEvent('download');await page.getByRole('button',{name:'Neo4j',exact:true}).first().click();const file=await download;await file.saveAs(path.join(folder,'neo4j-browser.zip'));
+ const semanticDownload=page.waitForEvent('download');await page.getByRole('button',{name:pick('Download','下载'),exact:true}).first().click();await(await semanticDownload).saveAs(path.join(folder,'semantic-browser.zip'));
+ checks.push('Reviewed revision, repeated affected regression and downloaded semantic/Neo4j packages');
+ await nav('connections');await page.reload();await page.locator('[data-md=scan]').waitFor();await page.screenshot({path:path.join(folder,`metadata-complete-${lang}.png`),fullPage:true});
+ await post('metadata-scan',()=>md('scan'));assert.match(await page.locator('main').innerText(),lang==='zh'?/结构未变化/:/Schema unchanged/);
+ assert.deepEqual(errors,[]);fs.writeFileSync(path.join(folder,'browser-result.json'),JSON.stringify({language:lang,checks,errors},null,2));console.log(JSON.stringify({language:lang,checks:checks.length,errors}));
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

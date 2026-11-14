@@ -1,5 +1,7 @@
 # Neo4j / Ontology Graph Spec 离线互通
 
+**v0.3.2 增加另一条 CSV/Cypher 数据导出路径**：[只读元数据与 Neo4j 导出](readonly-metadata.md)。下面的 `database_import_ready=false` 只描述 OGS 设计投影，不描述新的实际数据导入包。/ v0.3.2 adds a separate importable CSV/Cypher path. The OGS limits below continue to apply to design exchange only.
+
 需要把已核对的业务对象交给图建模工具时使用本页。`model.json` 仍是唯一语义定义；OGS 是从固定语义包生成的只读投影，不建立第二份手工维护本体。
 
 ## 导出与检查

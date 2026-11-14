@@ -158,6 +158,18 @@ class KnowledgeService:
         self.store = store
         self.root = Path(__file__).resolve().parents[1]
 
+    def metadata_connect(self, req):
+        from workbench.metadata_service import MetadataService
+        return MetadataService(self).connect(req)
+
+    def metadata_scan(self, req):
+        from workbench.metadata_service import MetadataService
+        return MetadataService(self).scan(req)
+
+    def metadata_regress(self, req):
+        from workbench.metadata_service import MetadataService
+        return MetadataService(self).regress(req)
+
     def _write(self, req, summary, fn):
         req = dict(req, _action=summary)
         def mutate(doc, db):
@@ -174,13 +186,14 @@ class KnowledgeService:
         return self.store.knowledge_change(req, summary, mutate)
 
     def state(self):
+        from workbench.metadata_service import regression_view
         state = self.store.read()
         sem, know = containers(state["document"])
         with self.store.connect() as db:
             snapshots = [json.loads(r["manifest"]) for r in db.execute("SELECT manifest FROM semantic_snapshots ORDER BY rowid DESC")]
         return {**state, "project_directory": str(self.store.directory), "project_id": self.store.project_id(),
                 "layout": self.store.layouts(), "history": self.store.history(), "assets": sem["assets"],
-                **know, "snapshots": snapshots, "problems": self.problems(sem, know)}
+                **know, "metadata_regressions": regression_view(sem, know), "snapshots": snapshots, "problems": self.problems(sem, know)}
 
     def scenario(self, req):
         """Save a business question and explicit pointers, never duplicate definitions."""
@@ -637,6 +650,9 @@ class KnowledgeService:
                 raise ValueError("请选择接纳、拒绝或暂缓")
             if group["status"] == "rejected":
                 raise ValueError("该组已拒绝；请用新依据提出新候选，不自动恢复旧建议")
+            if group.get("metadata_connection"):
+                from workbench.metadata_service import fresh
+                fresh(find(know.get("connections", []), group["metadata_connection"]))
             for ref in group["sources"]:
                 source, _ = source_revision(know["sources"], ref)
                 if source["current_revision"] != ref["revision"] or (ref.get("extraction_id") and source["revisions"][-1].get("current_extraction") != ref["extraction_id"]):
@@ -736,6 +752,8 @@ class KnowledgeService:
         def apply(doc, sem, know, db):
             keep = find(sem["assets"], req.get("survivor_id"), "保留对象")
             remove = find(sem["assets"], req.get("merged_id"), "被合并对象")
+            if any({keep["id"], remove["id"]} & set(c.get("asset_tables", {})) for c in know.get("connections", [])):
+                raise ValueError("Keep observed physical identities separate; link business meaning with dependencies/mappings / 采集的物理身份不可合并，请通过依赖或映射关联业务含义")
             if keep["id"] == remove["id"]:
                 raise ValueError("请选择两个不同对象")
             if keep["kind"] != remove["kind"] or keep["kind"] in {"relation", "mapping"}:
@@ -868,6 +886,9 @@ class KnowledgeService:
                 revision=req["revision"], asset_ids=selected, draft=True,
                 include_execution=bool(req.get("include_execution")), redirects=sem.get("redirects", {}))
             included = set(preview["scope"]["included_ids"])
+            if not req.get("draft"):
+                from workbench.metadata_service import guard_publication
+                guard_publication(sem, know, included)
             identity_issues = [{"code": "IDENTITY_REVIEW", "asset_ids": problem["asset_ids"],
                                 "matched_terms": problem["matched_terms"], "candidates": problem["candidates"],
                                 "message": problem["message"] + "；请合并或明确保持分离后发布"}
@@ -890,6 +911,9 @@ class KnowledgeService:
                 revision=req["revision"], asset_ids=selected, draft=bool(req.get("draft")),
                 include_execution=bool(req.get("include_execution")), snapshot_id=snapshot_id, redirects=sem.get("redirects", {}), task=task)
             db.execute("INSERT INTO semantic_snapshots VALUES (?,?,?,?)", (snapshot_id, req["revision"], encode(manifest), content))
+            if not req.get("draft"):
+                from workbench.metadata_service import published
+                published(know, included)
             return {"snapshot_id": snapshot_id, "filename": snapshot_id + ".zip", "manifest": manifest,
                     "download_url": "/api/knowledge/download/" + snapshot_id}
         return self._write(req, "发布知识快照", apply)

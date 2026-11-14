@@ -1,0 +1,30 @@
+{
+  "cases_passed": 32,
+  "assets_reviewed": 54,
+  "domains": [
+    {
+      "domain": "traffic",
+      "cases_passed": 8,
+      "independent_cli": true,
+      "question_handoffs": 7
+    },
+    {
+      "domain": "agriculture",
+      "cases_passed": 8,
+      "independent_cli": true,
+      "question_handoffs": 7
+    },
+    {
+      "domain": "university",
+      "cases_passed": 8,
+      "independent_cli": true,
+      "question_handoffs": 7
+    },
+    {
+      "domain": "finance",
+      "cases_passed": 8,
+      "independent_cli": true,
+      "question_handoffs": 6
+    }
+  ]
+}

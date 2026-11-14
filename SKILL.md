@@ -4,18 +4,18 @@ description: Build business-question-driven semantic models from existing data d
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.1
+  version: 0.3.2
   language: English and 简体中文; respond in the user's language, retaining original knowledge and quotes.
   runtime_environment: Python 3.10+ with pinned requirements.txt; no LLM or API key bundled.
   file_read: User-authorized material, project and semantic package paths.
   file_write: User-authorized project and output paths; proposals through the knowledge service.
   network: Parsing and offline reading are local; optional live adapters require an explicitly authorized guarded destination.
   subprocess: Bundled Python entrypoints only; no generic service rebuild or process replacement in the installation.
-  environment: Minimal child environment; no blanket inheritance of token or cloud variables.
-  sql: No SQL in knowledge intake or package reading; optional numeric tools compile bounded read-only single-dataset queries.
+  environment: Metadata drivers read only the explicitly named password variable in the host; minimal child environment; no blanket inheritance of token or cloud variables.
+  sql: Optional metadata connectors issue fixed read-only catalog SQL, never business-row queries; no SQL in text/DDL intake or package reading; optional numeric tools compile bounded read-only single-dataset queries.
 ---
 
-# AI Data Delivery · v0.3.1
+# AI Data Delivery · v0.3.2
 
 [中文说明](SKILL.zh-CN.md) · [Quickstart](README.md) · [中文快速开始](README.zh-CN.md)
 
@@ -34,6 +34,8 @@ The host Agent interprets materials and proposes changes. Local tools store evid
 | Diagnose numbers, NULLs, duplicates or joins | [Metric path](references/metric-context.md) and [diagnosis](references/diagnosis-playbook.md); numeric tools remain separate |
 | Reuse metadata, domain starters or standards | [Metadata](references/metadata-to-consumption.md), [starters](starter_packs/README.md), [standards](references/standards.md); references are not confirmed policy |
 | Try traffic, agriculture, university or finance cases | [Cross-domain exercises](examples/cross-domain/README.md); synthetic sources and counterexamples, not industry policy |
+| Read database changes and release reviewed semantics | **Database connections**; [catalog workflow](references/readonly-metadata.md), explicit endpoint/table scope, named credential variable and current question regression |
+| Import a snapshot into Neo4j | `scripts/neo4j_export.py`; [catalog and export guide](references/readonly-metadata.md). Creates CSV and fixed Cypher only; no automatic upload |
 | Exchange a graph design with Neo4j tooling | [OGS export and roundtrip audit](references/neo4j-interop.md); a generated projection, not database import or rule execution |
 
 Users supply a question, materials and project location. Handle IDs, JSON, commands and host-task handoffs for them. Reuse answers already given. Ask only about uncertainty that changes the current result, identity, scope or authority. Broad ontology maintenance need not be forced into a new scenario.
@@ -64,6 +66,8 @@ Use the [question acceptance and delivery contract](references/question-delivery
 Use the scenario check or `resolve` to discover candidates, select intended stable IDs and inspect required context. Lexical relevance does not establish understanding of the whole question; even a single candidate is not silently selected. The host can select from clear existing evidence; ask the user when a material ambiguity remains.
 
 Distinguish **context available**, **meaning unresolved**, and **execution required**. Definitions, dependencies and evidence do not prove the entire question answered. Calculation, record retrieval and actions need an appropriate authorized runtime; the package supplies no connector, tenant authorization or execution by itself. Scope filtering is not access control.
+
+For connected catalogs, use only the authorized connection and selected tables. Scanning proposes changes; only explicitly enabled nonunique-index-only synchronization of untouched physical definitions is automatic. Business meaning, renames and mappings require review. Never treat no linked questions as no business impact, silently refresh rejected candidates, fabricate passing examples, or retry a blocked publication as draft without user intent.
 
 After a source or definition changes, recheck affected questions against the current revision and original expectations. Feedback proposes a semantic change; it does not rewrite confirmed facts or expectations to make a check pass. Report what was actually inspected or executed.
 

@@ -4,18 +4,18 @@ description: 从业务问题出发，复用表结构与业务证据建立语义�
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.1
+  version: 0.3.2
   runtime_environment: Python 3.10+; install the pinned requirements.txt. Core modeling and package reading are local; optional live adapters need an explicitly authorized destination.
   language: English / 简体中文；按用户语言回复，原文和业务定义保留原语言。
   file_read: 用户授权的材料、项目及交付包路径 / user-authorized material, project and package paths
   file_write: 用户授权的项目与输出路径；候选通过知识服务提交 / authorized project and output paths; proposals through knowledge service
   network: 知识解析和离线读取不访问网络；可选适配工具只访问显式受控端点，公网需明确授权 / no network for parsing or offline reading; explicit guarded endpoints for optional adapters
   subprocess: 仅运行本工具的 Python 入口；通用服务重建、进程替换工具不随安装包交付 / bundled Python entrypoints only; no general service rebuild or process replacement in the installed skill
-  environment: 子进程使用运行必需项的最小环境，不整包继承 token 或 cloud 变量 / minimal child environment; no blanket token or cloud-variable inheritance
-  sql: 知识摄取及包读取不执行 SQL；可选数值工具执行模型编译的只读单表聚合、明细和快照约束检查 / no SQL in knowledge intake; optional read-only compiled numeric tools
+  environment: 元数据驱动仅读取宿主中明确指定的密码变量；子进程使用运行必需项的最小环境，不整包继承 token 或 cloud 变量 / minimal child environment; no blanket token or cloud-variable inheritance
+  sql: 可选元数据连接器只执行固定只读目录 SQL，不查询业务行；文本及 DDL 摄取、包读取不执行 SQL；可选数值工具执行模型编译的只读单表聚合、明细和快照约束检查 / no SQL in knowledge intake; optional read-only compiled numeric tools
 ---
 
-# AI Data Delivery · v0.3.1
+# AI Data Delivery · v0.3.2
 
 [English](SKILL.md) · [中文快速开始](README.zh-CN.md)
 
@@ -34,6 +34,8 @@ metadata:
 | 核对数字、NULL、去重或关联 | [指标路径](references/metric-context.md)、[诊断](references/diagnosis-playbook.md)；数值工具保持独立 |
 | 复用元数据、行业候选或标准 | [元数据](references/metadata-to-consumption.md)、[起步包](starter_packs/README.md)、[标准](references/standards.md)；参考模型不是已确认政策 |
 | 尝试交通、农业、高校或金融问题 | [四域练习](examples/cross-domain/README.md)；合成材料与反例，不作为行业政策 |
+| 数据库变化与回归发布 | “数据库连接”；[只读元数据链路](references/readonly-metadata.md)，使用已授权端点、明确选表、凭据变量和当前问题回归 |
+| 把快照导入 Neo4j | `scripts/neo4j_export.py` 或交付页下载；生成 CSV 与固定 Cypher，不自动上传，不执行业务规则 |
 | 把图设计交给 Neo4j 工具 | [OGS 导出与往返审计](references/neo4j-interop.md)；生成投影，不等于数据导入或规则执行 |
 
 用户提供问题、资料和项目位置即可，内部 ID、JSON、命令与宿主任务衔接由 Agent 代办。复用已有答案，只问会改变当前结果、身份、范围或权限的未知。用户要维护全域本体时沿用其范围，不强制新建问题。
@@ -77,6 +79,8 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" reso
 ```
 
 使用实际检索所得 ID，核对 `package_complete`、`request_complete`、缺口、能力及剩余分页，不能把退出码 0 当业务验收。`neighbors` 只遍历业务关系，`context` 和已选 ID 的 `resolve` 带齐必需依赖。未给 `as_of` 是时间未指定，不是今天；离线最新性未知，读取器也不能撤销已复制的包。
+
+连接数据库时只读取已授权端点和所选表的结构目录。仅在用户明确启用、且采集定义未被人工改动时，非唯一索引变化可机械同步；业务含义、改名及映射仍需核对。没有关联问题不代表没有业务影响。不得静默重提被拒绝候选、制造通过记录，或把被阻断的确认发布擅自改成草稿发布。详见[元数据流程](references/readonly-metadata.md)。
 
 ## 保留操作边界
 

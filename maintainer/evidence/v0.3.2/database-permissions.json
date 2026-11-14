@@ -1,0 +1,10 @@
+[
+  {
+    "engine": "postgresql",
+    "reader_write": "denied"
+  },
+  {
+    "engine": "mysql",
+    "reader_write": "denied"
+  }
+]
