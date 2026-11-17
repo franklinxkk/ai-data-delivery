@@ -1,0 +1,11 @@
+{
+  "boundary": "Independent second-round snapshot; final browser/API regressions cover subsequent fixes.",
+  "sha256": {
+    "scripts/semantic_read.py": "a2f00c8ae3296fb68e96ef98f11d8c3ac7dcb9c5ac86641e319b1ca0de5afd89",
+    "workbench/knowledge.py": "43dcabaa16ecdb85e16fecc287542c627122ae33cb2311f72f73c5283088a659",
+    "workbench/query_control.py": "4a96cd191a08acf17f7409765324e9a6b3ed5f4f42af36148c0ee8737a5723c9",
+    "workbench/semantic_demo.py": "d7a2124b0d85e55689f25850a6cf2d93b4c856d7fe1404837d02e621f16b0180",
+    "workbench/semantic_package.py": "3708b51f92a4c1b9bf478ae047815316d88268014b372e0a208984c24f797818",
+    "workbench/static/scenarios.js": "301389c09aad05ecc9f885521b3b45318e05e21785245630686ff05caea81883"
+  }
+}

@@ -77,6 +77,23 @@ def propose(service, req):
                  'exclusions': '其他实验室、非在库、已停用；同编号不重复计数' if zh else 'Other labs, not in storage, disabled; do not double-count an ID',
                  'time_scope': '所询时点' if zh else 'Requested point in time',
                  'expression': 'COUNT(DISTINCT equipment.id)', 'knowledge_gaps': [paragraphs[5]['text']]})]
+    # Authored physical bindings are reviewed with the same proposal group.
+    # This is a single-table lab filter, not a fabricated join to a lab table.
+    from workbench.query_control import semantic_fingerprint
+    columns = {a['properties'].get('column'): a['id'] for a in state['assets']
+               if a['kind'] == 'field' and a['status'] == 'confirmed' and dataset['id'] in a.get('refs', [])}
+    if not {'id', 'lab_id', 'state', 'disabled'} <= set(columns):
+        raise ValueError('Review the four unchanged equipment columns first / 请先核对设备的四个原始字段')
+    metric = assets[-1]
+    metric['properties']['query_plan'] = {
+        'dataset_id': dataset['id'], 'column_ids': [columns[k] for k in ('id', 'lab_id', 'state', 'disabled')],
+        'grain_ids': [columns['lab_id']], 'relation_ids': [], 'mapping_ids': ['demo.mapping'],
+        'rule_ids': ['demo.scope', 'demo.eligible'],
+        'aggregation': {'function': 'count_distinct', 'field_id': columns['id']},
+        'filters': [{'field_id': columns[k], 'op': 'eq', 'value': v}
+                    for k, v in [('lab_id', 'L'), ('state', 'in_store'), ('disabled', 0)]],
+        'null_policy': 'exclude', 'time_scope': metric['properties']['time_scope'],
+        'semantic_fingerprint': semantic_fingerprint(metric)}
     return service.propose({**req, 'batch_id': example['sources'][1]['batch_id'],
         'groups': [{'summary': '核对练习的业务定义、范围和映射（预先编写的候选）' if zh else
                     'Review business definitions, scopes and mapping (authored example proposals)',

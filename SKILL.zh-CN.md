@@ -4,7 +4,7 @@ description: 从业务问题出发，复用表结构与业务证据建立语义�
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.3
+  version: 0.3.4
   runtime_environment: Python 3.10+; install the pinned requirements.txt. Core modeling and package reading are local; optional live adapters need an explicitly authorized destination.
   language: English / 简体中文；按用户语言回复，原文和业务定义保留原语言。
   file_read: 用户授权的材料、项目及交付包路径 / user-authorized material, project and package paths
@@ -15,7 +15,7 @@ metadata:
   sql: 可选元数据连接器只执行固定只读目录 SQL，不查询业务行；文本及 DDL 摄取、包读取不执行 SQL；可选数值工具执行模型编译的只读单表聚合、明细和快照约束检查 / no SQL in knowledge intake; optional read-only compiled numeric tools
 ---
 
-# AI Data Delivery · v0.3.3
+# AI Data Delivery · v0.3.4
 
 [English](SKILL.md) · [中文快速开始](README.zh-CN.md)
 
@@ -91,3 +91,9 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" reso
 - 模型字段不是权限，本体声明不是 OWL/SHACL 推理。静态检查、Mock、浏览器、独立包读取和业务验收各有范围；如实报告结果与未验证项，不编造准确率或易用性收益。
 
 需要 Python 3.10+ 及锁定依赖。1.0 前历史格式不承诺兼容；保留目录和备份，未经授权不迁移或覆盖。
+
+## 问数交付绑定（0.3.4）
+
+问数/计算先读[查询控制合同](references/query-control.md)。宿主在现有指标 properties.query_plan 上提出有依据的字段、映射、规则和必要关系绑定，通过原候选/编辑流程核对；业务用户审可读含义，不填 JSON。使用字段的规则与映射保留稳定 ID 依赖，字段变化才能使旧验收失效。未知过滤、NULL、时间或 JOIN 不代填，单表不强造关系。
+
+接收方先 semantic_read.py --package PACKAGE control，再按需读 task 与 sources。控制单从同一语义源派生并重算校验；旧包返回 NO_CONTROL。本版只返回 explain_only 或 blocked，完整包、声明齐备和退出码 0 都不授权执行。没有生产执行器、通用连接编译或离线自动撤包能力。SOURCE_REVISION_AHEAD 表示导出时已登记更新来源，须回原项目核对适用性，不能臆造未交付正文。

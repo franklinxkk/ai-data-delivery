@@ -1,5 +1,7 @@
 # Semantic Workbench · v0.3.2
 
+> **0.3.4:** question handoffs use semantic-package/1.1 with derived query_control.json; run semantic_read.py --package PACKAGE control first. Knowledge-only/old 1.0 packages remain readable and return NO_CONTROL. 问题包新增快照绑定的控制单；仅供解释或明确阻断，不授予查询权限。[Contract / 调用合同](../references/query-control.md)。
+
 [简体中文](README.zh-CN.md) · [Quickstart](../README.md) · [Candidate contract](../references/m1-m2-contract.md)
 
 The local workbench stores materials, reviews proposals, edits one semantic graph and publishes independently readable snapshots. Your host Agent supplies reasoning; the workbench has no embedded model and does not automatically confirm uploaded knowledge.

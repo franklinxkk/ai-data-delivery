@@ -1,0 +1,21 @@
+{
+  "version": "0.3.4",
+  "date": "2026-11-17",
+  "python": {
+    "tests": 463,
+    "status": "OK",
+    "skipped": 5,
+    "skip_reason": "Windows symbolic-link privilege unavailable",
+    "log_sha256": "094b7861a51771537595c89c1fbc73dde7b3cd8ab09a5066094562d3d96546f5"
+  },
+  "new_query_control_tests": 15,
+  "javascript": [
+    "test_i18n.cjs",
+    "test_scope_ui.cjs",
+    "test_knowledge_ui.cjs",
+    "test_graph_layout.cjs",
+    "test_query_control_ui.cjs"
+  ],
+  "skill_frontmatter": "valid",
+  "production_execution_tested": false
+}

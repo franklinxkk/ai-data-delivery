@@ -1,0 +1,9 @@
+{
+  "checks": [
+    "Chinese boundary panel shows four bound fields, readable operators and actual blockers; focus moves to result",
+    "Editing and saving withdraws the previous download immediately",
+    "Actual in-flight publication cannot reinsert an old question download after editing",
+    "English panel preserves original domain text; no horizontal overflow at 1600, 960 and 390 pixels"
+  ],
+  "errors": []
+}

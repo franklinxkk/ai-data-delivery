@@ -1,4 +1,6 @@
-# AI Data Delivery · v0.3.3
+# AI Data Delivery · v0.3.4
+
+**0.3.4：** 问题包新增同源派生的查询控制单，补齐字段依赖、可读绑定与阻断原因；修复字段变更漏影响、旧下载入口和已登记新来源对接收方不可见的问题。保留已有元数据与 Neo4j 链路。[分析与修改清单](references/v0.3.4-design-review.md) · [调用合同](references/query-control.md) · [实际验证](references/v0.3.4-release-validation.md)。
 
 **先说清要解决的业务问题，再补齐它需要的含义，把定义、依据和边界一起交给 Agent。**
 
@@ -49,6 +51,7 @@ python -X utf8 scripts/start.py --project "./work/equipment-zh" --example equipm
 
 ```bash
 python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" verify
+python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" control
 python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" task --detail summary
 python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" sources --id demo.available
 ```

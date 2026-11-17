@@ -4,7 +4,7 @@ description: Build business-question-driven semantic models from existing data d
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.3
+  version: 0.3.4
   language: English and 简体中文; respond in the user's language, retaining original knowledge and quotes.
   runtime_environment: Python 3.10+ with pinned requirements.txt; no LLM or API key bundled.
   file_read: User-authorized material, project and semantic package paths.
@@ -15,7 +15,7 @@ metadata:
   sql: Optional metadata connectors issue fixed read-only catalog SQL, never business-row queries; no SQL in text/DDL intake or package reading; optional numeric tools compile bounded read-only single-dataset queries.
 ---
 
-# AI Data Delivery · v0.3.3
+# AI Data Delivery · v0.3.4
 
 [中文说明](SKILL.zh-CN.md) · [Quickstart](README.md) · [中文快速开始](README.zh-CN.md)
 
@@ -79,6 +79,12 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" reso
 ```
 
 Use actual discovered IDs. Inspect `package_complete`, `request_complete`, gaps, capabilities and all remaining pages; exit code zero is not business acceptance. `neighbors` follows business edges; `context` and selected `resolve` include required dependencies. `as_of` checks definition validity, not the data cutoff; put data windows in reviewed metric `time_scope`. No `as_of` means unspecified, not today. Offline freshness is unknown; this reader cannot revoke copied packages.
+
+## Bind a question for a receiving Agent
+
+For calculation/query handoff, read [query control](references/query-control.md). Propose physical bindings on the existing metric's properties.query_plan through the normal reviewed candidate/edit path; business users review readable choices, not JSON. Include the actual field IDs used by mappings, rules and metrics so field changes invalidate affected evidence. Preserve unknown filters, NULL behavior, time and joins instead of guessing. A single dataset does not need a fabricated relationship.
+
+Read semantic_read.py --package PACKAGE control before interpreting a query handoff. The derived control binds model, question and snapshot, reports selected dependencies and blockers, and is recomputed on read. Legacy packages return NO_CONTROL. A declared plan, complete package or exit code 0 never grants execution. This offline release returns only explain_only or blocked; no production executor or general join compiler is supplied. A supplied expected snapshot can detect mismatch, not prove freshness. Review SOURCE_REVISION_AHEAD against the authoring source; never invent missing new text.
 
 ## Preserve operational boundaries
 

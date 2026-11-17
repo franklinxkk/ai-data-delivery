@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "Inputs and candidates do not auto-confirm knowledge",
+    "Language switch retains unsaved input and explains recovery",
+    "Reviewed DDL and source-linked business proposals through UI",
+    "Invalid edit is rejected in the selected language and input remains editable",
+    "Edit aliases, save and reload preserve knowledge",
+    "Auto layout saved and real graph screenshot captured",
+    "Published and downloaded a confirmed package through UI",
+    "Language switch changes presentation and preserves all source/asset values"
+  ],
+  "errors": [],
+  "asset_count": 12
+}

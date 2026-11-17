@@ -1,0 +1,10 @@
+{
+  "original_question": "实验室 L 现在有多少台可借设备？",
+  "saved_question": "只解释实验室 L 的设备可借规则，不需要当前台数",
+  "saved_intent": "explain",
+  "old_download_before": true,
+  "old_download_after": false,
+  "fixed_snapshot_message_after": false,
+  "old_snapshot_marked_stale": false,
+  "qualification": "Actual UI event handlers run in isolated VM with service mocked; no browser/layout verification."
+}

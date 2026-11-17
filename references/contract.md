@@ -1,5 +1,7 @@
 # v0.0.7 合同与可执行边界
 
+> 本页描述历史数值/执行模型工具，保留用于对应任务。本体建模请从[问题工作流](question-workflow.md)进入；唯一语义图谱为 document.model.semantic.assets，与这里的模型不自动双向同步。[0.3.4 查询控制](query-control.md)。
+
 `semantic.yaml` 延续 datasets/concepts/relationships/metrics，v0.0.6 新增可选 `ontology` 段；v0.0.7 新增可维护性字段（uid/evidence/domain，见下）。模型本身的 version 与 skill 版本分别管理。新增字段保持增量，但下游是否忽略/拒绝/正确执行要在实际消费者验证。
 
 ## 本体声明层与合同投影

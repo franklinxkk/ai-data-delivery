@@ -1,5 +1,7 @@
 # Read a semantic package with an Agent
 
+> **0.3.4:** question handoffs use semantic-package/1.1 with derived query_control.json; run semantic_read.py --package PACKAGE control first. Knowledge-only/old 1.0 packages remain readable and return NO_CONTROL. 问题包新增快照绑定的控制单；仅供解释或明确阻断，不授予查询权限。[Contract / 调用合同](query-control.md)。
+
 [中文完整合同](semantic-package.md)
 
 The recipient needs the ZIP (or extracted directory), this skill's reader and Python dependencies. The original project, browser session and running workbench are not needed. Reading does not execute SQL, browse source links, call models or perform business actions.

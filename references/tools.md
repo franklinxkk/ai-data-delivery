@@ -1,5 +1,7 @@
 # 工具入口
 
+> 本页描述历史数值/执行模型工具，保留用于对应任务。本体建模请从[问题工作流](question-workflow.md)进入；唯一语义图谱为 document.model.semantic.assets，与这里的模型不自动双向同步。[0.3.4 查询控制](query-control.md)。
+
 以下命令在仓库根目录执行，完整参数用 `python scripts/<name>.py --help` 查看。除特别说明外不自动访问外部系统；带 endpoint 的工具会访问指定服务。`_*.py` 是内部共享模块，不是 CLI。
 
 ## 按角色找工具（先看这个，不用遍历命令清单）

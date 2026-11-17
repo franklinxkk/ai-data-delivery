@@ -1,0 +1,84 @@
+{
+  "confirmed_preview_has_DRAFT_PACKAGE": false,
+  "confirmed_package_has_DRAFT_PACKAGE": false,
+  "merge_errors": [],
+  "after_merges_case_status": "stale",
+  "after_merges_plan": {
+    "aggregation": {
+      "field_id": "field.duplicate.id",
+      "function": "count_distinct"
+    },
+    "column_ids": [
+      "field.duplicate.id",
+      "field.duplicate.lab",
+      "field_cd8af6aeddf8af715b",
+      "field.duplicate.disabled"
+    ],
+    "dataset_id": "dataset.duplicate.equipment",
+    "filters": [
+      {
+        "field_id": "field.duplicate.lab",
+        "op": "eq",
+        "value": "L"
+      },
+      {
+        "field_id": "field_cd8af6aeddf8af715b",
+        "op": "eq",
+        "value": "in_store"
+      },
+      {
+        "field_id": "field.duplicate.disabled",
+        "op": "eq",
+        "value": 0
+      }
+    ],
+    "grain_ids": [
+      "field.duplicate.lab"
+    ],
+    "mapping_ids": [
+      "demo.mapping"
+    ],
+    "null_policy": "exclude",
+    "relation_ids": [],
+    "rule_ids": [
+      "demo.scope",
+      "demo.eligible"
+    ],
+    "semantic_fingerprint": "b1ad1930f2002d82bb807b32d6b98947ac2e1f347b9eed991dd7a895e3f6f27f",
+    "time_scope": "所询时点"
+  },
+  "after_merges_binding_errors": [],
+  "actual_draft_package_has_DRAFT_PACKAGE": true,
+  "actual_draft_preview_blockers": [
+    {
+      "code": "KNOWLEDGE_GAP",
+      "message": "知识尚未确认、需复核或已停用",
+      "gap": {
+        "asset_id": "demo.available",
+        "asset_name": "可借设备数",
+        "code": "UNCONFIRMED_ASSET",
+        "status": "draft",
+        "message": "知识尚未确认、需复核或已停用",
+        "next_step": "在知识维护入口核对该资产及其依据"
+      }
+    },
+    {
+      "code": "KNOWLEDGE_GAP",
+      "message": "资料没有提供库存观测记录、借用人权限或借用执行接口。仅凭定义不能回答当前可借台数，也不能实际办理借用。",
+      "gap": {
+        "code": "DECLARED_KNOWLEDGE_GAP",
+        "asset_id": "demo.available",
+        "message": "资料没有提供库存观测记录、借用人权限或借用执行接口。仅凭定义不能回答当前可借台数，也不能实际办理借用。",
+        "next_step": "取得有依据的业务补充后复核；不能用默认值代替"
+      }
+    },
+    {
+      "code": "NO_EXECUTOR",
+      "message": "No runtime authorization or executor is bound / 尚无已验证的执行器与运行时授权"
+    },
+    {
+      "code": "FRESHNESS_UNVERIFIED",
+      "message": "Offline files cannot prove current definitions or catalog / 离线包无法证明口径与目录仍为最新"
+    }
+  ]
+}

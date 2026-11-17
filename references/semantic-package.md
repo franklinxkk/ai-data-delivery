@@ -1,5 +1,7 @@
 # 固定语义包与离线调用
 
+> **0.3.4:** question handoffs use semantic-package/1.1 with derived query_control.json; run semantic_read.py --package PACKAGE control first. Knowledge-only/old 1.0 packages remain readable and return NO_CONTROL. 问题包新增快照绑定的控制单；仅供解释或明确阻断，不授予查询权限。[Contract / 调用合同](query-control.md)。
+
 本入口交付对象、术语、属性、关系、指标、规则及其依据。术语和规则可以没有数据库或可执行 SQL。工作台生成 ZIP；消费方只需这份 ZIP 或解包目录，以及本工具的只读 CLI，不需要原项目 SQLite、原工作台会话或模型服务。
 
 `model.json` 是包内唯一语义定义。图形查看、文件导出和 CLI 使用同一资产 ID、方向和来源。包中内容只是知识与执行说明；规则是否执行、数据是否正确，不能由“已确认”或包指纹推出。
@@ -34,11 +36,11 @@ python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.
 |---|---|
 | `model.json` | `schema_version: "1.0"`、资产列表 `assets`、旧 ID 到存续 ID 的 `redirects`。 |
 | `sources.json` | 选中断言使用的来源、具体修订、原文位置和片段。只带这些片段，不能据此声称已带完整来源文档。 |
-| `manifest.json` | `format_version: "semantic-package/1.0"`、快照 ID、项目身份、来源项目修订、实际范围、草稿状态、缺口、逐文件 SHA256 及规范化模型 SHA256。 |
+| `manifest.json` | `format_version: "semantic-package/1.0"`（纯知识）或 `semantic-package/1.1`（问题+控制单）、快照 ID、项目身份、来源项目修订、实际范围、草稿状态、缺口、逐文件 SHA256 及规范化模型 SHA256。 |
 | `README.md` | 包内调用及边界说明。 |
 | `human-review.html` | 无外部依赖的只读页面，展示同一模型的定义、原始关系方向、范围及来源。 |
 
-包不携带原附件、项目数据库或其他未引用来源片段。源码中的读取器只接受这份固定文件清单；混入文件、重复 ZIP 成员、损坏 JSON、指纹不符或不支持的格式均拒绝消费。指纹验证只证明文件与清单一致，不构成来源认证、电子签名或业务验收。
+包不携带原附件、项目数据库或其他未引用来源片段。源码中的读取器接受上表的知识包清单、加 task.json 的旧问题包，或同时加 task.json 与 query_control.json 的新版问题包；混入文件、重复 ZIP 成员、损坏 JSON、指纹不符或不支持的格式均拒绝消费。指纹验证只证明文件与清单一致，不构成来源认证、电子签名或业务验收。
 
 固定快照不会随工作图谱修改而变化。相同输入产生相同包内容；新内容或新项目修订产生新快照身份。离线始终返回 `is_latest: "unknown_offline"`，不能判断是否已经有更新，更不能撤回已发出的文件。
 
@@ -70,6 +72,7 @@ python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.
 
 - `asset_ids` 为空时选择所有知识资产；默认不把 `dataset/field/mapping/physical_fk` 作为根节点。显式选定任何这些资产仍会交付它们。
 - 顶层 `refs` 以及关系的 `from/to` 永远是必须依赖。递归补齐至引用闭合，循环去重。遇到跨领域或物理资产仍带上定义，不能为了缩图删掉必需内容。
+- properties.query_plan 中明确声明的数据集、字段、粒度、规则、映射和所选关系也是必需依赖，始终加入上下文与影响追踪。
 - 不自动展开这些依赖的所有邻接关系。因此只选一条规则可以带齐规则所需对象，而不夹带这些对象的无关业务网络。
 - `include_execution` 额外包含物理资产根节点和 `properties.execution` 块。执行块中的 `refs/data_refs` 仅在包含执行块时参与闭合；默认移除整个执行块，并在 `omitted_execution_ids` 中列明。其他业务属性保留。
 - `scope.root_ids/dependency_ids/included_ids` 分别说明根节点、自动补入项和最终范围；`omitted_asset_count` 仅相对于输入模型，不代表整个领域的未知知识数量。

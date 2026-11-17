@@ -1,5 +1,15 @@
 # Changelog
 
+
+## 0.3.4 — 2026-11-17
+
+- Why: question handoffs lacked physical dependencies and a machine-readable boundary between semantic completeness and authorized execution.
+- What: derive snapshot/model/task-bound query_control.json; add the control reader, strict recomputation, explicit metric query bindings and common dependency/impact coverage. Preserve zero-hop single-table queries, typed NULL/false/zero and offline freshness uncertainty.
+- Fix: bind equipment fields, rewrite bindings on identity merge, withdraw outdated/in-flight handoff links, disclose known newer source revisions, and avoid treating internal preview packaging as a business draft.
+- UX: readable query-boundary panel, bilingual aggregation/filter labels and keyboard focus after checks. PM/FDE onboarding now starts from the same semantic question workflow.
+- Scope: no production executor, general JOIN compiler, MCP server or automatic migration. Old 1.0 packages remain readable; new question packages use 1.1. Metadata and Neo4j adapters remain available.
+- Validation: see [actual evidence and limits](references/v0.3.4-release-validation.md); [research and expert-advice decisions](references/v0.3.4-design-review.md).
+
 Versioning: keep published tags unchanged; continue from `0.3.0` with patch increments (`0.3.1`, `0.3.2`, …). Unreleased previews use `-dev`. / 版本约定：保留已发布标签，后续默认递增补丁号，开发预览加 `-dev`，不重写历史版本。
 
 ## 0.3.3 — 2026-11-14

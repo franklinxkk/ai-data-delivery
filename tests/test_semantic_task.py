@@ -80,8 +80,11 @@ class SemanticTaskTests(unittest.TestCase):
     def test_explicit_context_preserves_dependencies_evidence_and_source_revision(self):
         p = self.package()
         r = p.resolve("车辆维护有什么要求？", asset_ids=["rule"])
-        self.assertEqual(r["status"], "context_available")
+        # The fixture cites revision 1, while revision 2 was already registered.
+        # Historical evidence remains readable; applicability requires review.
+        self.assertEqual(r["status"], "needs_review")
         c = r["context"]
+        self.assertIn("SOURCE_REVISION_AHEAD", {g["code"] for g in c["gaps"]})
         self.assertEqual(set(c["required_asset_ids"]), {"rule", "company", "vehicle"})
         rule_evidence = next(e for e in c["evidence"] if e["asset_id"] == "rule")
         self.assertEqual(rule_evidence["evidence"][0]["assertion"]["revision"], 1)

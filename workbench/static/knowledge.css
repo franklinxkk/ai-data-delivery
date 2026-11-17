@@ -78,3 +78,4 @@
 .md-grid,.md-diff{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.md-card{margin:20px 0}.md-diff pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}#md-form label{display:block;margin:12px 0}#md-form input:not([type=checkbox]),#md-form textarea,#md-form select{width:100%}.md-card details{margin:12px 0}@media(max-width:900px){.md-grid,.md-diff{grid-template-columns:1fr}}
 
 .md-card .gap{display:block}.md-card .gap p{margin:6px 0}.md-card{padding:20px;background:#fff;border:1px solid #dce5df;border-radius:12px}
+.sq-control{border:1px solid var(--line,#dce5df);border-radius:12px;padding:18px;margin:20px 0;background:var(--surface,#fff)}.sq-control li{margin:6px 0;overflow-wrap:anywhere}.sq-control summary{cursor:pointer;padding:10px 0}.sq-control h3{margin-top:0}

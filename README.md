@@ -1,4 +1,6 @@
-# AI Data Delivery · v0.3.3
+# AI Data Delivery · v0.3.4
+
+**0.3.4:** question packages now include derived query control, explicit field dependencies and actionable blockers. Fixes cover field-change impact, outdated download links and visibility of newer registered source revisions. Existing metadata and Neo4j workflows are retained. [Changes and research](references/v0.3.4-design-review.md) · [Consumer contract](references/query-control.md) · [Validation](references/v0.3.4-release-validation.md).
 
 **Start with a business question. Build the meanings it needs, then give an Agent the definitions, evidence and limits together.**
 
@@ -51,6 +53,7 @@ Open the local URL printed in the terminal:
 
 ```bash
 python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" verify
+python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" control
 python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" task --detail summary
 python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" sources --id demo.available
 ```

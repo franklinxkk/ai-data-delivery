@@ -1,43 +1,32 @@
-# FDE：先打通一个业务问题
+# FDE：把同一个问题交付给接收方
 
-先给 Agent 具体问题和已有资料，不必预先建 scope.yaml、cases.json 或评测报告：
-
-> 使用 ai-data-delivery。我需要回答【问题】，现有DDL/模型在【路径】，样本或快照在【路径，可缺】，目标消费者是【应用/Agent/报表，可待定】。请保存到【目录】，先给我当前问题的映射、可读口径、结果证据和未决项，不跑无关门禁。
-
-## 首次体验
-
-在skill目录执行（先安装 requirements.txt）：
+先复用已有语义与实际资料，只补当前问题需要的含义和依赖。主数据源是 document.model.semantic.assets，不再手工维护第二份语义 YAML。
 
 ```bash
-python scripts/start.py --project ./work/fde-demo --demo
+python -m pip install -r requirements.txt
+python -X utf8 scripts/start.py --project ./work/equipment-fde --example equipment --language zh
 ```
 
-打开本机网址 → 首页“开始数值与明细练习” → 执行 → 换三种计数 → 预览上下文 → 导出。结果为合成演示，不是客户数据。
+按[业务负责人步骤](quickstart-pm.md)核对 DDL 和业务候选。真实项目不加 --example，用材料摄取/宿主任务处理授权路径。SQLite/PostgreSQL/MySQL 目录可使用[只读元数据入口](readonly-metadata.md)；只扫描获准表，不读取业务行。
 
-## 用自己的资料
+| 要核对什么 | 交付要求 |
+| --- | --- |
+| 业务范围与反例 | 原文、负责人决定和独立预期可回查；缺失条件保持未知 |
+| 指标与数据 | query_plan 引用实际数据集、字段、映射和必要规则；字段 ID 进入依赖闭包，避免改列后旧验收仍通过 |
+| 单表与多表 | 单表不强造关系；声明多表关系不等于验证 JOIN、基数或去重；本版不生成通用 SQL |
+| 查询边界 | 先看 control，再按需读 task 和 sources；结构完整与执行许可分别判断 |
+| 变更 | 修改字段、来源或口径后，核对影响路径、失效案例和新来源适用性；保留失败证据 |
+
+让宿主根据[查询约定](query-control.md)提出 metric.properties.query_plan，通过现有候选/编辑路径核对。不要让业务负责人填 JSON，也不要为消除 blocker 自动补 NULL、时间或关联策略。现有项目不会自动添加绑定。
 
 ```bash
-python scripts/start.py --project ./work/customer --model ./semantic.yaml --sample ./snapshot.sqlite --provenance deidentified
+python -X utf8 scripts/knowledge.py --project ./work/equipment-fde check --scenario SCENARIO_ID
+python -X utf8 scripts/knowledge.py --project ./work/equipment-fde handoff --scenario SCENARIO_ID --out ./delivery/question.zip
+python -X utf8 scripts/semantic_read.py --package ./delivery/question.zip control
+python -X utf8 scripts/semantic_read.py --package ./delivery/question.zip task --detail summary
+python -X utf8 scripts/semantic_read.py --package ./delivery/question.zip sources --id demo.available
 ```
 
-只有SQLite/MySQL DDL：用 `--ddl ./source.sql` 替代 `--model`，可不带快照。没有数据库也可整理草案。仅准备不启动加 `--prepare-only`；已有项目去掉导入参数重开，导入新版本在工作台“数据与资料”完成并保留历史。
+替换真实 scenario ID；先建立输出目录，文件不可已存在。接收方不依赖原工作台。0.3.4 的 query/calculate 始终 blocked：执行需要另行核验当前源、数据时间、租户权限、资源限制和结果；不能把 CLI 退出码 0 当成执行许可。
 
-按当前问题依次完成：
-
-| 你做什么 | Agent/工具帮你做什么 | 你检查的结果 |
-| --- | --- | --- |
-| 指出问题所需表与可信来源 | 复用表、字段和显式关系，生成语义候选 | 不猜同名关联；稳定ID保留；缺口有具体问题 |
-| 与有权负责人确认范围、粒度、NULL/重复及时间含义 | 保存确认依据，补齐指标和映射 | 文字口径与执行公式/过滤一致 |
-| 提供独立样本与预期，运行“指标与明细核对” | 同一快照计算数值、匹配行数与明细 | 数值对且记录范围也对；失败不复用旧成功结果 |
-| 明确交给文件还是已有服务 | 选择上下文包或受控联调；保存模型/快照证据 | 文件不冒充API，范围选择不冒充授权 |
-| 更改定义后重新核对 | 漂移、失效引用和旧证据提示 | 旧包消费前检查；新报告绑定当前输入 |
-
-不用先清空全库所有问题。只处理影响本次用例的业务决定、执行依赖和验收；其他缺口保留。多表查询需要明确来源粒度和目标引擎，当前工具不生成通用多表SQL。
-
-## 需要自动化时再用CLI
-
-与人交接时先用“可视化验收页”的FDE入口，从数据与映射查看粒度、主键、字段和关系，再看执行证据；原始定义可展开。PM可切回业务入口，两者读同一模型。见[人工核验方法](human-review.md)。
-
-可复制并含真实输入准备过程的[指标—明细—上下文示例](metric-context.md)；[工具清单](tools.md)按任务检索。不要从一个尚未export的会话直接引用不存在的exported文件；引导会话的完整 init/propose/apply/export 见[补齐路径](onboarding.md)。
-
-远端调用会发送所选问题/元数据，必须是本任务明确指定且获准的目标。默认不走代理、不跟重定向；公网或域名端点需显式开启。服务重建是高级选项，不是正常语义交付的前置条件，见[安全边界](../SECURITY.md)。
+如果任务本来就是核对数值，[旧数值与明细工具](metric-context.md)仍可使用 --demo 或显式模型/独立快照。它们与新语义图谱不自动双向同步，数值工具的成功也不授权 query_control 执行。远端目标必须在实际授权范围内。[安全边界](../SECURITY.md)

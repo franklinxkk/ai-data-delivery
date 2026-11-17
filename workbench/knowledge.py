@@ -284,7 +284,18 @@ class KnowledgeService:
                       "selected_asset_ids": scenario["asset_ids"],
                       "next_steps": [{"code": exc.code, "message": str(exc)}]}
         from workbench.scenario_contract import acceptance_report
+        control = {"decision": "blocked", "blockers": [{"code": "NO_SELECTION", "message": "Select the question definitions / 请先选择问题定义"}], "answer_verified": False}
+        if scenario["asset_ids"] and not reader.get("error"):
+            from workbench.query_control import derive_control
+            package.task_record = {"format_version": "1.0", "snapshot_id": package.manifest["snapshot_id"],
+                "model_sha256": package.manifest["model_sha256"], "request": {k: copy.deepcopy(scenario.get(k, {} if k == "acceptance" else None)) for k in
+                ("id", "title", "question", "intent", "asset_ids", "domain", "scope", "as_of", "acceptance")}}
+            control = derive_control(package, preview=True)
+        elif reader.get("error"):
+            control["blockers"] = [copy.deepcopy(reader["error"])]
+        control["preview"] = True
         return {"scenario": scenario, "revision": state["revision"], "status": reader["decision"],
+                "query_control": control,
                 "reader": reader, "acceptance": acceptance_report(scenario, sem, know, reader),
                 "answer_verified": False, "published": False}
 
@@ -781,6 +792,10 @@ class KnowledgeService:
                     if a.get(field) == remove["id"]:
                         a[field] = keep["id"]
                 execution = a.get("properties", {}).get("execution")
+                plan = a.get("properties", {}).get("query_plan")
+                if isinstance(plan, dict):
+                    from workbench.query_control import redirect_plan
+                    redirect_plan(plan, remove["id"], keep["id"])
                 if isinstance(execution, dict):
                     for field in ("refs", "data_refs"):
                         if field in execution:

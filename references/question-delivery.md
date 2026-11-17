@@ -1,5 +1,7 @@
 # Question acceptance, change impact and Agent handoff
 
+> **0.3.4:** question handoffs use semantic-package/1.1 with derived query_control.json; run semantic_read.py --package PACKAGE control first. Knowledge-only/old 1.0 packages remain readable and return NO_CONTROL. 问题包新增快照绑定的控制单；仅供解释或明确阻断，不授予查询权限。[Contract / 调用合同](query-control.md)。
+
 [中文说明](#问题验收变更影响与-agent-交付) · [Question workflow](question-workflow.md)
 
 ## Check a question against explicit expectations
