@@ -137,6 +137,37 @@ def meaningful(asset):
     return {k: v for k, v in asset.items() if k not in {"updated", "confirmed_at", "confirmed_by", "review_note", "status"}}
 
 
+def seed_physical_drafts(sem, know, group_ids):
+    """Initialize an empty graph from parsed structure; never confirm business meaning."""
+    if sem["assets"]:
+        raise ValueError("Draft initialization requires an empty graph / 初始草稿仅用于空图；已有模型请按候选核对变化")
+    groups = [find(know["groups"], gid, "候选组") for gid in group_ids]
+    assets = []
+    for group in groups:
+        for candidate in group["candidates"]:
+            a = copy.deepcopy(candidate.get("asset", {}))
+            if candidate["op"] != "upsert" or not (a.get("kind") in {"dataset", "field"} or
+                    a.get("kind") == "relation" and a.get("relation_type") == "physical_fk"):
+                raise ValueError("Only explicit tables, fields and foreign keys can initialize a draft / 初始草稿只接纳明确的表、字段和外键")
+            a["status"] = "draft"
+            for key in ("confirmed_at", "confirmed_by", "review_note"):
+                a.pop(key, None)
+            assets.append(a)
+    if not assets:
+        raise ValueError("No usable table structure found / 未提取到可用的表结构")
+    sem["assets"] = assets
+    current = {a["id"]: a for a in assets}
+    # Optional later review must compare against the visible draft, including manual edits.
+    for group in groups:
+        group["seeded_as_draft"] = True
+        for c in group["candidates"]:
+            c["target_fingerprint"] = digest(meaningful(current[c["target_id"]]))
+            c["dependency_fingerprints"] = {key: digest(meaningful(current[key])) if key in current else None
+                                              for key in dependencies(c["asset"])}
+    return {"status": "draft", "asset_ids": list(current),
+            "counts": {kind: sum(a["kind"] == kind for a in assets) for kind in ("dataset", "field", "relation")}}
+
+
 def mark_dependents(assets, changed_ids):
     """Invalidate affected execution evidence without inventing new semantic facts."""
     impacted = set(changed_ids)
@@ -391,11 +422,17 @@ class KnowledgeService:
         parsed = parse_material(filename, content, req.get("options"))
         attached = self.store.attach(filename, "knowledge", content)
         def apply(doc, sem, know, db):
+            if type(req.get("seed_draft", False)) is not bool:
+                raise ValueError("seed_draft must be boolean")
+            if req.get("seed_draft") and (sem["assets"] or not parsed.get("structure", {}).get("tables")):
+                raise ValueError("Draft initialization needs table DDL and an empty graph / 初始草稿需要表结构 DDL 和空图；已有模型请按候选核对变化")
             current = find(know["sources"], req["source_id"], "来源") if req.get("source_id") else None
             if not current and not req.get("distinct_source"):
                 same = [s for s in know["sources"] if any(r["sha256"] == attached["sha256"] for r in s["revisions"])]
                 if same:
                     source = same[0]
+                    if req.get("seed_draft"):
+                        raise ValueError("Already imported; review existing candidates or use a new model directory / 材料已导入；请核对已有候选，或使用新的模型目录初始化")
                     return {"source_id": source["id"], "duplicate": True, "message": "内容已存在；若出处不同，请选择保留独立来源", "parsed": parsed}
                 same_name = [s for s in know["sources"] if s["name"] == filename]
                 if same_name:
@@ -403,6 +440,8 @@ class KnowledgeService:
             if current:
                 old = current["revisions"][-1]
                 if old["sha256"] == attached["sha256"] and old["parsed"] == parsed:
+                    if req.get("seed_draft"):
+                        raise ValueError("Already imported; review existing candidates or use a new model directory / 材料已导入；请核对已有候选，或使用新的模型目录初始化")
                     return {"source_id": current["id"], "duplicate": True, "parsed": old["parsed"]}
                 same_content = old["sha256"] == attached["sha256"]
                 number = current["current_revision"] if same_content else current["current_revision"] + 1
@@ -450,12 +489,16 @@ class KnowledgeService:
                      "base_revision": req["revision"], "created": now()}
             know["batches"].append(batch)
             groups = self._structured_groups(current, revision, sem, req.get("language", "en"))
+            seeded = None
             if groups:
-                self._add_groups(groups, batch, sem, know)
+                group_ids = self._add_groups(groups, batch, sem, know)
+                if req.get("seed_draft"):
+                    seeded = seed_physical_drafts(sem, know, group_ids)
                 batch["status"] = "review"
             if parsed["status"] in {"failed", "needs_conversion"}:
                 batch["status"] = "failed"
-            return {"source_id": current["id"], "batch_id": batch["id"], "parsed": parsed, "affected": affected}
+            return {"source_id": current["id"], "batch_id": batch["id"], "parsed": parsed, "affected": affected,
+                    **({"seeded": seeded} if seeded else {})}
         return self._write(req, "导入知识材料", apply)
 
     def _structured_groups(self, source, revision, sem, language="en"):
@@ -710,6 +753,16 @@ class KnowledgeService:
     def edit(self, req):
         def apply(doc, sem, know, db):
             a = normalize_asset(req.get("asset"), confirm=bool(req.get("confirm")))
+            if req.get("review_query_plan"):
+                reason = req.get("plan_review_reason")
+                plan = a.get("properties", {}).get("query_plan")
+                if req.get("review_query_plan") is not True or not req.get("confirm") or a["kind"] != "metric" or not isinstance(plan, dict):
+                    raise ValueError("Explicit confirmed metric review is required / 请在指标核对中明确确认查询口径")
+                if not isinstance(reason, str) or not reason.strip():
+                    raise ValueError("Record why the bindings match the business meaning / 请记录口径与字段对应的核对依据")
+                from workbench.query_control import semantic_fingerprint
+                plan["semantic_fingerprint"] = semantic_fingerprint(a)
+                a["evidence"].append({"type": "manual", "quote": reason.strip(), "actor": "local", "created": now()})
             old = next((x for x in sem["assets"] if x["id"] == a["id"]), None)
             if old and a["kind"] != old["kind"]:
                 raise ValueError("已有对象的类型不可直接改写，请新建正确类型并重绑引用")

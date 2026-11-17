@@ -79,3 +79,8 @@
 
 .md-card .gap{display:block}.md-card .gap p{margin:6px 0}.md-card{padding:20px;background:#fff;border:1px solid #dce5df;border-radius:12px}
 .sq-control{border:1px solid var(--line,#dce5df);border-radius:12px;padding:18px;margin:20px 0;background:var(--surface,#fff)}.sq-control li{margin:6px 0;overflow-wrap:anywhere}.sq-control summary{cursor:pointer;padding:10px 0}.sq-control h3{margin-top:0}
+.qb-filter{display:grid;grid-template-columns:minmax(100px,1.3fr) minmax(80px,.7fr) minmax(90px,.8fr) minmax(100px,1fr) auto;gap:10px;align-items:end;padding:12px 0;border-bottom:1px solid var(--line,#dbe7e0)}
+.qb-filter input,.qb-filter select,[data-testid=binding-review] input,[data-testid=binding-review] select{max-width:100%;min-width:0}
+[data-testid=binding-review] fieldset{border:1px solid var(--line,#dbe7e0);border-radius:8px;margin:14px 0;padding:12px}
+[data-testid=binding-review] .grid{margin:14px 0}
+@media(max-width:850px){.sq-list{display:block;max-height:270px;overflow:auto}.qb-filter{grid-template-columns:repeat(2,minmax(0,1fr))}.qb-filter button{grid-column:1/-1}.sq-workspace{min-width:0}}

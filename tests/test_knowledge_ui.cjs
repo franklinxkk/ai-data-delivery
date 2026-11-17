@@ -231,7 +231,7 @@ async function checkQuestionDeliveryScope(){
   await restored.click('publish');assert.deepEqual(restored.requests[0].request.asset_ids,['only']);
   restored.wb.deliver([]);const before=restored.requests.length;await restored.click('publish');
   assert.equal(restored.requests.length,before);assert.match(restored.error.textContent,/没有选择定义/);
-  await restored.click('reset-delivery');await restored.click('publish');assert.deepEqual(restored.requests.at(-1).request.asset_ids,[]);
+  await restored.click('reset-delivery');await restored.click('publish');assert.deepEqual(restored.requests.at(-1).request.asset_ids,['only','unrelated']);
   console.log('PASS: question delivery scope survives reload; empty never expands without explicit reset');
 }
 (async()=>{await checkQuestionDeliveryScope();

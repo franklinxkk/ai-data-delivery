@@ -57,10 +57,18 @@ class BrowserEntryTests(unittest.TestCase):
         status, _ = self.get("/", {**headers, "Sec-Fetch-Mode": "cors"})
         self.assertEqual(status, 403)
 
+    def test_occupied_port_cannot_share_an_unrelated_listener(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("127.0.0.1", 0))
+            listener.listen()
+            with self.assertRaises(OSError):
+                make_server(self.service, listener.getsockname()[1])
+
     def test_graph_scripts_are_exact_local_allowlist_with_self_only_csp(self):
         static = Path(__file__).resolve().parents[1] / "workbench" / "static"
         headers = {"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Dest": "script"}
-        for path in ("/graph-layout.js", "/vendor/elk.bundled.js"):
+        for path in ("/graph-layout.js", "/query-bindings.js", "/vendor/elk.bundled.js"):
             with self.subTest(path=path):
                 status, body = self.get(path, headers)
                 self.assertEqual(status, 200)

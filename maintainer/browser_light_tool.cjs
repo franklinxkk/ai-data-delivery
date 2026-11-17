@@ -1,0 +1,23 @@
+const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const origin=process.argv[2],out=process.env.EVIDENCE_DIR;
+if(!out)throw Error('Set EVIDENCE_DIR');fs.mkdirSync(out,{recursive:true});
+(async()=>{const browser=await chromium.launch({executablePath:process.env.BROWSER_PATH||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+try{const page=await browser.newPage({viewport:{width:1600,height:1050},acceptDownloads:true}),errors=[],checks=[];page.on('pageerror',e=>errors.push(e.message));
+const state=()=>page.evaluate(async()=>{const r=await fetch('/api/knowledge/state',{headers:{'X-Workbench-Token':document.querySelector('meta[name=session-token]').content}});return r.json()});
+await page.goto(origin+'/?lang=zh');await page.waitForLoadState('networkidle');
+let initial=await state();
+if(!initial.assets.length){await page.locator('[data-kw=go][data-page=knowledge]').click();await page.locator('#kw-files').setInputFiles(path.resolve('examples/semantic-workbench/transport.sql'));await page.locator('[data-kw=import-files]').click();await page.waitForURL('**#graph');initial=await state();checks.push('Empty model → upload SQL → editable graph, without candidate review');}
+assert.equal(initial.assets.length,8);assert(initial.assets.every(a=>a.status==='draft'));assert.equal(await page.locator('#kw-canvas-view').inputValue(),'data');assert.equal(await page.locator('nav>button').count(),3);assert.equal(initial.scenarios.length,0);
+await page.waitForFunction(()=>document.querySelectorAll('[data-kw-node]').length===7);checks.push('Default route displays all physical nodes, with three primary tools and no question');
+const field=initial.assets.find(a=>a.kind==='field'&&a.name==='vehicle.id');await page.locator(`[data-kw-node="${field.id}"]`).dblclick();await page.locator('#kw-asset-fields [data-field=aliases]').fill('车辆编号');
+const saved=page.waitForResponse(r=>r.url().endsWith('/api/knowledge/edit'));await page.locator('#kw-form button[value=draft]').click();assert.equal((await saved).status(),200);await page.locator('dialog[open]').waitFor({state:'hidden'});await page.reload();await page.locator('#kw-canvas-view').waitFor();
+let edited=await state();assert(edited.assets.find(a=>a.id===field.id).aliases.includes('车辆编号'));assert(edited.assets.every(a=>a.status==='draft'));checks.push('Double-click, edit alias, save draft and reload preserve IDs, evidence and draft state');
+await page.locator('[data-kw=fit-canvas]').click();await page.waitForFunction(()=>!document.querySelector('#toast').classList.contains('show'));await page.screenshot({path:path.join(out,'graph-v034-zh.png')});
+await page.locator('nav [data-page=publish]').click();const publish=page.waitForResponse(r=>r.url().endsWith('/api/knowledge/publish'));await page.locator('[data-kw=publish][data-draft=true]').click();const published=await publish;assert.equal(published.status(),200,JSON.stringify(await published.json()));
+const download=page.waitForEvent('download');await page.locator('[data-kw=download]').filter({hasText:'下载语义包'}).click();await(await download).saveAs(path.join(out,'model.zip'));checks.push('Unselected export includes the active physical graph; draft download succeeds');
+await page.locator('nav [data-page=graph]').click();for(const width of [1600,960,390]){await page.setViewportSize({width,height:1050});await page.waitForTimeout(100);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'overflow '+width);for(const id of ['graph','knowledge','publish'])assert(await page.locator(`nav [data-page=${id}]`).isVisible());}
+await page.screenshot({path:path.join(out,'graph-mobile.png')});checks.push('Three primary actions remain visible with no horizontal overflow at 1600/960/390px');
+await page.setViewportSize({width:1600,height:1050});await page.locator('#ui-language').selectOption('en');await page.waitForURL('**lang=en*');await page.locator('#kw-canvas-view').waitFor();assert.equal(await page.locator('#kw-canvas-view').inputValue(),'data');assert.deepEqual((await state()).assets,edited.assets);
+await page.waitForFunction(()=>document.querySelectorAll('[data-kw-node]').length===7);await page.locator('[data-kw=fit-canvas]').click();await page.screenshot({path:path.join(out,'graph-v034-en.png')});checks.push('Language switch retains original asset values and graph view');
+assert.deepEqual(errors,[]);fs.writeFileSync(path.join(out,'light-browser.json'),JSON.stringify({checks,errors,asset_count:edited.assets.length},null,2));console.log(JSON.stringify({checks,errors}));
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

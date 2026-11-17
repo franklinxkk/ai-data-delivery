@@ -1,6 +1,6 @@
 # 固定语义包与离线调用
 
-> **0.3.4:** question handoffs use semantic-package/1.1 with derived query_control.json; run semantic_read.py --package PACKAGE control first. Knowledge-only/old 1.0 packages remain readable and return NO_CONTROL. 问题包新增快照绑定的控制单；仅供解释或明确阻断，不授予查询权限。[Contract / 调用合同](query-control.md)。
+> **0.3.4:** question handoffs use semantic-package/1.1 with derived query_control.json; start with semantic_read.py --package PACKAGE brief (which includes control). Knowledge-only/old 1.0 packages remain readable and return NO_CONTROL. 问题包新增快照绑定的控制单；仅供解释或明确阻断，不授予查询权限。[Contract / 调用合同](query-control.md)。
 
 本入口交付对象、术语、属性、关系、指标、规则及其依据。术语和规则可以没有数据库或可执行 SQL。工作台生成 ZIP；消费方只需这份 ZIP 或解包目录，以及本工具的只读 CLI，不需要原项目 SQLite、原工作台会话或模型服务。
 

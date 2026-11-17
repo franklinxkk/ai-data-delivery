@@ -21,6 +21,10 @@ def make_parser():
     commands = p.add_subparsers(dest="command", required=True, parser_class=Parser)
     commands.add_parser("verify", help="Verify bytes, references, states and evidence, not business truth")
     commands.add_parser("describe", help="Discover read-only tools and execution boundaries")
+    brief = commands.add_parser("brief", help="Question package: context, blockers and evidence pointers in one read; no execution")
+    brief.add_argument("--limit", type=int, default=50)
+    brief.add_argument("--offset", type=int, default=0)
+    brief.add_argument("--expected-snapshot", help="Caller reference only; no freshness authority")
     control = commands.add_parser("control", help="Read the snapshot-bound query control; never generate SQL or authorize execution")
     control.add_argument("--scenario", dest="scenario_id")
     control.add_argument("--expected-snapshot", help="Caller-supplied reference detects mismatch; not an authority or freshness proof")
@@ -83,6 +87,8 @@ def main(argv=None):
             result = package.verify()
         elif args.command == "describe":
             result = package.describe()
+        elif args.command == "brief":
+            result = package.brief(limit=args.limit, offset=args.offset, expected_snapshot=args.expected_snapshot)
         elif args.command == "control":
             result = package.control(scenario_id=args.scenario_id, expected_snapshot=args.expected_snapshot)
         elif args.command == "task":

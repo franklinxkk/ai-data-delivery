@@ -62,14 +62,15 @@ def prepare(project, demo=None, model=None, ddl=None, sample=None, provenance='u
                     continue
                 result = service.knowledge.import_material({
                     'revision':service.store.read()['revision'], 'operation_id':uuid.uuid4().hex,
-                    'filename':path.name, 'content_base64':base64.b64encode(path.read_bytes()).decode(), 'language':language})['result']
+                    'filename':path.name, 'content_base64':base64.b64encode(path.read_bytes()).decode(), 'language':language,
+                    'seed_draft': kind == 'ddl'})['result']
                 parsed = result['parsed']
                 if parsed['status'] in {'failed', 'needs_conversion'}:
                     raise ValueError(f"{path.name} 未能提取可用内容：{parsed.get('warnings', [])}")
         project.mkdir(parents=True,exist_ok=True)
         os.link(service.store.path,project/'project.sqlite')  # Atomic create, fails if another initializer won.
     return Service(project),{'status':'prepared','project':str(project),'demo':demo,'example':example,'language':language,
-                             'boundary':('Authored synthetic materials loaded; review DDL, then prepare business proposals. / 已载入合成材料；请先核对 DDL，再准备业务候选。' if example else '本机单人项目；演示不是生产验证。') if demo or example else ('已登记材料与可提取的候选；请在工作台核对后写入图谱。' if model or ddl else ('已载入独立数值样本；尚未建立语义图谱。' if sample else '已创建空项目；可在工作台导入资料。'))}
+                             'boundary':('Authored synthetic materials loaded; review DDL, then prepare business proposals. / 已载入合成材料；请先核对 DDL，再准备业务候选。' if example else '本机单人项目；演示不是生产验证。') if demo or example else ('Physical draft ready; business meaning is not confirmed. / 表、字段与外键草稿已生成，业务含义尚未确认。' if ddl else '已登记材料与可提取的候选；请核对后写入图谱。' if model else ('已载入独立数值样本；尚未建立语义图谱。' if sample else '已创建空项目；可导入资料。'))}
 
 
 def main(argv=None):
@@ -79,7 +80,7 @@ def main(argv=None):
     source.add_argument('--example', choices=['equipment'], help='Bilingual semantic modeling exercise / 双语设备借用建模练习')
     source.add_argument('--demo',nargs='?',const='traffic',choices=['traffic','retail'],help='Optional numeric demo (default: traffic) / 可选数值练习，默认交通')
     source.add_argument('--model',help='Import YAML/JSON as material and candidates, not confirmed knowledge / 登记模型材料及候选，不覆盖图谱')
-    source.add_argument('--ddl',help='Parse CREATE TABLE into physical candidates without executing SQL / 解析 DDL 为结构候选，不执行 SQL')
+    source.add_argument('--ddl',help='Initialize editable physical drafts from CREATE TABLE, without executing SQL / 解析 DDL 生成可编辑结构草稿，不执行 SQL')
     p.add_argument('--sample',help='Optional independent SQLite snapshot / 可选独立 SQLite 快照')
     p.add_argument('--provenance',choices=['unknown','demo','deidentified','production'],default='unknown')
     p.add_argument('--prepare-only',action='store_true',help='Prepare project without starting server / 仅准备项目，不启动服务')

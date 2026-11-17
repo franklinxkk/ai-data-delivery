@@ -1,18 +1,14 @@
-# 本地语义工作台 · v0.3.2
+# 按需打开的图谱编辑器 · 0.3.4
 
-> **0.3.4:** question handoffs use semantic-package/1.1 with derived query_control.json; run semantic_read.py --package PACKAGE control first. Knowledge-only/old 1.0 packages remain readable and return NO_CONTROL. 问题包新增快照绑定的控制单；仅供解释或明确阻断，不授予查询权限。[Contract / 调用合同](../references/query-control.md)。
+CLI 主路径见[快速开始](../README.zh-CN.md)：导入结构 → 可选编辑 → 导出／离线读取。此页面仅在需要看关系和修改定义时打开，不要求业务问题、任务或验收流程。
 
-**问题验收**支持预期定义、应披露缺口及有实际依据的样例核对记录；依赖变化后标记待复验并展示影响路径。**生成本问题的 Agent 包**将已保存请求与范围内语义一起交付，独立 Agent 可先用 `task --detail summary`，再回查来源。[操作与边界](../references/question-delivery.md#问题验收变更影响与-agent-交付)。
+默认进入图谱，只有物理结构时自动显示数据视图。顶部保留“图谱编辑、导入资料、导出模型”；数据库连接、候选核对、业务问题和历史在“更多工具”中按需使用。关闭浏览器后在终端 Ctrl+C 停止服务，文件保留。
 
-[English guide](README.md) · [中文快速开始](../README.zh-CN.md)
+界面支持 English／简体中文。语言切换只改变界面，不翻译业务数据；未保存输入和打开的弹窗会阻止切换，避免丢失修改。
 
-界面支持 English／简体中文。启动时用 `--language zh`；右上角可切换语言，原文与已保存知识不变。未保存输入或弹窗打开时先保存、清除或关闭，再切换，避免丢失编辑。浏览器原生文件选择器随浏览器／系统语言显示。
+模型保存于指定目录的 `project.sqlite`。CLI、图谱、候选与可选问题引用同一份语义资产；来源和修订由工具维护，无需逐站处理。工作台不内置大模型；文档语义由宿主 Agent 或人工补充。无需 Node、CDN 或 Neo4j。
 
-新用户可用 `python -X utf8 scripts/start.py --project "./work/equipment-zh" --example equipment --language zh`。先核对并接纳 DDL 结构组，再回材料页点击“准备练习业务候选”，核对后进入图谱“全部知识”，编辑保存并发布。候选是随包预先编写的合成练习，不是通用文本自动抽取，也不会自动确认。重开使用同一路径，去掉 `--example`。
-
-本地单人知识建模工作台。默认从“业务问题”保存问题、预期和所选定义，再“保存并检查”候选含义、依赖与缺口。检查不会自动回答问题、计算数据或办理业务；详细命令见[问题工作流](../references/question-workflow.md)。知识材料、待核对、语义图谱和交付与调用仍可单独使用。问题发起的交付保留所选范围，刷新或取消全部勾选不会默默扩大到全库。原文、候选、统一语义资产、问题和历史保存在项目目录的 `project.sqlite`；问题只引用知识，不复制另一套事实。项目历史单独查看，数值工具作为次入口保留。
-
-工作台不内置大模型。文件读取和结构候选在本机完成，业务语义候选由当前宿主 Agent 生成，或由操作者手工创建。无需 Node、CDN、AI API 密钥或独立数据库服务；Python 依赖为 PyYAML 和 pypdf。
+以下章节是按需参考，不是首次上手的必做清单。
 
 ## 启动与继续
 
@@ -31,9 +27,9 @@ python -X utf8 scripts/start.py --project "./work/ontology"
 python -X utf8 scripts/start.py --project "./work/new-domain" --ddl "./materials/schema.sql"
 ```
 
-`--model "./materials/model.json"` 与 `--ddl` 二选一。材料经过解析后形成可支持的候选，不直接确认或覆盖图谱。已有项目不重复使用初始化参数；进入页面继续上传。`--prepare-only` 只准备项目，不启动网页。
+`--model "./materials/model.json"` 与 `--ddl` 二选一。`--ddl` 在空模型中直接生成物理草稿；`--model` 仍形成候选。两者均不自动确认业务含义或覆盖已有图谱。已有项目不重复使用初始化参数；进入页面继续上传。`--prepare-only` 只准备项目，不启动网页。
 
-**1.0 前不承诺旧项目、模型格式或命令行为兼容。** 当前为 v0.3.0，建议用新目录体验；升级前保留旧目录与私人备份，不依赖自动迁移。
+**1.0 前不承诺旧项目、模型格式或命令行为兼容。** 当前为 v0.3.4，建议用新目录体验；升级前保留旧目录与私人备份，不依赖自动迁移。
 
 ## 知识材料
 
@@ -67,7 +63,7 @@ python -X utf8 scripts/knowledge.py --project "./work/ontology" task --batch "BA
 python -X utf8 scripts/knowledge.py --project "./work/ontology" --revision PROJECT_REVISION --operation-id "OPERATION_ID" propose --batch "BATCH_ID" --file "./work/candidates.json"
 ```
 
-候选文件格式为 `{"groups":[...]}` 或组列表，详见[实现合同](../references/m1-m2-contract.md)。`propose --partial` 用于尚未处理完全部材料；组说明应交代已处理范围与剩余部分。CLI 只提供材料摄取、任务与候选提交，不代替页面上的人工确认。
+候选文件格式为 `{"groups":[...]}` 或组列表，详见[实现合同](../references/m1-m2-contract.md)。`propose --partial` 用于尚未处理完全部材料；组说明应交代已处理范围与剩余部分。CLI 同样提供 `review`、`edit` 和无需业务问题的 `export`，均复用相同保护；Agent 按已有用户授权执行，不能自行确认推断。
 
 宿主也可以使用 `knowledge.py import --file` 导入材料，附 `--domain`、`--scope`，更新时附 `--source-id`，相同内容但不同出处附 `--distinct-source`。命令中的 `--project`、`--revision` 和 `--operation-id` 必须放在子命令前。
 
@@ -101,7 +97,7 @@ python -X utf8 scripts/knowledge.py --project "./work/ontology" --revision PROJE
 
 ## 交付与调用
 
-在交付页选择知识，或不勾选以交付全部业务语义。必需引用和关系端点自动补齐；数据集、字段、映射和物理 FK 默认只在被明确选中或作为必要依赖时带出。“附带数据映射与执行声明”用于需要同时交付这些内容的场景，不代表执行已经可用。
+在导出页选择知识，或不勾选以导出全部有效模型，包含数据集、字段和物理外键。必需引用和关系端点自动补齐。“附带数据映射与执行声明”用于需要同时交付这些内容的场景，不代表执行已经可用。
 
 “发布确认快照”检查当前范围，未确认、需复核、停用依赖或缺失依据会提示具体对象。修复后重试、缩小范围，或用“导出草稿供讨论”保留明确的草稿状态与缺口。保存后查看实际范围并下载；无关范围的问题不应要求把整个项目先补全。
 
@@ -141,7 +137,7 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/semantic.zip" neig
 
 本机页面和 API 使用同源检查及临时会话令牌，CLI 直接访问明确指定的本机项目；这不是多人权限或企业认证系统。知识解析、语义包读取不联网、不执行材料指令。原有消费者适配须明确配置地址，按其受控端点规则调用。
 
-v0.3.0 的操作说明不等于验收报告。维护者可按受影响范围运行 `tests/test_knowledge_parsers.py`、`tests/test_knowledge_flow.py`、`tests/test_semantic_package.py` 及原有工作台测试；完整入口为 `python -m unittest discover -s tests -v`。日常使用无需先跑所有检查；测试、真实页面操作、业务验收与生产部署应分别记录，不沿用旧版测试数或收益结论。
+操作说明不等于验收报告。维护者可按受影响范围运行 `tests/test_knowledge_parsers.py`、`tests/test_knowledge_flow.py`、`tests/test_semantic_package.py` 及原有工作台测试；完整入口为 `python -m unittest discover -s tests -v`。日常使用无需先跑所有检查；测试、真实页面操作、业务验收与生产部署应分别记录，不沿用旧版测试数或收益结论。
 
 ## 数据库连接与 Neo4j
 

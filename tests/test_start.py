@@ -51,11 +51,12 @@ class FirstUse(unittest.TestCase):
         with self.assertRaises(ValueError):prepare(self.project,model=bad)
         self.assertFalse((self.project/'project.sqlite').exists())
 
-    def test_ddl_start_creates_reviewable_candidates_without_confirming_graph(self):
+    def test_ddl_start_creates_editable_drafts_without_confirming_graph(self):
         ddl=self.root/'orders.sql';original=b'CREATE TABLE orders (id INTEGER PRIMARY KEY, amount INTEGER);'
         ddl.write_bytes(original);service,_=prepare(self.project,ddl=ddl)
         doc=service.store.read()['document']
-        self.assertEqual(doc['model']['semantic']['assets'], [])
+        self.assertEqual(len(doc['model']['semantic']['assets']), 3)
+        self.assertTrue(all(a['status'] == 'draft' and 'confirmed_by' not in a for a in doc['model']['semantic']['assets']))
         knowledge = service.knowledge.state()
         self.assertEqual(knowledge['sources'][0]['name'], 'orders.sql')
         candidates = knowledge['groups'][0]['candidates']

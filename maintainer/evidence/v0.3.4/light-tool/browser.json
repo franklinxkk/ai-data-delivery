@@ -1,0 +1,11 @@
+{
+  "checks": [
+    "Default route displays all physical nodes, with three primary tools and no question",
+    "Double-click, edit alias, save draft and reload preserve IDs, evidence and draft state",
+    "Unselected export includes the active physical graph; draft download succeeds",
+    "Three primary actions remain visible with no horizontal overflow at 1600/960/390px",
+    "Language switch retains original asset values and graph view"
+  ],
+  "errors": [],
+  "asset_count": 8
+}

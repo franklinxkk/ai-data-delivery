@@ -2,34 +2,29 @@
 
 [English quickstart](../README.md) · [中文快速开始](../README.zh-CN.md)
 
-## Try SQLite without another server
+## Short CLI path / CLI 最短路径
 
-From the installed skill directory, create a **new** synthetic directory outside the installation, then open a project:
+Use an existing authorized SQLite file and explicit tables. Save a profile such as `connection.json` (replace the absolute path):
 
-```bash
-python -X utf8 examples/readonly-metadata/create_example.py --out "../metadata-demo"
-python -X utf8 scripts/start.py --project "../metadata-project" --language en
+```json
+{"name":"Plants","engine":"sqlite","path":"C:/data/plants.sqlite","tables":["plant","care"]}
 ```
 
-In **Database connections**, name the connection, select SQLite, paste the absolute `plants.sqlite` path printed above, and enter `plant` and `care` on separate lines. Save, reopen the page, then **Scan structure**. Review the table, column and physical-FK candidates in **Review changes**. Nothing is confirmed at connection or scan time.
-
-Create a **Business question**, search for `moisture`, explicitly select the intended field, and select that field under **Question acceptance → Context must include**. Save. This first exercise checks declared structure only; it supplies no threshold or plant-care recommendation. Real questions should reference reviewed business definitions that depend on the selected fields, with independently supplied examples where needed.
-
-After recording those dependencies, an external database administrator can change the example. For this **synthetic database only**, this command adds a column; the connector itself never executes it:
-
 ```bash
-python -c "import sqlite3,sys; d=sqlite3.connect(sys.argv[1]); d.execute('ALTER TABLE plant ADD COLUMN humidity REAL'); d.commit(); d.close()" "../metadata-demo/plants.sqlite"
+python -X utf8 scripts/knowledge.py --project "./work/plants" connect --file "connection.json"
+python -X utf8 scripts/knowledge.py --project "./work/plants" scan --connection "RETURNED_CONNECTION_ID" --seed-draft
+python -X utf8 scripts/knowledge.py --project "./work/plants" export --out "./work/plants.zip" --draft
 ```
 
-Scan again. Inspect **Before / After** and the affected-question paths; accept revised candidates, run **Regress affected questions**, then publish or use the question's handoff. If examples were configured, check and record their actual results again: old observations become stale. Download the semantic ZIP or Neo4j CSV/Cypher ZIP. A successful context check does not validate a business answer.
+Take the actual connection ID from `result.result.connection.id`. `--seed-draft` writes observed tables, columns and in-scope foreign keys as **unconfirmed drafts in an empty graph**. It does not read business rows or require a question, review page or server. Open `start.py --project "./work/plants"` only when visual editing helps. Later scans omit `--seed-draft`; changes remain candidates so manual definitions are not overwritten.
 
-## 中文：无服务依赖的最短练习
+中文：连接配置只保存路径或凭据环境变量名与明确选表。`connect` 返回实际连接 ID；`scan --seed-draft` 直接生成结构草稿；`export --draft` 即可交给本机 Agent。无需业务问题或常驻服务，字段、外键不自动变成已确认的业务规则。已有模型去掉初始化参数，按候选核对变化。
 
-在安装目录运行上方两条命令，`--language zh` 切换中文。样例目录必须是安装目录之外的新目录；不会覆盖旧库。在“数据库连接”选择 SQLite，填写命令输出的绝对路径，选表每行填写 `plant`、`care`。保存后重开，再“读取结构变化”，到“待核对”接纳表、字段与物理外键候选。
+For a synthetic SQLite file, run `python -X utf8 examples/readonly-metadata/create_example.py --out "../metadata-demo"` in a new directory outside the installation. It prints the file path for the profile above. Alternatively use **Import → Connect database** in the editor: choose exact tables and **Read structure and create draft**. Existing models receive change candidates instead.
 
-在“业务问题”检索 `moisture`，明确选择该字段，并在“问题验收→上下文必须包含”勾选它、保存。这只是结构练习，没有给出养护阈值或建议。真实任务应先核对业务定义与物理字段的依赖，并配置独立样例。仅针对这个新建的合成库，可执行上方 `ALTER TABLE` 演练命令；连接器本身不执行它。
+## Optional: review later changes / 可选：维护后续变化
 
-再次扫描，查看变化前后与问题影响路径，核对候选、回归问题后发布。配置过人工样例时，旧记录会变成待复验；重新检查并记录真实结果后才能发布。下载语义包或 Neo4j 导入包。上下文通过不等于业务答案正确。
+Scan again after source changes. Review the before/after candidates and preserve business definitions. If affected business questions have been registered, regression checks and observations must be current before confirmed publication. A schema-only draft needs no question workflow. Catalog absence can mean lost visibility; it does not authorize deletion. See the contracts below for freshness and publication guards.
 
 ## PostgreSQL and MySQL / PostgreSQL 与 MySQL
 

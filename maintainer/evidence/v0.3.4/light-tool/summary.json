@@ -1,0 +1,73 @@
+{
+  "kind": "Agent simulations and local tests, not human acceptance",
+  "date": "2026-11-17",
+  "python": {
+    "full_suite": 474,
+    "skipped": 5,
+    "later_targeted_cli_suite": 6,
+    "later_guard": "Repeated seed on previously imported material rejects without a false success"
+  },
+  "javascript": [
+    "i18n",
+    "scope_ui",
+    "knowledge_ui",
+    "graph_layout",
+    "query_control_ui"
+  ],
+  "sol": {
+    "model": "gpt-6.1-sol",
+    "trial": "fresh synthetic traffic DDL; public CLI only",
+    "calls": 14,
+    "successful": 11,
+    "expected_rejections": 3,
+    "assets": 20,
+    "verified": [
+      "editable physical drafts",
+      "stable identity and evidence after edit",
+      "export all active physical assets",
+      "independent offline verify/search/get/sources/context",
+      "nonempty seed refusal",
+      "confirmed export refusal for drafts",
+      "output overwrite refusal"
+    ],
+    "not_verified": [
+      "browser",
+      "production database",
+      "human usability"
+    ]
+  },
+  "terra": {
+    "model": "gpt-6.1-terra",
+    "roles": [
+      "data engineer",
+      "DBA",
+      "analyst",
+      "receiving Agent developer"
+    ],
+    "same_model_simulates_all_roles": true,
+    "verified": [
+      "DDL CLI import/export/search: 8 draft assets",
+      "SQLite CLI connect/scan/export/search: 9 draft assets, no business rows",
+      "Edge empty-model SQL upload opens graph",
+      "double-click opens editing form"
+    ],
+    "not_verified": [
+      "saving edits in this agent trial",
+      "SQLite form in this agent trial",
+      "real human adoption"
+    ]
+  },
+  "root_browser": [
+    "graph editing/save/reload/draft download",
+    "SQLite form → selected catalog → 6 draft assets",
+    "1600/960/390 widths",
+    "Chinese and English",
+    "original optional candidate review and binding/question handoff"
+  ],
+  "remaining_limits": [
+    "No embedded model or automatic business confirmation",
+    "No PostgreSQL/MySQL production integration",
+    "No production query/action executor",
+    "No claim of zero learning cost or measured real-user productivity"
+  ]
+}

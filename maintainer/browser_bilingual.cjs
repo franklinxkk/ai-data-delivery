@@ -6,7 +6,7 @@ const zh=lang==='zh',pick=(en,cn)=>zh?cn:en;
 try{const page=await browser.newPage({viewport:{width:1600,height:1080},locale:zh?'zh-CN':'en-US',acceptDownloads:true}),errors=[],checks=[];
 page.on('pageerror',e=>errors.push(e.message));
 const apiState=()=>page.evaluate(async()=>{const r=await fetch('/api/knowledge/state',{headers:{'X-Workbench-Token':document.querySelector('meta[name=session-token]').content}});return r.json()});
-const nav=async(id)=>{await page.locator(`nav [data-page="${id}"]`).click();};
+const nav=async(id)=>{const button=page.locator(`nav [data-page="${id}"]`);if(!await button.isVisible())await page.locator("nav .tool-more>summary").click();await button.click();};
 async function review(){
  const rows=page.locator('details.kw-candidate');for(let i=0;i<await rows.count();i++)await rows.nth(i).locator(':scope > summary').click();
  await page.locator('[data-group-reason]').fill(pick('Synthetic exercise only: checked each definition against the supplied original text.','仅合成练习：逐项核对定义与原文，不代表真实业务签署。'));
@@ -14,7 +14,7 @@ async function review(){
  await page.getByRole('button',{name:pick('Accept whole group','接纳整组'),exact:true}).click();const res=await response;assert.equal(res.status(),200,JSON.stringify(await res.json()));
  await page.getByText(pick('No changes to review here','当前没有待核对变化'),{exact:true}).waitFor();
 }
-await page.goto(origin+'/?lang='+lang+'#knowledge');await page.locator('#kw-import-text').waitFor();
+await page.goto(origin+'/?lang='+lang+'#knowledge');await page.locator('details.tool-secondary').first().locator('summary').click();await page.locator('#kw-import-text').waitFor();
 if(!process.argv.includes('--resume')){
 assert.equal((await apiState()).assets.length,0);checks.push('Inputs and candidates do not auto-confirm knowledge');
 // Language switching must not discard user input or translate domain material.

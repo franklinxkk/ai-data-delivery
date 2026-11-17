@@ -1,6 +1,26 @@
 # Read a semantic package with an Agent
 
-> **0.3.4:** question handoffs use semantic-package/1.1 with derived query_control.json; run semantic_read.py --package PACKAGE control first. Knowledge-only/old 1.0 packages remain readable and return NO_CONTROL. 问题包新增快照绑定的控制单；仅供解释或明确阻断，不授予查询权限。[Contract / 调用合同](query-control.md)。
+## Read a model directly
+
+```bash
+python -X utf8 scripts/semantic_read.py --package "./work/transport.zip" search --query vehicle
+```
+
+Use actual IDs from the results with `get --id ID`, `neighbors --id ID`, `context --id ID` or `sources --id ID`. No saved question or running server is required. Multiple matches remain ambiguous; use `--kind dataset` or inspect definitions before choosing an ID. Draft assets retain draft status. `verify` checks package integrity, not business truth.
+
+中文：直接搜索模型即可开始；按返回的实际ID读取对象、关系、依赖和原文。搜索多项不等于工具已替你选定含义，可用类型筛选缩小范围。纯模型无需先建立业务问题。
+
+## Optional: read a saved question in one call
+
+```bash
+python -X utf8 scripts/semantic_read.py --package "./delivery/question.zip" brief
+```
+
+`brief` combines the saved question, summary context, recomputed control and an evidence index. Follow `evidence_index` to `sources --id ...`; summary output omits quotation text and never claims that the receiving Agent read it. Continue `brief --offset NEXT --limit LIMIT` when needed, retain preceding pages and compare IDs with `required_asset_ids`. A known reference can be supplied with `--expected-snapshot`; it is not a freshness authority.
+
+知识包未包含问题时返回 `needs_question`，再用下面的 `resolve` 提供当前问题；不默认选择意图或身份。`brief` 复用现有读取器，不读取原项目、不调用模型、不执行 SQL。后续各命令供局部读取与深入检查使用。
+
+> **0.3.4:** question handoffs use semantic-package/1.1 with derived query_control.json; start with semantic_read.py --package PACKAGE brief (which includes control). Knowledge-only/old 1.0 packages remain readable and return NO_CONTROL. 问题包新增快照绑定的控制单；仅供解释或明确阻断，不授予查询权限。[Contract / 调用合同](query-control.md)。
 
 [中文完整合同](semantic-package.md)
 
@@ -17,7 +37,7 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/equipment.zip" sou
 
 Use the actual download path. Only the included exercise has `demo.available`; for other packages, use IDs from search results.
 
-## Start with a question
+## Optional: supply a question
 
 If the publisher explicitly included `task.json`, run `task --detail summary` to retain its exact question, IDs, scope and date, then fetch `sources --id ID` or `task --detail full`. The reader verifies the task's snapshot/model binding. Ordinary packages have no task; supply `resolve` arguments instead. `resolve` and `context` also support `--detail summary`. Summary output keeps meaning, dependencies, scopes and gaps while marking evidence text as omitted. See [question delivery](question-delivery.md); task content never grants permission to execute.
 

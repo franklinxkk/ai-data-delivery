@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host-agent tools for material intake and evidence-linked proposals.
+"""Local CLI: import structure, edit semantics, export a portable package.
 
 Read a prepared task and propose against its source revision. Review/edit commands
 record explicit operator decisions through the same guards as the workbench.
@@ -33,6 +33,7 @@ def main(argv=None):
         item = commands.add_parser(command, help="Read selected catalog / check affected question contracts")
         item.add_argument("--connection", required=True)
         if command == "scan":
+            item.add_argument("--seed-draft", action="store_true", help="Initialize an empty graph with physical drafts; never confirm business meaning")
             item.add_argument("--refresh-review", action="store_true", help="Explicitly regenerate unresolved candidates against current graph and a fresh catalog observation")
     commands.add_parser("example", help="Prepare authored proposals after reviewing the equipment example DDL; never confirms knowledge")
     scenario = commands.add_parser("scenario", help="Save a business question and selected knowledge, never confirm it")
@@ -49,12 +50,18 @@ def main(argv=None):
     handoff.add_argument("--scenario", required=True)
     handoff.add_argument("--out", required=True)
     handoff.add_argument("--draft", action="store_true")
+    export = commands.add_parser("export", help="Export the model without a question or a running server")
+    export.add_argument("--out", required=True)
+    export.add_argument("--id", action="append", dest="asset_ids", help="Optional selected asset ID; repeat for multiple assets. Default: all active model assets")
+    export.add_argument("--draft", action="store_true", help="Preserve draft status and unresolved gaps")
+    export.add_argument("--include-execution", action="store_true", help="Also include existing execution declarations; does not authorize execution")
     material = commands.add_parser("import", help="Register material without overwriting the graph")
     material.add_argument("--file", required=True)
     material.add_argument("--domain", default="")
     material.add_argument("--scope", default="")
     material.add_argument("--source-id")
     material.add_argument("--distinct-source", action="store_true")
+    material.add_argument("--seed-draft", action="store_true", help="DDL only: initialize an empty graph with editable physical drafts")
     task = commands.add_parser("task", help="Read material fragments and current graph for the selected host task")
     task.add_argument("--batch", required=True)
     task.add_argument("--scenario", help="Optional saved business question guiding this material task")
@@ -85,7 +92,7 @@ def main(argv=None):
             result = service.metadata_connect({**req, "connection": json.loads(Path(args.file).read_text(encoding="utf-8-sig"))})
         elif args.command in {"scan", "regress"}:
             result = getattr(service, "metadata_" + args.command)({**req, "connection_id": args.connection,
-                **({"refresh_review": args.refresh_review} if args.command == "scan" else {})})
+                **({"refresh_review": args.refresh_review, "seed_draft": args.seed_draft} if args.command == "scan" else {})})
         elif args.command == "receipt":
             result = {"receipt": store.operation(args.id)}
         elif args.command == "impact":
@@ -93,11 +100,18 @@ def main(argv=None):
         elif args.command == "assess":
             data = json.loads(Path(args.file).read_text(encoding="utf-8-sig"))
             result = service.scenario_assess({**data, **req})
-        elif args.command == "handoff":
+        elif args.command in {"handoff", "export"}:
             path = Path(args.out)
             if path.exists() or not path.parent.is_dir():
                 raise ValueError("Choose a new output file in an existing directory / 请在已有目录中指定新文件")
-            result = service.publish({**req, "scenario_id": args.scenario, "draft": args.draft})
+            if args.command == "handoff":
+                scope = {"scenario_id": args.scenario}
+            else:
+                selected = args.asset_ids if args.asset_ids is not None else [a["id"] for a in service.state()["assets"] if a["status"] != "retired"]
+                if not selected:
+                    raise ValueError("No model assets to export / 当前没有可导出的模型资产")
+                scope = {"asset_ids": selected, "include_execution": args.include_execution}
+            result = service.publish({**req, **scope, "draft": args.draft})
             created = False
             try:
                 with path.open("xb") as stream:
@@ -113,7 +127,8 @@ def main(argv=None):
         elif args.command == "import":
             path = Path(args.file)
             result = service.import_material({**req, "filename": path.name, "content_base64": base64.b64encode(path.read_bytes()).decode(),
-                "domain": args.domain, "scope": args.scope, "language": args.language, "source_id": args.source_id, "distinct_source": args.distinct_source})
+                "domain": args.domain, "scope": args.scope, "language": args.language, "source_id": args.source_id, "distinct_source": args.distinct_source,
+                "seed_draft": args.seed_draft})
         elif args.command == "task":
             result = service.task({**req, "batch_id": args.batch, "action": args.action, 'language': args.language,
                                    "scenario_id": args.scenario})
@@ -137,6 +152,12 @@ def main(argv=None):
             data = json.loads(Path(args.file).read_text(encoding="utf-8-sig"))
             groups = data if isinstance(data, list) else data.get("groups")
             result = service.propose({**req, "batch_id": args.batch, "groups": groups, "complete": not args.partial})
+        if args.command in {"import", "scan"} and args.seed_draft:
+            detail = result["result"]
+            result = {"revision": result["revision"], "result": {
+                **{k: detail[k] for k in ("source_id", "batch_id", "seeded", "status") if k in detail},
+                "warnings": detail.get("parsed", {}).get("warnings", []),
+                "optional_editor_argv": [sys.executable, str(Path(__file__).with_name("start.py")), "--project", str(Path(args.project).resolve()), "--language", args.language]}}
         print(json.dumps({"ok": True, "operation_id": operation_id, "result": result}, ensure_ascii=False, allow_nan=False))
         return 0
     except (ValueError, OSError, TypeError) as exc:

@@ -838,6 +838,7 @@ class SemanticPackage:
 
     def describe(self):
         return self._result(tools=[
+            {"name": "brief", "optional": ["limit", "offset", "expected_snapshot"], "purpose": "Question package: question, summary context, control and evidence index / 问题包：读取问题、摘要、边界与证据索引"},
             {"name": "control", "optional": ["scenario_id", "expected_snapshot"], "purpose": "读取问数控制单；无控制单拒绝执行，指纹完整不等于运行时授权"},
             {"name": "task", "optional": ["detail", "limit", "offset"], "available": self.task_record is not None,
              "purpose": "Read the explicitly exported question against this fixed snapshot / 按本快照读取明确交付的问题"},
@@ -886,7 +887,7 @@ class SemanticPackage:
         if domain is not None and not isinstance(domain, str) or scope is not None and not isinstance(scope, (str, dict)):
             raise PackageError("INVALID_INPUT", "domain/scope 格式无效")
         _page(limit, offset)
-        date, needle = _date(as_of, "as_of"), query.strip().casefold()
+        date, needle = _date(as_of, "as_of"), _normalized_text(query)
         found = []
         for asset in self.index.values():
             if domain is not None and asset.get("domain", "").casefold() != domain.casefold() or kind and asset["kind"] != kind or not _matches_scope(asset, scope):
@@ -895,8 +896,8 @@ class SemanticPackage:
             if applicability == "outside_known_interval":
                 continue
             names = [asset["name"], *asset.get("aliases", [])]
-            exact = any(needle == value.casefold() for value in names)
-            fields = [field for field, value in _search_fields(asset).items() if needle in value.casefold()]
+            exact = any(needle == _normalized_text(value) for value in names)
+            fields = [field for field, value in _search_fields(asset).items() if needle in _normalized_text(value)]
             reason = "name_or_alias_exact" if exact else "property_match" if any(f.startswith("properties.") for f in fields) else "text_match"
             if fields:
                 found.append({"asset": copy.deepcopy(asset), "match_reason": reason,
@@ -1108,6 +1109,36 @@ class SemanticPackage:
             validate_acceptance(req["acceptance"], req["acceptance"].get("required_asset_ids", []) if isinstance(req["acceptance"], dict) else [])
         except ValueError as exc:
             raise PackageError("INVALID_TASK", str(exc)) from exc
+
+    def brief(self, *, limit=50, offset=0, expected_snapshot=None):
+        """One read-only entry: reuse task/context/control; never synthesize a question or permission."""
+        _page(limit, offset)
+        control = self.control(expected_snapshot=expected_snapshot)
+        if self.task_record is None:
+            return self._result("needs_question", decision="needs_question", control=control,
+                answer_verified=False, authorization_granted=False, evidence_details_included=False,
+                next_steps=[{"code": "SUPPLY_QUESTION", "command": "resolve --question QUESTION",
+                    "message": "This knowledge-only package has no saved question. Supply yours; no intent is inferred / 此知识包没有保存问题，请提供当前问题，不代猜意图"}])
+        result = self.task(detail="summary", limit=limit, offset=offset)
+        result["control"] = control
+        result["authorization_granted"] = False
+        result["evidence_details_included"] = False
+        result["evidence_read_by_consumer"] = "not_established"
+        context = result.get("context", {})
+        result["evidence_index"] = [{"asset_id": row["asset_id"], "command": "sources",
+            "arguments": {"id": row["asset_id"]}, "records": len(row["evidence"])}
+            for row in context.get("evidence", [])]
+        result["continuation"] = {"command": "brief", "limit": limit,
+            "next_offset": context.get("next_offset"),
+            "required_asset_ids": context.get("required_asset_ids", []),
+            "all_pages_required": bool(context.get("truncated"))}
+        result["next_steps"].insert(0, {"code": "READ_REFERENCED_EVIDENCE",
+            "message": "Read cited sources for the selected meaning; this summary omits quotations / 按证据索引核对原文，摘要未包含引文"})
+        if any(b["code"] == "STALE_SNAPSHOT" for b in control.get("blockers", [])):
+            result["status"] = result["decision"] = "needs_review"
+            result["next_steps"].insert(0, {"code": "CHECK_EXPECTED_SNAPSHOT",
+                "message": "Snapshot differs from the caller's reference / 当前包与调用方参考快照不同"})
+        return result
 
     def task(self, *, detail="summary", limit=50, offset=0):
         if self.task_record is None:

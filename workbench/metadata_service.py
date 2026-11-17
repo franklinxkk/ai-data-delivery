@@ -3,7 +3,7 @@ import copy
 import json
 
 from workbench.db_metadata import capture, classify, profile
-from workbench.knowledge import containers, dependencies, find, meaningful, normalize_asset, uid, mark_dependents
+from workbench.knowledge import containers, dependencies, find, meaningful, normalize_asset, uid, mark_dependents, seed_physical_drafts
 from workbench.scenario_contract import basis, closure
 from workbench.store import Conflict, digest, now
 
@@ -77,12 +77,16 @@ class MetadataService:
 
     def scan(self, req):
         def apply(doc, sem, know, db):
+            if type(req.get("seed_draft", False)) is not bool:
+                raise ValueError("seed_draft must be boolean")
+            if req.get("seed_draft") and sem["assets"]:
+                raise ValueError("Draft initialization requires an empty graph / 初始草稿仅用于空图；已有模型请按候选核对变化")
             conn = find(know.get("connections", []), req.get("connection_id"), "连接")
             observed = capture({k: v for k, v in conn.items() if k in {"id", "name", "engine", "path", "host", "port", "database", "schema", "user", "password_env", "tls_ca", "tables", "auto_indexes"}})
             previous = conn.get("snapshot")
             if type(req.get("refresh_review", False)) is not bool:
                 raise ValueError("refresh_review must be boolean / 重新生成候选须为开关")
-            if previous and previous["fingerprint"] == observed["fingerprint"] and not req.get("refresh_review"):
+            if previous and previous["fingerprint"] == observed["fingerprint"] and not req.get("refresh_review") and not req.get("seed_draft"):
                 return {"status": "unchanged", "connection_id": conn["id"], "fingerprint": observed["fingerprint"], "business_rows_read": 0}
             if not previous and any(t is None for t in observed["tables"].values()):
                 raise ValueError("Initial selected tables are missing or invisible; check exact names and permissions / 首次选表存在缺失或不可见项，请核对名称和权限")
@@ -156,7 +160,9 @@ class MetadataService:
                 if hits:
                     scan["affected_questions"].append({"id": q["id"], "title": q["title"], "paths": [paths[x] for x in sorted(hits)]})
             know.setdefault("metadata_scans", []).append(scan)
-            return {"status": "review_required" if candidates else "automatically_adjusted", "scan": scan}
+            seeded = seed_physical_drafts(sem, know, scan["group_ids"]) if req.get("seed_draft") else None
+            return {"status": "draft_ready" if seeded else "review_required" if candidates else "automatically_adjusted", "scan": scan,
+                    **({"seeded": seeded} if seeded else {})}
         return self.knowledge._write(req, "读取数据库结构变化", apply)
 
     def regress(self, req):

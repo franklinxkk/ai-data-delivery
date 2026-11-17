@@ -1,0 +1,9 @@
+{
+  "checks": [
+    "Actual binding dialog retains invalid input, preserves numeric zero and writes reviewed evidence to the same metric",
+    "Review, recheck, publish and download stay connected; receiving instruction uses brief",
+    "Saved questions remain reachable at 390px; no horizontal overflow at 1600/960/390px",
+    "English presentation retains original business text and offers readable binding review"
+  ],
+  "errors": []
+}

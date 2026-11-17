@@ -1,4 +1,4 @@
-# Security boundaries · v0.3.0
+# Security boundaries · v0.3.4
 
 [简体中文](SECURITY.zh-CN.md)
 
@@ -41,7 +41,21 @@ Python dependencies are pinned in requirements.txt. ELK 0.12.1 is bundled locall
 
 The earlier ClawHub report concerned v0.1.2. Subsequent fixes removed generic lifecycle utilities from distribution, hardened mock paths and live destinations, and repaired metric/gold/read-only integrity failures. Denylist literals require contextual interpretation, not removal to silence scanners.
 
-Current local test scope is in [release validation](references/v0.3.2-release-validation.md). It is not a new ClawHub scan, SkillHub evaluation, production certification or promise of no future vulnerabilities. External submissions and their version-bound results are recorded separately.
+Current local test scope is in [release validation](references/v0.3.4-release-validation.md). It is not a new ClawHub scan, platform certification or promise of no future vulnerabilities. External submissions and their version-bound results are recorded separately.
+
+## Required capabilities and host permissions
+
+The [Agent Skills specification](https://agentskills.io/specification) defines `allowed-tools` as optional experimental **pre-approved tools**, not the complete capability manifest. Keeping `Read` does not describe this toolkit as read-only. Actual capabilities are disclosed in `metadata` (including compatibility requirements); no arbitrary shell wildcard is pre-approved to silence a scanner.
+
+| Task | Required capability | Scope |
+| --- | --- | --- |
+| Read instructions/materials | File read | User-specified paths |
+| Read a semantic ZIP | Python execution and file read | Supplied package; no project mutation, SQL or network |
+| Author/review/export | Python execution and file write | Authorized project/output; normal revision and evidence guards |
+| Open workbench | Local process and loopback HTTP | 127.0.0.1, session controls; no remote service deployment |
+| Connect catalogs/live engine | Explicit network destination and, if needed, named credential | Selected tables or evaluation questions; live evaluation may transmit question text |
+
+Use the host's existing task authorization and permissions; do not repeatedly request approval already given. If required capabilities are unavailable, explain the specific unavailable operation instead of claiming it ran. Current local CLI/browser and Agent exercise results do not certify Claude Code/OpenClaw/other hosts' permission parsing. A scanner may still flag necessary subprocesses or request a host-specific manifest.
 
 ## Optional metadata connections and graph export
 

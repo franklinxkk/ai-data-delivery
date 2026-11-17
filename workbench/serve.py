@@ -9,6 +9,7 @@ import mimetypes
 import os
 from pathlib import Path
 import secrets
+import socket
 import sys
 from urllib.parse import urlsplit
 
@@ -100,7 +101,7 @@ def make_server(service, port=0):
                     return self.response(200, body, "text/html; charset=utf-8", download_session=True)
                 if path == "/ui-en.js":
                     return self.response(200, b"window.UI_EN=" + (STATIC / "ui-en.json").read_bytes() + b";", "text/javascript; charset=utf-8")
-                if path in {"/app.js", "/i18n.js", "/style.css", "/knowledge.js", "/knowledge.css", "/scenarios.js", "/metadata.js", "/graph-layout.js", "/vendor/elk.bundled.js"}:
+                if path in {"/app.js", "/i18n.js", "/style.css", "/knowledge.js", "/knowledge.css", "/scenarios.js", "/metadata.js", "/query-bindings.js", "/graph-layout.js", "/vendor/elk.bundled.js"}:
                     return self.response(200, (STATIC / path[1:]).read_bytes(), "text/javascript; charset=utf-8" if path.endswith("js") else "text/css; charset=utf-8")
                 self.response(404, {"error": "页面不存在"})
             except PermissionError as exc:
@@ -150,6 +151,14 @@ def make_server(service, port=0):
 
     class LocalServer(ThreadingHTTPServer):
         daemon_threads = True
+        allow_reuse_address = os.name != "nt"
+
+        def server_bind(self):
+            # Windows SO_REUSEADDR can share a listening port with an unrelated
+            # local service, sending the browser to the wrong application.
+            if os.name == "nt":
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            super().server_bind()
 
         def get_request(self):
             connection, address = super().get_request()

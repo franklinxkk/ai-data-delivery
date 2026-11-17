@@ -74,6 +74,51 @@ class KnowledgeCliTests(unittest.TestCase):
         self.run_cli("edit", "--file", self.write("规则.json", asset), "--confirm")
         self.assertEqual(self.run_cli("state")["result"]["assets"][0]["status"], "confirmed")
 
+    def test_short_structure_flow_exports_physical_drafts_without_server_or_question(self):
+        from workbench.semantic_package import read_package
+        path = self.root / "结构.sql"
+        path.write_text("CREATE TABLE plant(id INTEGER PRIMARY KEY); CREATE TABLE care(id INTEGER PRIMARY KEY, plant_id INTEGER REFERENCES plant(id));", encoding="utf-8")
+        first = self.run_cli("--operation-id", "seed", "import", "--file", str(path), "--seed-draft")
+        self.assertEqual(first, self.run_cli("--operation-id", "seed", "import", "--file", str(path), "--seed-draft"))
+        self.assertEqual(first["result"]["result"]["seeded"]["counts"], {"dataset": 2, "field": 3, "relation": 1})
+        state = self.run_cli("state")["result"]
+        self.assertEqual(len(state["assets"]), 6)
+        self.assertTrue(all(a["status"] == "draft" and a["evidence"] and "confirmed_by" not in a for a in state["assets"]))
+        edited = state["assets"][0]
+        edited["definition"] = "Manually refined physical definition"
+        self.run_cli("edit", "--file", self.write("edit.json", edited))
+        self.run_cli("review", "--group", state["groups"][0]["id"], "--action", "accept", "--reason", "Cannot overwrite editing", code=2)
+        current = self.run_cli("state")["result"]
+        self.run_cli("import", "--file", str(path), "--seed-draft", code=2)
+        self.assertEqual(self.run_cli("state")["result"]["revision"], current["revision"])
+        out = self.root / "model.zip"
+        self.run_cli("export", "--out", str(out), code=2)
+        self.assertFalse(out.exists())
+        self.run_cli("export", "--out", str(out), "--draft")
+        package = read_package(out)
+        self.assertEqual(len(package.index), 6)
+        self.assertTrue(package.manifest["draft"])
+        before = out.read_bytes()
+        self.run_cli("export", "--out", str(out), "--draft", code=2)
+        self.assertEqual(out.read_bytes(), before)
+
+    def test_seed_draft_rejects_nonstructural_material_and_empty_export(self):
+        path = self.root / "说明.md"
+        path.write_text("A document is not a table declaration.", encoding="utf-8")
+        self.run_cli("import", "--file", str(path), "--seed-draft", code=2)
+        state = self.run_cli("state")["result"]
+        self.assertEqual(state["assets"], [])
+        self.assertEqual(state["sources"], [])
+        self.run_cli("export", "--out", str(self.root / "empty.zip"), "--draft", code=2)
+
+    def test_seed_draft_does_not_report_success_for_already_imported_candidates(self):
+        self.proposal()
+        before = self.run_cli("state")["result"]
+        self.run_cli("import", "--file", str(self.root / "表结构.sql"), "--seed-draft", code=2)
+        after = self.run_cli("state")["result"]
+        self.assertEqual(after["assets"], [])
+        self.assertEqual(after["revision"], before["revision"])
+
 
 if __name__ == "__main__":
     unittest.main()

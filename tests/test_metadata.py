@@ -32,6 +32,19 @@ class MetadataTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_empty_graph_catalog_draft_is_editable_but_not_confirmed(self):
+        scanned = self.call('metadata_scan', connection_id=self.conn, seed_draft=True)
+        self.assertEqual(scanned['status'], 'draft_ready')
+        state = self.s.state()
+        self.assertEqual(len(state['assets']), 8)
+        self.assertEqual(scanned['scan']['business_rows_read'], 0)
+        self.assertTrue(all(a['status'] == 'draft' and 'confirmed_by' not in a for a in state['assets']))
+        self.assertTrue(state['groups'][0]['seeded_as_draft'])
+        with self.assertRaisesRegex(ValueError, 'empty graph'):
+            self.call('metadata_scan', connection_id=self.conn, seed_draft=True)
+        self.call('review', group_id=state['groups'][0]['id'], action='accept', reason='Authorized synthetic review')
+        self.assertTrue(all(a['status'] == 'confirmed' for a in self.s.state()['assets']))
+
     def sql(self, sql):
         db = sqlite3.connect(self.dbpath)
         try:

@@ -32,13 +32,13 @@ window.UIText=(()=>{
   }
   function mount(){
     document.documentElement.lang=language==='zh'?'zh-CN':'en';
-    document.title=t('语义工作台 · AI Data Delivery');
+    document.title=t('图谱编辑器 · AI Data Delivery');
     document.querySelectorAll('[data-ui]').forEach(el=>el.textContent=t(el.dataset.ui));
     document.querySelectorAll('[data-ui-aria]').forEach(el=>el.setAttribute('aria-label',t(el.dataset.uiAria)));
     const select=document.getElementById('ui-language');select.value=language;
     select.addEventListener('change',()=>{
       // A language change reloads presentation code; never discard an open edit.
-      const dirty=[...document.querySelectorAll('input:not([type=hidden]),textarea')].some(el=>!el.readOnly&&!el.disabled&&(el.type==='file'?el.files.length:el.type==='checkbox'||el.type==='radio'?el.checked!==el.defaultChecked:el.value!==el.defaultValue));
+      const dirty=[...document.querySelectorAll('input:not([type=hidden]),textarea')].some(el=>!el.closest('dialog:not([open])')&&!el.readOnly&&!el.disabled&&(el.type==='file'?el.files.length:el.type==='checkbox'||el.type==='radio'?el.checked!==el.defaultChecked:el.value!==el.defaultValue));
       if(document.querySelector('dialog[open]')||dirty||window.ScenarioWorkbench?.isDirty()||window.MetadataWorkbench?.isDirty()){select.value=language;const toast=document.getElementById('toast');toast.textContent=language==='zh'?'请先保存或清除当前输入，并关闭弹窗，再切换语言；输入已保留。':'Save or clear your current input and close the dialog before switching language. Your input is retained.';toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),6500);return;}
       try{localStorage.setItem('ai-data-delivery:language',select.value);}catch(_){}
       const url=new URL(location.href);url.searchParams.set('lang',select.value);location.assign(url);

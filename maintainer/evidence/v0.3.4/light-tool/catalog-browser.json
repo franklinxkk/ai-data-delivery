@@ -1,0 +1,7 @@
+{
+  "checks": [
+    "Empty model → connection form → selected SQLite catalog → draft graph",
+    "6 assets, all draft; 0 business rows; no saved question"
+  ],
+  "errors": []
+}

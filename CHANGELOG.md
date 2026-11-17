@@ -3,10 +3,13 @@
 
 ## 0.3.4 — 2026-11-17
 
-- Why: question handoffs lacked physical dependencies and a machine-readable boundary between semantic completeness and authorized execution.
+- Why: first use required too many management steps, and question handoffs lacked physical dependencies and a clear execution boundary.
 - What: derive snapshot/model/task-bound query_control.json; add the control reader, strict recomputation, explicit metric query bindings and common dependency/impact coverage. Preserve zero-hop single-table queries, typed NULL/false/zero and offline freshness uncertainty.
 - Fix: bind equipment fields, rewrite bindings on identity merge, withdraw outdated/in-flight handoff links, disclose known newer source revisions, and avoid treating internal preview packaging as a business draft.
-- UX: readable query-boundary panel, bilingual aggregation/filter labels and keyboard focus after checks. PM/FDE onboarding now starts from the same semantic question workflow.
+- Tool workflow: CLI-first DDL/catalog draft initialization in an empty graph; model export without a question or server; optional editor opens directly in the right graph view with three primary tools. Existing models and candidate review remain protected.
+- UX: shorter bilingual quickstart, compact editor shell, readable optional query bindings and narrow-screen navigation. Questions and acceptance stay optional.
+- Reader: `brief` combines saved question/context/control/evidence pointers; ordinary search uses the same Unicode normalization. No implicit execution or evidence-read claims.
+- Packaging/security: reproducible ZIP, actual capability declaration, bounded subprocesses, loopback-only editor and exclusive occupied-port protection on Windows.
 - Scope: no production executor, general JOIN compiler, MCP server or automatic migration. Old 1.0 packages remain readable; new question packages use 1.1. Metadata and Neo4j adapters remain available.
 - Validation: see [actual evidence and limits](references/v0.3.4-release-validation.md); [research and expert-advice decisions](references/v0.3.4-design-review.md).
 

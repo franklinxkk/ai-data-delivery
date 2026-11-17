@@ -1,12 +1,12 @@
-# Semantic Workbench · v0.3.2
+# On-demand graph editor · 0.3.4
 
-> **0.3.4:** question handoffs use semantic-package/1.1 with derived query_control.json; run semantic_read.py --package PACKAGE control first. Knowledge-only/old 1.0 packages remain readable and return NO_CONTROL. 问题包新增快照绑定的控制单；仅供解释或明确阻断，不授予查询权限。[Contract / 调用合同](../references/query-control.md)。
+The main path is in the [quickstart](../README.md): import structure → optionally edit → export/read offline. Open this editor only when seeing relationships or editing definitions helps. No question, task or acceptance workflow is required.
 
-[简体中文](README.zh-CN.md) · [Quickstart](../README.md) · [Candidate contract](../references/m1-m2-contract.md)
+It opens directly in the graph, choosing the data view for structure-only models. Primary tools are **Edit graph, Import, Export**. Connections, candidate review, business questions and history remain under **More**. Close the page and press Ctrl+C in the terminal to stop the service; files remain.
 
-The local workbench stores materials, reviews proposals, edits one semantic graph and publishes independently readable snapshots. Your host Agent supplies reasoning; the workbench has no embedded model and does not automatically confirm uploaded knowledge.
+English/Chinese switching preserves original business values. Save or clear unsaved input and close dialogs before switching. CLI and editor use the same `project.sqlite` and semantic assets. The tool maintains sources and revisions; no separate management workflow is needed. Business interpretation comes from the host Agent or a person, not an embedded LLM.
 
-The default **Business questions** view saves a question, expectations and selected semantic IDs. **Save and check** discovers candidate meanings or reads the selected definitions with dependencies and gaps. It never claims to answer the question or execute data/action requests. See the [question workflow](../references/question-workflow.md). Materials, review and graph remain independently accessible. Question-scoped delivery retains its selection on reload; clearing it cannot silently publish the whole graph.
+The sections below are optional references, not onboarding steps.
 
 ## Open a project and choose a language
 
@@ -17,11 +17,9 @@ python -X utf8 scripts/start.py --project "./work/my-domain" --language en
 
 Open the printed loopback URL. Use the same directory to reopen. `--language en|zh` chooses the initial interface; the top-right selector changes it and remembers the preference for that browser origin. Source text and asset values remain unchanged. Save or clear unsaved input and close dialogs before switching. Browser-native file-picker text follows the browser/OS language.
 
-For a complete included exercise, add `--example equipment` with a **new** project path. Review the DDL group first, then return to Materials and prepare the authored business proposals. Review those before opening the graph and publishing. Remove `--example` when reopening; initialization refuses to overwrite projects. This fixture does not run AI or confirm knowledge automatically.
+For an optional business-rule exercise, add `--example equipment` with a **new** project path. Review the DDL group first, then return to Materials and prepare the authored business proposals. Review those before opening the graph and publishing. Remove `--example` when reopening; initialization refuses to overwrite projects. This fixture does not run AI or confirm knowledge automatically.
 
 ## Materials
-
-**Question acceptance** supports required definitions, disclosed gaps and example observations with actual evidence. Changed dependencies mark observations stale and display impact paths. **Create question handoff** exports the saved request with its scoped semantic snapshot; independent Agents can use `task --detail summary` then retrieve sources. [Detailed workflow and limits](../references/question-delivery.md).
 
 Paste text or upload files up to 32 MB each. Give material a useful name, domain and business scope; unknown domain/scope can be clarified later. Scope is retained with the source. Uploading and parsing do not confirm meaning.
 
@@ -58,7 +56,7 @@ Cancelling keeps existing candidates but rejects late additions. Resume explicit
 
 Filter by batch/status and inspect each group. Expand all candidates, including other pages, to compare current definitions, proposals and original evidence. Edit proposals if necessary, record a reason, then accept the **whole group**, defer or reject. Current source/target/dependency conflicts reject the transaction without partial writes and retain inputs for correction.
 
-Confirmed knowledge needs a name, definition, domain, scope and evidence. Metrics additionally need unit, grain, inclusions, exclusions and time scope. Rules need conditions and requirements; attributes/fields need value type. Manual editing can save incomplete drafts. Confirmation means an operator accepted the definition, not that a rule ran or a number was verified.
+Confirmed knowledge needs a name, definition, domain, scope and evidence. Metrics additionally need unit, grain, inclusions, exclusions and time scope. Rules need `properties.condition` and `properties.requirement` (singular keys); attributes/fields need `properties.value_type`. Manual editing can save incomplete drafts. Confirmation means an operator accepted the definition, not that a rule ran or a number was verified.
 
 Names/aliases suggest identity collisions but never merge automatically. Compare definitions and scopes, choose a surviving ID for a deliberate merge, or record why items stay separate. Source review compares old evidence with new fragments: adopt changes or explain why the original definition still applies. Preserve recorded accept/reject/defer decisions on replay.
 
@@ -77,7 +75,7 @@ Project history preserves revisions. **Check and undo** creates a new revision w
 
 ## Deliver and consume
 
-Select a scope or leave all business semantics selected. Required dependencies are added automatically. Unconfirmed definitions, pending source review, retired dependencies, missing evidence and unresolved identity issues in that scope block confirmed publication. Fix those items, narrow scope or export an explicitly marked draft. SQL bindings are not required for a purely semantic package.
+Select a scope or leave the selection empty to export all active model assets, including tables, fields and physical foreign keys. Required dependencies are added automatically. Unconfirmed definitions, pending source review, retired dependencies, missing evidence and unresolved identity issues in that scope block confirmed publication. Fix those items, narrow scope or export an explicitly marked draft. SQL bindings are not required for a purely semantic package.
 
 Publish a confirmed snapshot and download its ZIP. It contains model.json, required source fragments, a scope/fingerprint manifest, bilingual human-review.html and reader instructions. It excludes original attachments and the project database. A later edit does not mutate an issued snapshot. See [independent reading](../references/agent-reader.md).
 
