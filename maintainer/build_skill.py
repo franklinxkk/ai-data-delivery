@@ -43,7 +43,7 @@ def main():
         ap.error("generated database/report/cache found in tracked runtime assets")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    archive = out / f"ai-data-delivery_v{version}.skill"
+    archive = out / f"ai-data-delivery_v{version}.zip"
     manifest = {"name": metadata["name"], "version": version,
                 "source_commit": git("rev-parse", "HEAD").decode().strip(),
                 "development_preview": args.allow_dirty,
