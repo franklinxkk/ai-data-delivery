@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-18",
+  "python": {
+    "collected": 489,
+    "passed": 484,
+    "skipped": 5,
+    "skip_reason": "Windows symlink creation privilege",
+    "log_sha256": "8ad40c7c602a1cd26bb58667fc2343ff9eaa476c00c8557e367665607b2b6875"
+  },
+  "javascript": {
+    "passed": [
+      "i18n",
+      "scope_ui",
+      "knowledge_ui",
+      "graph_layout",
+      "query_control_ui"
+    ]
+  },
+  "browser": {
+    "checks": [
+      "Empty model → upload SQL → editable graph, without candidate review",
+      "Default route displays all physical nodes, with three primary tools and no question",
+      "Double-click, edit alias, save draft and reload preserve IDs, evidence and draft state",
+      "Unselected export includes the active physical graph; draft download succeeds",
+      "Three primary actions remain visible with no horizontal overflow at 1600/960/390px",
+      "Language switch retains original asset values and graph view"
+    ],
+    "errors": [],
+    "asset_count": 8
+  },
+  "industry_configured_handoffs": 12,
+  "independent_field_cases": {
+    "positive": 3,
+    "negative_omission_rejection": 3
+  },
+  "publication_and_installation": "Verified separately against Release assets and BUILD.json"
+}

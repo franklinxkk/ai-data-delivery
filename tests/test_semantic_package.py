@@ -65,6 +65,57 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, code)
         return caught.exception
 
+    def test_reader_pagination_fallback_and_coverage(self):
+        package, path, _ = self.write_package()
+        single = package.sources("rule")
+        self.assertEqual(single["evidence"], package.sources(["rule"])["evidence"])
+        both = package.sources(["vehicle", "company", "rule"], limit=1)
+        self.assertEqual(both["total"], 2)  # identical manual evidence is deduplicated
+        self.assertEqual(both["next_offset"], 1)
+        self.assertEqual(both["evidence_coverage"][0]["asset_ids"], ["vehicle", "company"])
+        cli = subprocess.run([sys.executable, str(ROOT / "scripts/semantic_read.py"), "--package", str(path), "sources", "--id", "vehicle", "--id", "rule", "--limit", "1"], capture_output=True, text=True, encoding="utf-8", check=True)
+        self.assertEqual(json.loads(cli.stdout)["total"], 2)
+        last = package.sources(["vehicle", "company", "rule"], limit=1, offset=1)
+        self.assertIsNone(last["next_offset"])
+        self.assertEqual(package.sources(["rule"], offset=99)["evidence"], [])
+        self.assert_code("INVALID_INPUT", lambda: package.sources("rule", limit=0))
+        self.assert_code("UNKNOWN_ID", lambda: package.sources(["rule", "unknown"]))
+        search = package.search("不存在的词", domain="销售", kind="term", scope={"basis": "已支付订单"})
+        self.assertEqual([c["id"] for c in search["fallback"]["candidates"]], ["revenue_sales"])
+        resolve = package.resolve("完全无关的字串", domain="销售", scope={"basis": "已支付订单"})
+        self.assertEqual(resolve["status"], "no_match")
+        self.assertEqual([c["id"] for c in resolve["fallback"]["candidates"]], ["revenue_sales"])
+        first = package.context(["rule"], limit=1)
+        last = package.context(["rule"], limit=1, offset=2)
+        self.assertIsNone(last["next_offset"])
+        self.assertFalse(last["complete"])
+        self.assertIn(last["page_asset_ids"][0], first["required_asset_ids"])
+        self.assertIn("不证明业务需求完整", last["coverage_note"])
+        self.assertEqual(read_package(path).sources("rule")["evidence"], single["evidence"])
+
+    def test_fallback_pages_and_missing_evidence(self):
+        duplicate = {"type": "manual", "quote": "相同依据", "actor": "reviewer", "created": "2026-11-09T00:00:00Z"}
+        assets = [asset("a", name="甲", evidence=[duplicate, duplicate]),
+                  asset("b", name="乙", evidence=[]),
+                  asset("c", name="丙", domain="其他")]
+        package, _, _ = self.write_package(assets, [], draft=True)
+        result = package.sources(["a", "b"])
+        self.assertFalse(result["complete"])
+        self.assertEqual(result["missing_evidence_asset_ids"], ["b"])
+        self.assertEqual(result["evidence_coverage"][0]["asset_ids"], ["a"])
+        for result in (package.search("完全无关", domain="交通", kind="term", limit=1),
+                       package.resolve("完全无关", domain="交通", limit=1)):
+            fallback = result["fallback"]
+            self.assertEqual(fallback["total"], 2)
+            self.assertEqual(fallback["next_offset"], 1)
+            self.assertEqual(fallback["candidates"][0]["id"], "a")
+            self.assertIn("aliases", fallback["candidates"][0])
+        for result in (package.search("完全无关", domain="交通", kind="term", limit=1, offset=1),
+                       package.resolve("完全无关", domain="交通", limit=1, offset=1)):
+            self.assertEqual(result["fallback"]["candidates"][0]["id"], "b")
+            self.assertIsNone(result["fallback"]["next_offset"])
+            self.assertTrue(result["fallback"]["truncated"])
+
     def test_full_package_is_offline_and_keeps_rule_direction_and_exact_source_revision(self):
         package, path, manifest = self.write_package()
         self.assertEqual(package.verify()["status"], "verified")

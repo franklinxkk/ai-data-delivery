@@ -1,0 +1,80 @@
+{
+  "meter": [
+    {
+      "id": "M1",
+      "tenant": "A",
+      "multiplier": 10,
+      "rollover": null
+    },
+    {
+      "id": "M2",
+      "tenant": "A",
+      "multiplier": 1,
+      "rollover": 1000
+    },
+    {
+      "id": "M3",
+      "tenant": "A",
+      "multiplier": 1,
+      "rollover": null
+    },
+    {
+      "id": "M4",
+      "tenant": "B",
+      "multiplier": 1,
+      "rollover": null
+    }
+  ],
+  "reading": [
+    {
+      "id": "R1",
+      "meter_id": "M1",
+      "day": "2025-07-01",
+      "value": 100
+    },
+    {
+      "id": "R2",
+      "meter_id": "M1",
+      "day": "2025-08-01",
+      "value": 140
+    },
+    {
+      "id": "R3",
+      "meter_id": "M2",
+      "day": "2025-07-01",
+      "value": 990
+    },
+    {
+      "id": "R4",
+      "meter_id": "M2",
+      "day": "2025-08-01",
+      "value": 20
+    },
+    {
+      "id": "R5",
+      "meter_id": "M3",
+      "day": "2025-08-01",
+      "value": 30
+    },
+    {
+      "id": "R6",
+      "meter_id": "M4",
+      "day": "2025-07-01",
+      "value": 0
+    },
+    {
+      "id": "R7",
+      "meter_id": "M4",
+      "day": "2025-08-01",
+      "value": 999
+    }
+  ],
+  "meter_event": [
+    {
+      "id": "E1",
+      "meter_id": "M2",
+      "kind": "rollover",
+      "count": 1
+    }
+  ]
+}

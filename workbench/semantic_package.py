@@ -746,6 +746,19 @@ def discover_candidates(assets, question, *, domain=None, scope=None, as_of=None
             "resolution": {"method": "lexical_candidates", "question_coverage": "not_verified"}, "next_steps": steps}
 
 
+def _fallback_candidates(index, *, domain, scope, kind, date, limit, offset):
+    eligible = [a for a in sorted(index.values(), key=lambda a: a["id"])
+                if (domain is None or a.get("domain", "").casefold() == domain.casefold())
+                and (not kind or a["kind"] == kind) and _matches_scope(a, scope)
+                and _applicability(a, date) != "outside_known_interval"]
+    page = eligible[offset:offset + limit]
+    return {"candidates": [{k: copy.deepcopy(a.get(k)) for k in ("id", "name", "kind", "aliases", "status", "domain", "scope")} for a in page],
+            "total": len(eligible), "limit": limit, "offset": offset,
+            "truncated": offset > 0 or offset + len(page) < len(eligible),
+            "next_offset": offset + limit if offset + limit < len(eligible) else None,
+            "next_step": "核对范围内名称后重新搜索；候选不表示语义等价，不自动选择。"}
+
+
 class SemanticPackage:
     """Verified read-only snapshot; all result envelopes identify its actual scope."""
     def __init__(self, entries):
@@ -849,7 +862,7 @@ class SemanticPackage:
             {"name": "context", "required": ["asset_ids"], "optional": ["intent", "as_of", "limit", "offset"],
              "purpose": "按明确身份取得全部必需依赖、业务范围、依据、知识状态和缺口"},
             {"name": "get", "required": ["asset_id"], "optional": ["as_of"], "purpose": "取得单个资产"},
-            {"name": "sources", "required": ["asset_id"], "purpose": "回查所引来源片段"},
+            {"name": "sources", "required": ["asset_id"], "optional": ["limit", "offset"], "cli": "sources --id ID [--id ID] [--limit N] [--offset N]", "purpose": "回查所引来源片段"},
             {"name": "neighbors", "required": ["asset_id"], "purpose": "仅显式业务关系，定义依赖请用context"},
             {"name": "export", "required": ["asset_ids"], "purpose": "导出本包内依赖闭合子图"},
             {"name": "verify", "purpose": "核对包完整性，不认证业务真值或最新性"}],
@@ -912,7 +925,8 @@ class SemanticPackage:
                             matches=page, total=len(found), offset=offset, limit=limit, truncated=truncated,
                             next_offset=offset + limit if offset + limit < len(found) else None,
                             complete=not issues and not truncated, request_complete=not issues and not truncated, issues=issues,
-                            ambiguity="多个定义需结合领域、范围及有效时间消歧，不自动合并" if status == "ambiguous" else None)
+                            ambiguity="多个定义需结合领域、范围及有效时间消歧，不自动合并" if status == "ambiguous" else None,
+                            fallback=_fallback_candidates(self.index, domain=domain, scope=scope, kind=kind, date=date, limit=limit, offset=offset) if not found else None)
 
     def resolve(self, question, *, asset_ids=None, intent="explain", domain=None, scope=None, as_of=None, limit=50, offset=0, detail="full"):
         """Route a business question to explicit, evidence-linked knowledge, never an answer."""
@@ -927,6 +941,10 @@ class SemanticPackage:
             discovery = discover_candidates(self.index.values(), question, domain=domain, scope=scope,
                                              as_of=as_of, limit=limit, offset=offset)
             status = discovery.pop("status")
+            if status == "no_match":
+                date = _date(as_of, "as_of")
+                discovery["fallback"] = _fallback_candidates(self.index, domain=domain, scope=scope, kind=None,
+                                                               date=date, limit=limit, offset=offset)
             return self._result(status, request=request, capabilities=self._capabilities(), **discovery)
         roots = list(dict.fromkeys(self._resolve(aid) for aid in ids))
         mismatches = [aid for aid in roots if (domain is not None and self.index[aid].get("domain", "").casefold() != domain.casefold())
@@ -988,12 +1006,36 @@ class SemanticPackage:
                          "fragment": copy.deepcopy(fragment)})
         return rows
 
-    def sources(self, asset_id):
-        target = self._resolve(asset_id)
-        rows = self._evidence_rows(target)
-        complete = bool(rows) and all(r["status"] == "available" for r in rows)
-        return self._result("ok" if complete else "incomplete", request={"id": asset_id},
-                            evidence=rows, complete=complete, request_complete=complete)
+    def sources(self, asset_id, *, limit=100, offset=0):
+        _page(limit, offset)
+        ids = [asset_id] if isinstance(asset_id, str) else asset_id
+        _strings(ids, "asset_ids")
+        if not ids:
+            raise PackageError("INVALID_INPUT", "sources 需要至少一个资产 ID")
+        targets = list(dict.fromkeys(self._resolve(aid) for aid in ids))
+        rows, seen, evidence_assets, missing_evidence = [], set(), {}, []
+        for target in targets:
+            target_rows = self._evidence_rows(target)
+            if not target_rows:
+                missing_evidence.append(target)
+            for row in target_rows:
+                key = _json(row)
+                linked = evidence_assets.setdefault(key, [])
+                if target not in linked:
+                    linked.append(target)
+                if key not in seen:
+                    seen.add(key)
+                    rows.append(row)
+        page = rows[offset:offset + limit]
+        coverage = [{"evidence_index": offset + i, "asset_ids": evidence_assets[_json(row)]} for i, row in enumerate(page)]
+        complete = bool(rows) and not missing_evidence and all(r["status"] == "available" for r in rows)
+        truncated = offset > 0 or offset + len(page) < len(rows)
+        return self._result("ok" if complete and not truncated else "incomplete",
+                            request={"id": ids[0] if len(ids) == 1 else None, "ids": ids},
+                            asset_ids=targets, missing_evidence_asset_ids=missing_evidence, evidence=page, evidence_coverage=coverage, total=len(rows), limit=limit, offset=offset,
+                            next_offset=offset + limit if offset + limit < len(rows) else None,
+                            truncated=truncated, complete=complete and not truncated,
+                            request_complete=complete and not truncated)
 
     def context(self, asset_ids, *, intent="explain", as_of=None, limit=100, offset=0, detail="full"):
         """Dependency-closed task context. References are not invented business relations."""
@@ -1076,7 +1118,7 @@ class SemanticPackage:
             detail_level=detail, evidence_details_included=detail == "full",
             evidence_next_step="sources --id ASSET_ID, or context/resolve/task --detail full" if detail == "summary" else None,
             request={"ids": ids, "intent": intent, "as_of": as_of}, root_ids=roots,
-            required_asset_ids=ordered, assets=rows, dependency_edges=dependencies,
+            required_asset_ids=ordered, page_asset_ids=page_ids, coverage_note="合并各页 page_asset_ids 并核对覆盖 required_asset_ids；声明依赖覆盖不证明业务需求完整。", assets=rows, dependency_edges=dependencies,
             relations=[copy.deepcopy(a) for a in rows if a["kind"] in {"relation", "mapping"}],
             business_scopes=scopes, evidence=evidence, gaps=gaps, source_warnings=warnings,
             missing_dependencies=missing, total=len(ordered), limit=limit, offset=offset,

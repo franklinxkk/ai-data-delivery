@@ -6,7 +6,7 @@ description: >-
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.4
+  version: 0.3.5
   language: English and 简体中文; respond in the user's language, retaining original knowledge and quotes.
   runtime_environment: Python 3.10+ with pinned requirements.txt; no LLM or API key bundled.
   file_read: User-authorized material, project and semantic package paths.
@@ -36,10 +36,10 @@ Help the user build and reuse a semantic model with a short, local workflow: imp
 | Start from SQL | `knowledge.py --project DIR import --file SCHEMA.sql --seed-draft`; creates source-linked physical drafts in an empty graph, never confirmed business meaning |
 | Inspect or edit visually | `start.py --project DIR`; opens the same model in the graph editor; stop with Ctrl+C when finished |
 | Export without a question/server | `knowledge.py --project DIR export --out MODEL.zip --draft`; default is all active assets including physical structure, or repeat `--id` for selected scope |
-| Optional: refine semantics for a question | [Question workflow](references/question-workflow.md); `scripts/knowledge.py` handles state, proposals and review |
+| Build/refine business semantics | [Short modeling path](references/modeling.md): smallest useful objects, fields, mappings and relationships; atomic batch edits, no saved question required |
 | Import materials or propose changes | [Candidate contract](references/m1-m2-contract.md) before proposing; [workbench guide](workbench/README.md) for formats and recovery |
 | Read a received package | `semantic_read.py --package PACKAGE search --query TEXT`, then actual IDs with `context` / `sources`; `brief` for question packages; [reader guide](references/agent-reader.md) for evidence and paging |
-| Maintain graph identities, rules or mappings | Existing graph/review controls; preserve stable IDs and evidence; never edit project SQLite directly |
+| Maintain graph identities, rules or mappings | `state --summary`, `edit --file` (asset or array), `inspect --id`; preserve stable IDs and evidence; never edit project SQLite directly |
 | Connect catalogs or track schema changes | [Read-only metadata](references/readonly-metadata.md); explicit connection and selected tables |
 | Review query bindings | [Query control](references/query-control.md); existing metric and readable review, no second model |
 | Check expectations or change impact | [Question delivery](references/question-delivery.md); independent expectations and actual observations |
@@ -48,16 +48,18 @@ Help the user build and reuse a semantic model with a short, local workflow: imp
 
 Read only task-relevant references. Handle IDs, commands and JSON for the user. Reuse prior answers and authorization; ask about unresolved meaning, scope or authority only when it changes the current result. Existing graph maintenance need not be forced into a new question.
 
+For business modeling, make the recipient's root definition reference every relevant field, join key, mapping, relationship and rule—including secondary tables. Store metrics as metrics and relationships as evidenced relationships, not a paragraph or SQL string on one object. Use source-supported aliases. A coherent asset array can be maintained atomically with `edit --file`; apply `--confirm` only under existing confirmation authority. Run `inspect --id` to expose omitted links and unresolved dependencies, then check coverage against the actual task; its output is advisory, not a proof of meaning.
+
 ## Keep one meaning and its evidence
 
 - `document.model.semantic.assets` is the canonical graph. Questions reference it; packages and controls are derived snapshots. Legacy numeric/ontology formats need explicit intake and review, not silent synchronization.
 - Reuse identity by definition, domain and scope, not name alone. Foreign keys establish physical references, not business responsibility. Preserve units, grain, exclusions, time and zero/false/null; record unknowns without guessed defaults.
-- Propose coherent business groups with exact sources, revisions and quotes. Physical draft initialization is not confirmation. Only authorized review/manual editing confirms meaning. Preserve rejection, deferral, cancellation and manual corrections; never change IDs to evade them or manufacture evidence/observations.
+- Propose coherent business groups with exact sources, revisions and quotes. Imported material uses its actual source evidence; `manual` evidence is for a distinct operator assertion, not a shortcut for copying a policy without revision tracking. Physical draft initialization is not confirmation. Only authorized review/manual editing confirms meaning. Preserve rejection, deferral, cancellation and manual corrections; never change IDs to evade them or manufacture evidence/observations.
 - Writes carry revision and operation IDs. After an uncertain write inspect its receipt before retrying. On conflict reread and compare; retain input. Source updates do not silently erase definitions or rewrite past results. Use the referenced authoring contracts for details.
 
 ## Deliver something the recipient can judge
 
-Use `brief` for a saved question package. For knowledge-only packages supply `resolve --question ...` and select actual discovered IDs. Matching terms suggest candidates, not semantic equivalence. Read cited `sources` and all required context pages; a summary does not establish that evidence was read.
+Use `brief` for a saved question package. For knowledge-only packages supply `resolve --question ...` and select actual discovered IDs. Matching terms suggest candidates, not semantic equivalence; on no match inspect the filtered available terms rather than guessing an ID. Read cited `sources` and all required context pages; a summary does not establish that evidence was read. Check exact flags with subcommand `--help`; validate one invocation before batching, and stop a batch on a shared argument error.
 
 Distinguish available definitions, unresolved meaning and required execution. Scope filters are not access control. A complete package, structure check or exit code zero proves neither a correct business answer nor authorization. This release supplies no production executor; query control remains `explain_only` or `blocked`.
 

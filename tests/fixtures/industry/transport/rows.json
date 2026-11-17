@@ -1,0 +1,84 @@
+{
+  "enterprise": [
+    {
+      "id": "E1",
+      "tenant": "A"
+    },
+    {
+      "id": "E2",
+      "tenant": "B"
+    }
+  ],
+  "vehicle": [
+    {
+      "id": "V1",
+      "enterprise_id": "E1"
+    },
+    {
+      "id": "V2",
+      "enterprise_id": "E2"
+    }
+  ],
+  "journey": [
+    {
+      "row_id": "R1",
+      "tenant": "A",
+      "source": "gps",
+      "original_id": "001",
+      "vehicle_id": "V1",
+      "status": "completed",
+      "business_day": "2025-07-01",
+      "version": 1
+    },
+    {
+      "row_id": "R2",
+      "tenant": "A",
+      "source": "gps",
+      "original_id": "001",
+      "vehicle_id": "V1",
+      "status": "completed",
+      "business_day": "2025-07-01",
+      "version": 2
+    },
+    {
+      "row_id": "R3",
+      "tenant": "A",
+      "source": "dispatch",
+      "original_id": "001",
+      "vehicle_id": "V1",
+      "status": "completed",
+      "business_day": "2025-07-02",
+      "version": 1
+    },
+    {
+      "row_id": "R4",
+      "tenant": "A",
+      "source": "gps",
+      "original_id": "002",
+      "vehicle_id": "V1",
+      "status": "cancelled",
+      "business_day": "2025-07-02",
+      "version": 1
+    },
+    {
+      "row_id": "R5",
+      "tenant": "B",
+      "source": "gps",
+      "original_id": "003",
+      "vehicle_id": "V2",
+      "status": "completed",
+      "business_day": "2025-07-02",
+      "version": 1
+    },
+    {
+      "row_id": "R6",
+      "tenant": "A",
+      "source": "gps",
+      "original_id": "004",
+      "vehicle_id": "V1",
+      "status": "arrived",
+      "business_day": "2025-07-02",
+      "version": 1
+    }
+  ]
+}

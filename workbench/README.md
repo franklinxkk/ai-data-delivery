@@ -1,4 +1,4 @@
-# On-demand graph editor · 0.3.4
+# On-demand graph editor · 0.3.5
 
 The main path is in the [quickstart](../README.md): import structure → optionally edit → export/read offline. Open this editor only when seeing relationships or editing definitions helps. No question, task or acceptance workflow is required.
 

@@ -1,0 +1,3 @@
+合成业务政策，非真实行业法规。
+
+本试点截至2025-07-31，项目tenant=A，币种CNY。已审核工程应付基于certificate.state=approved的金额合计，draft不计。已付净额为payment.state=posted金额减去state=reversal金额；pending不计。未付额为已审核应付减已付净额。付款流水和计量证书均独立汇总后按项目关联，不能直接多对多join求和。这个指标不表示全部合同承诺或会计利润，未提供税、质保金及争议扣款规则。

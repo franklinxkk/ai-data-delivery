@@ -1,0 +1,77 @@
+{
+  "patient_alias": [
+    {
+      "id": "A1",
+      "tenant": "A",
+      "canonical_person": "P1",
+      "source": "HIS"
+    },
+    {
+      "id": "A2",
+      "tenant": "A",
+      "canonical_person": "P1",
+      "source": "PORTAL"
+    },
+    {
+      "id": "A3",
+      "tenant": "A",
+      "canonical_person": "P2",
+      "source": "HIS"
+    },
+    {
+      "id": "A4",
+      "tenant": "B",
+      "canonical_person": "P9",
+      "source": "HIS"
+    }
+  ],
+  "encounter": [
+    {
+      "id": "E1",
+      "patient_alias_id": "A1",
+      "day": "2025-07-01",
+      "state": "completed"
+    },
+    {
+      "id": "E2",
+      "patient_alias_id": "A2",
+      "day": "2025-07-02",
+      "state": "completed"
+    },
+    {
+      "id": "E3",
+      "patient_alias_id": "A3",
+      "day": "2025-07-02",
+      "state": "completed"
+    },
+    {
+      "id": "E4",
+      "patient_alias_id": "A3",
+      "day": "2025-07-03",
+      "state": "cancelled"
+    },
+    {
+      "id": "E5",
+      "patient_alias_id": "A4",
+      "day": "2025-07-02",
+      "state": "completed"
+    }
+  ],
+  "lab_record": [
+    {
+      "id": "L1",
+      "encounter_id": "E1",
+      "test_code": "X"
+    },
+    {
+      "id": "L2",
+      "encounter_id": "E1",
+      "test_code": "Y"
+    },
+    {
+      "id": "L3",
+      "encounter_id": "E3",
+      "test_code": "X"
+    }
+  ]
+}

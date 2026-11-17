@@ -1,0 +1,3 @@
+合成业务政策，非真实行业法规。
+
+本试点仅统计租户A的2025年7月完工批次。合格产量以lot为粒度，每批取inspection最大revision的最终处置；仅accepted计入，failed与quarantine排除。quantity按lot.qty读取；piece为件，dozen每打等于12件，禁止把打直接当件相加。一次批次多次检验不增加产量。不同工单不能因数量相同合并。供应商与BOM未在资料中提供，不得推断。 本次新增已授权政策：最终处置为accepted的批次计为合格，quarantine改为待定并单列数量，不计入合格。

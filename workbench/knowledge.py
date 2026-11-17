@@ -751,8 +751,8 @@ class KnowledgeService:
         return self._write(req, "核对知识候选", apply)
 
     def edit(self, req):
-        def apply(doc, sem, know, db):
-            a = normalize_asset(req.get("asset"), confirm=bool(req.get("confirm")))
+        def apply_one(value, sem):
+            a = normalize_asset(value, confirm=bool(req.get("confirm")))
             if req.get("review_query_plan"):
                 reason = req.get("plan_review_reason")
                 plan = a.get("properties", {}).get("query_plan")
@@ -778,8 +778,20 @@ class KnowledgeService:
                 sem["assets"][sem["assets"].index(old)] = a
             else:
                 sem["assets"].append(a)
-            mark_dependents(sem["assets"], [a["id"]])
             return {"asset_id": a["id"]}
+        def apply(doc, sem, know, db):
+            value = req.get("asset")
+            grouped = isinstance(value, list)
+            values = value if grouped else [value]
+            if not values:
+                raise ValueError("Asset array cannot be empty / 资产数组不能为空")
+            ids = [a.get("id") for a in values if isinstance(a, dict) and a.get("id")]
+            if len(ids) != len(set(ids)):
+                raise ValueError("Duplicate asset IDs / 同批资产身份不能重复")
+            results = [apply_one(a, sem) for a in values]
+            changed = [r["asset_id"] for r in results if not r.get("unchanged")]
+            mark_dependents(sem["assets"], changed)
+            return {"asset_ids": [r["asset_id"] for r in results], "assets": results} if grouped else results[0]
         return self._write(req, "维护语义资产", apply)
 
     def review_source(self, req):

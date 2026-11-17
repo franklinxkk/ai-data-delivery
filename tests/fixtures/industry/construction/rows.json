@@ -1,0 +1,60 @@
+{
+  "project": [
+    {
+      "id": "P1",
+      "tenant": "A",
+      "currency": "CNY"
+    },
+    {
+      "id": "P2",
+      "tenant": "B",
+      "currency": "CNY"
+    }
+  ],
+  "certificate": [
+    {
+      "id": "C1",
+      "project_id": "P1",
+      "state": "approved",
+      "amount": 600,
+      "business_day": "2025-07-15"
+    },
+    {
+      "id": "C2",
+      "project_id": "P1",
+      "state": "draft",
+      "amount": 200,
+      "business_day": "2025-07-20"
+    },
+    {
+      "id": "C3",
+      "project_id": "P2",
+      "state": "approved",
+      "amount": 9999,
+      "business_day": "2025-07-15"
+    }
+  ],
+  "payment": [
+    {
+      "id": "T1",
+      "project_id": "P1",
+      "state": "posted",
+      "amount": 400,
+      "business_day": "2025-07-20"
+    },
+    {
+      "id": "T2",
+      "project_id": "P1",
+      "state": "reversal",
+      "amount": 50,
+      "business_day": "2025-07-21"
+    },
+    {
+      "id": "T3",
+      "project_id": "P1",
+      "state": "pending",
+      "amount": 30,
+      "business_day": "2025-07-22"
+    }
+  ]
+}

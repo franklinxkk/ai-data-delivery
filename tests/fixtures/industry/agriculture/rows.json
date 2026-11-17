@@ -1,0 +1,79 @@
+{
+  "plot": [
+    {
+      "id": "P1",
+      "tenant": "A",
+      "season": "2025-S"
+    },
+    {
+      "id": "P2",
+      "tenant": "B",
+      "season": "2025-S"
+    }
+  ],
+  "harvest": [
+    {
+      "id": "H1",
+      "plot_id": "P1",
+      "qty": 100,
+      "unit": "kg",
+      "day": "2025-07-01",
+      "state": "posted"
+    },
+    {
+      "id": "H2",
+      "plot_id": "P1",
+      "qty": 200,
+      "unit": "kg",
+      "day": "2025-07-02",
+      "state": "posted"
+    },
+    {
+      "id": "H3",
+      "plot_id": "P1",
+      "qty": 50000,
+      "unit": "g",
+      "day": "2025-07-03",
+      "state": "posted"
+    },
+    {
+      "id": "H4",
+      "plot_id": "P1",
+      "qty": 10,
+      "unit": "kg",
+      "day": "2025-07-03",
+      "state": "void"
+    },
+    {
+      "id": "H5",
+      "plot_id": "P2",
+      "qty": 999,
+      "unit": "kg",
+      "day": "2025-07-03",
+      "state": "posted"
+    }
+  ],
+  "lot_event": [
+    {
+      "id": "E1",
+      "harvest_id": "H1",
+      "kind": "transfer",
+      "qty": 100,
+      "unit": "kg"
+    },
+    {
+      "id": "E2",
+      "harvest_id": "H2",
+      "kind": "split",
+      "qty": 80,
+      "unit": "kg"
+    },
+    {
+      "id": "E3",
+      "harvest_id": "H2",
+      "kind": "split",
+      "qty": 120,
+      "unit": "kg"
+    }
+  ]
+}

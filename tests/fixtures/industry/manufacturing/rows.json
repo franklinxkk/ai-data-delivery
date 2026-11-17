@@ -1,0 +1,74 @@
+{
+  "work_order": [
+    {
+      "id": "W1",
+      "tenant": "A"
+    },
+    {
+      "id": "W2",
+      "tenant": "B"
+    }
+  ],
+  "lot": [
+    {
+      "id": "L1",
+      "order_id": "W1",
+      "qty": 100,
+      "unit": "piece",
+      "finished_day": "2025-07-01"
+    },
+    {
+      "id": "L2",
+      "order_id": "W1",
+      "qty": 50,
+      "unit": "piece",
+      "finished_day": "2025-07-02"
+    },
+    {
+      "id": "L3",
+      "order_id": "W1",
+      "qty": 30,
+      "unit": "dozen",
+      "finished_day": "2025-07-03"
+    },
+    {
+      "id": "L4",
+      "order_id": "W2",
+      "qty": 999,
+      "unit": "piece",
+      "finished_day": "2025-07-03"
+    }
+  ],
+  "inspection": [
+    {
+      "id": "I1",
+      "lot_id": "L1",
+      "revision": 1,
+      "disposition": "failed"
+    },
+    {
+      "id": "I2",
+      "lot_id": "L1",
+      "revision": 2,
+      "disposition": "accepted"
+    },
+    {
+      "id": "I3",
+      "lot_id": "L2",
+      "revision": 1,
+      "disposition": "quarantine"
+    },
+    {
+      "id": "I4",
+      "lot_id": "L3",
+      "revision": 1,
+      "disposition": "accepted"
+    },
+    {
+      "id": "I5",
+      "lot_id": "L4",
+      "revision": 1,
+      "disposition": "accepted"
+    }
+  ]
+}

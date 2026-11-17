@@ -1,4 +1,4 @@
-# Security boundaries · v0.3.4
+# Security boundaries · v0.3.5
 
 [简体中文](SECURITY.zh-CN.md)
 
@@ -41,7 +41,7 @@ Python dependencies are pinned in requirements.txt. ELK 0.12.1 is bundled locall
 
 The earlier ClawHub report concerned v0.1.2. Subsequent fixes removed generic lifecycle utilities from distribution, hardened mock paths and live destinations, and repaired metric/gold/read-only integrity failures. Denylist literals require contextual interpretation, not removal to silence scanners.
 
-Current local test scope is in [release validation](references/v0.3.4-release-validation.md). It is not a new ClawHub scan, platform certification or promise of no future vulnerabilities. External submissions and their version-bound results are recorded separately.
+Current local test scope is in [release validation](references/v0.3.5-release-validation.md). It is not a new ClawHub scan, platform certification or promise of no future vulnerabilities. External submissions and their version-bound results are recorded separately.
 
 ## Required capabilities and host permissions
 

@@ -1,0 +1,80 @@
+{
+  "unit_space": [
+    {
+      "id": "U1",
+      "tenant": "A",
+      "area": 100,
+      "rentable": 1
+    },
+    {
+      "id": "U2",
+      "tenant": "A",
+      "area": 200,
+      "rentable": 1
+    },
+    {
+      "id": "U3",
+      "tenant": "A",
+      "area": 100,
+      "rentable": 1
+    },
+    {
+      "id": "U4",
+      "tenant": "A",
+      "area": 50,
+      "rentable": 0
+    },
+    {
+      "id": "U5",
+      "tenant": "B",
+      "area": 500,
+      "rentable": 1
+    }
+  ],
+  "lease": [
+    {
+      "id": "L1",
+      "unit_id": "U1",
+      "start_day": "2025-01-01",
+      "end_day": "2026-01-01",
+      "state": "active"
+    },
+    {
+      "id": "L2",
+      "unit_id": "U2",
+      "start_day": "2025-01-01",
+      "end_day": "2025-07-01",
+      "state": "active"
+    },
+    {
+      "id": "L3",
+      "unit_id": "U3",
+      "start_day": "2025-07-01",
+      "end_day": "2026-01-01",
+      "state": "active"
+    },
+    {
+      "id": "L4",
+      "unit_id": "U4",
+      "start_day": "2025-01-01",
+      "end_day": "2026-01-01",
+      "state": "active"
+    }
+  ],
+  "owner_history": [
+    {
+      "id": "H1",
+      "unit_id": "U1",
+      "owner": "OLD",
+      "start_day": "2020-01-01",
+      "end_day": "2025-06-01"
+    },
+    {
+      "id": "H2",
+      "unit_id": "U1",
+      "owner": "NEW",
+      "start_day": "2025-06-01",
+      "end_day": "2030-01-01"
+    }
+  ]
+}

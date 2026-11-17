@@ -19,14 +19,24 @@ from workbench.knowledge import KnowledgeService
 from workbench.semantic_package import PackageError
 
 
+class JsonArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        print(json.dumps({"ok": False, "status": "argument_error", "error": message,
+                          "hint": "Use COMMAND --help / 使用子命令 --help 查看参数"}, ensure_ascii=False))
+        raise SystemExit(2)
+
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = JsonArgumentParser(description=__doc__)
     parser.add_argument("--project", required=True)
     parser.add_argument("--revision", type=int)
     parser.add_argument("--language", choices=['en', 'zh'], default='en')
     parser.add_argument("--operation-id", help="Reuse this ID with identical input after an uncertain result")
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("state", help="Read the current project and material/candidate status")
+    state = commands.add_parser("state", help="Read the current project and material/candidate status")
+    state.add_argument("--summary", action="store_true", help="Compact identities, revisions and pending work")
+    inspect = commands.add_parser("inspect", help="Inspect model dependency closure and authoring gaps; read only")
+    inspect.add_argument("--id", action="append", dest="asset_ids")
     connection = commands.add_parser("connect", help="Register a metadata-only connection; credentials use environment variable names")
     connection.add_argument("--file", required=True, help="Connection profile JSON, never a password or SQL")
     for command in ("scan", "regress"):
@@ -76,7 +86,7 @@ def main(argv=None):
     review.add_argument("--reason", required=True)
     review.add_argument("--assets", help="Optional JSON array of revised assets within this group")
     edit = commands.add_parser("edit", help="Maintain an asset through normal graph guards; draft unless explicitly confirmed")
-    edit.add_argument("--file", required=True, help="Complete semantic asset JSON")
+    edit.add_argument("--file", required=True, help="Complete semantic asset object or atomic array; same-batch dependencies allowed")
     edit.add_argument("--confirm", action="store_true", help="Only when the operator has authorized confirmation")
     receipt = commands.add_parser("receipt", help="Read the durable result of an earlier operation")
     receipt.add_argument("id")
@@ -88,6 +98,17 @@ def main(argv=None):
     try:
         if args.command == "state":
             result = service.state()
+            if args.summary:
+                result = {"revision": result["revision"], "project_id": result["project_id"],
+                          "assets": [{k: a.get(k) for k in ("id", "name", "kind", "status")} for a in result["assets"]],
+                          "sources": [{"id": a["id"], "name": a.get("name"), "current_revision": a.get("current_revision"),
+                                       "revisions": [r["revision"] for r in a.get("revisions", [])]} for a in result["sources"]],
+                          "pending_groups": [{k: a.get(k) for k in ("id", "batch_id", "status")} for a in result["groups"] if a.get("status") not in {"accepted", "rejected"}],
+                          "batches": [{k: a.get(k) for k in ("id", "sources", "status")} for a in result["batches"]]}
+        elif args.command == "inspect":
+            from workbench.authoring_inspect import inspect_model
+            current = service.state()
+            result = {"revision": current["revision"], **inspect_model(current["assets"], current["sources"], asset_ids=args.asset_ids)}
         elif args.command == "connect":
             result = service.metadata_connect({**req, "connection": json.loads(Path(args.file).read_text(encoding="utf-8-sig"))})
         elif args.command in {"scan", "regress"}:

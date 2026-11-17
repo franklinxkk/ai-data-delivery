@@ -2,7 +2,7 @@
 
 **Turn an existing database schema into an editable semantic model your Agent can read.**
 
-[简体中文](README.zh-CN.md) · [Download 0.3.4 ZIP](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.4) · [Security](SECURITY.md)
+[简体中文](README.zh-CN.md) · [Download 0.3.5 ZIP](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.5) · [Security](SECURITY.md)
 
 Import SQL or read a database catalog to get a draft of tables, fields and foreign keys. Enrich it with business objects, attributes and relationships. Export a source-linked semantic package that another local Agent can read through the CLI.
 
@@ -59,18 +59,20 @@ Or tell your host Agent:
 
 The host handles commands, IDs and JSON. You review business meaning. A foreign key is not automatically confirmed as company ownership.
 
+For business semantics, the Agent can save related objects, attributes, mappings and relationships in one atomic batch. `inspect` points out unconfirmed dependencies, omitted mappings and join keys. You decide unresolved business meaning; existing authorization is reused. [Short modeling path and commands](references/modeling.md)
+
 ## Continue only as needed
 
 | Need | Entry point |
 | --- | --- |
 | Connect SQLite, PostgreSQL or MySQL | [Read-only catalogs](references/readonly-metadata.md): explicit tables, structure only, no business rows |
-| Add documents, metrics, rules or mappings | [Material and editing guide](workbench/README.md): retain sources; use Agent proposals or manual editing |
+| Add documents, metrics, rules or mappings | [Short modeling path](references/modeling.md): batch maintenance, dependency review and scoped delivery |
 | Hand off a specific question with its context | [Optional question handoff](references/question-delivery.md): export with `handoff`, read with `brief` |
 | Exchange with Neo4j or ontology-graph-spec | [Offline interchange](references/neo4j-interop.md); Neo4j is optional |
 | Try transport, agriculture, university or finance examples | [Synthetic exercises](examples/cross-domain/README.md), not business policy |
 
-This is a modeling and delivery tool. It does not provide multi-user administration, enterprise authorization, production queries or business execution. Core parsing and offline reading are local; optional connections use explicitly authorized endpoints. Parsing has documented limits, and packages can contain business definitions and source excerpts. [Architecture](references/architecture.md) · [Actual validation](references/v0.3.4-release-validation.md)
+This is a modeling and delivery tool. It does not provide multi-user administration, enterprise authorization, production queries or business execution. Core parsing and offline reading are local; optional connections use explicitly authorized endpoints. Parsing has documented limits, and packages can contain business definitions and source excerpts. [Architecture](references/architecture.md) · [Actual validation](references/v0.3.5-release-validation.md)
 
-0.3.4 shortens the path from structure import to visual editing and CLI export while retaining optional candidate review and question diagnosis. Existing models are not automatically migrated or overwritten; back up before upgrading. Report a specific blocked step with sanitized inputs: [feedback](https://github.com/franklinxkk/ai-data-delivery/issues).
+0.3.5 adds atomic batch maintenance, scoped dependency inspection and consistent evidence reading, keeping the CLI-first workflow. Existing models are not automatically migrated or overwritten; back up before upgrading. Report a specific blocked step with sanitized inputs: [feedback](https://github.com/franklinxkk/ai-data-delivery/issues).
 
 [MIT](LICENSE) · [Skill instructions](SKILL.md) · [Changelog](CHANGELOG.md)

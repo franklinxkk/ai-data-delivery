@@ -1,0 +1,78 @@
+{
+  "contract": [
+    {
+      "id": "C1",
+      "tenant": "A",
+      "currency": "CNY"
+    },
+    {
+      "id": "C2",
+      "tenant": "A",
+      "currency": "CNY"
+    },
+    {
+      "id": "C3",
+      "tenant": "A",
+      "currency": "USD"
+    },
+    {
+      "id": "C4",
+      "tenant": "B",
+      "currency": "CNY"
+    }
+  ],
+  "balance": [
+    {
+      "id": "B1",
+      "contract_id": "C1",
+      "as_of": "2025-07-31",
+      "version": 1,
+      "amount": 900
+    },
+    {
+      "id": "B2",
+      "contract_id": "C1",
+      "as_of": "2025-07-31",
+      "version": 2,
+      "amount": 1000
+    },
+    {
+      "id": "B3",
+      "contract_id": "C2",
+      "as_of": "2025-07-31",
+      "version": 1,
+      "amount": 1000
+    },
+    {
+      "id": "B4",
+      "contract_id": "C3",
+      "as_of": "2025-07-31",
+      "version": 1,
+      "amount": 100
+    },
+    {
+      "id": "B5",
+      "contract_id": "C4",
+      "as_of": "2025-07-31",
+      "version": 1,
+      "amount": 9999
+    }
+  ],
+  "collateral": [
+    {
+      "id": "G1",
+      "contract_id": "C1",
+      "value": 300
+    },
+    {
+      "id": "G2",
+      "contract_id": "C1",
+      "value": 400
+    },
+    {
+      "id": "G3",
+      "contract_id": "C2",
+      "value": 800
+    }
+  ]
+}

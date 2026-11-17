@@ -1,0 +1,75 @@
+{
+  "person_role": [
+    {
+      "id": "R1",
+      "tenant": "A",
+      "person_id": "P1",
+      "role": "student"
+    },
+    {
+      "id": "R2",
+      "tenant": "A",
+      "person_id": "P1",
+      "role": "assistant_teacher"
+    },
+    {
+      "id": "R3",
+      "tenant": "A",
+      "person_id": "P2",
+      "role": "student"
+    },
+    {
+      "id": "R4",
+      "tenant": "B",
+      "person_id": "P3",
+      "role": "student"
+    }
+  ],
+  "course": [
+    {
+      "id": "C1",
+      "name": "数据基础"
+    },
+    {
+      "id": "C2",
+      "name": "数据伦理"
+    }
+  ],
+  "enrolment": [
+    {
+      "id": "E1",
+      "role_id": "R1",
+      "course_id": "C1",
+      "term": "2025-S",
+      "state": "completed"
+    },
+    {
+      "id": "E2",
+      "role_id": "R1",
+      "course_id": "C1",
+      "term": "2025-S",
+      "state": "completed"
+    },
+    {
+      "id": "E3",
+      "role_id": "R3",
+      "course_id": "C2",
+      "term": "2025-S",
+      "state": "completed"
+    },
+    {
+      "id": "E4",
+      "role_id": "R3",
+      "course_id": "C1",
+      "term": "2025-S",
+      "state": "withdrawn"
+    },
+    {
+      "id": "E5",
+      "role_id": "R4",
+      "course_id": "C1",
+      "term": "2025-S",
+      "state": "completed"
+    }
+  ]
+}

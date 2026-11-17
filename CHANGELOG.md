@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.5 — 2026-11-18
+
+- Why: cross-industry trials exposed incomplete task dependencies, repetitive per-asset edits and avoidable reader retries.
+- Authoring: atomic arrays on the existing `edit --file` path; explicit confirmation, evidence, revision conflicts, rollback and operation receipts remain guarded. `state --summary` discovers identities without full history.
+- Handoff: read-only `inspect --id` highlights omitted mappings, relations and join keys, unresolved states and changed source evidence. Suggestions do not silently expand scope or confirm meaning.
+- Reader: paged multi-asset `sources` with deduplicated evidence and explicit missing targets; paged, scope-filtered term discovery on no match; clear page identity coverage without claiming business completeness.
+- Guidance: one short business-modeling path, source-supported aliases, explicit secondary-table dependencies and reuse of existing confirmation authority. CLI and optional editor retain one canonical graph.
+- Scope: no embedded model, business-query executor, new service, industry policy defaults or migration. Published 0.3.4 remains unchanged.
+- Validation: [actual checks and remaining boundaries](references/v0.3.5-release-validation.md).
+
 
 ## 0.3.4 — 2026-11-17
 

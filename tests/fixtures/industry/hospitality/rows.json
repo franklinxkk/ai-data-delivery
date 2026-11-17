@@ -1,0 +1,82 @@
+{
+  "room": [
+    {
+      "id": "R1",
+      "tenant": "A"
+    },
+    {
+      "id": "R2",
+      "tenant": "A"
+    },
+    {
+      "id": "R3",
+      "tenant": "B"
+    }
+  ],
+  "room_day": [
+    {
+      "id": "D1",
+      "room_id": "R1",
+      "day": "2025-07-01",
+      "sellable": 1
+    },
+    {
+      "id": "D2",
+      "room_id": "R1",
+      "day": "2025-07-02",
+      "sellable": 1
+    },
+    {
+      "id": "D3",
+      "room_id": "R2",
+      "day": "2025-07-01",
+      "sellable": 0
+    },
+    {
+      "id": "D4",
+      "room_id": "R2",
+      "day": "2025-07-02",
+      "sellable": 1
+    },
+    {
+      "id": "D5",
+      "room_id": "R3",
+      "day": "2025-07-01",
+      "sellable": 1
+    }
+  ],
+  "stay": [
+    {
+      "id": "S1",
+      "room_id": "R1",
+      "check_in": "2025-07-01",
+      "check_out": "2025-07-03",
+      "state": "completed",
+      "complimentary": 0
+    },
+    {
+      "id": "S2",
+      "room_id": "R2",
+      "check_in": "2025-07-02",
+      "check_out": "2025-07-03",
+      "state": "completed",
+      "complimentary": 1
+    },
+    {
+      "id": "S3",
+      "room_id": "R2",
+      "check_in": "2025-07-01",
+      "check_out": "2025-07-02",
+      "state": "cancelled",
+      "complimentary": 0
+    },
+    {
+      "id": "S4",
+      "room_id": "R3",
+      "check_in": "2025-07-01",
+      "check_out": "2025-07-02",
+      "state": "completed",
+      "complimentary": 0
+    }
+  ]
+}

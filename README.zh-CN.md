@@ -2,7 +2,7 @@
 
 **把已有表结构变成可编辑、可交给 Agent 的语义模型。**
 
-[English](README.md) · [下载 0.3.4 ZIP](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.4) · [安全说明](SECURITY.zh-CN.md)
+[English](README.md) · [下载 0.3.5 ZIP](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.5) · [安全说明](SECURITY.zh-CN.md)
 
 导入 SQL，或读取数据库目录，先得到表、字段和外键草稿；再补充“车辆、企业、线路”等业务对象、属性与关系。导出一份带来源的语义包，其他本机 Agent 可以直接用 CLI 读取。
 
@@ -59,18 +59,20 @@ python -X utf8 scripts/semantic_read.py --package "./work/transport.zip" search 
 
 宿主处理命令、ID 与 JSON，你只核对业务含义。它不会把“外键引用”自动确认为“企业拥有车辆”。
 
+补业务语义时，Agent 可把对象、属性、映射和关系一次成组保存；`inspect` 会提示未确认依赖、遗漏映射及跨表连接字段。你只需要判断资料中没有确定的业务含义，已有授权不重复确认。[建模短链与实际命令](references/modeling.md)
+
 ## 按需继续
 
 | 需要做什么 | 使用入口 |
 | --- | --- |
 | 直接连接 SQLite、PostgreSQL、MySQL | [目录接入](references/readonly-metadata.md)：明确选表，只读结构，不读取业务行 |
-| 补充文档、指标、规则或业务映射 | [材料与编辑说明](workbench/README.zh-CN.md)：保留原文，Agent 提议或人工编辑 |
+| 补充文档、指标、规则或业务映射 | [建模短链](references/modeling.md)：成组维护、核对依赖，再按范围交付 |
 | 把特定问题连同语义交给 Agent | [可选问题交付](references/question-delivery.md)：`handoff` 导出，`brief` 读取 |
 | 将模型交给 Neo4j 或 ontology-graph-spec | [离线交换](references/neo4j-interop.md)：Neo4j 不是必装依赖 |
 | 试交通、农业、高校、金融场景 | [四域合成练习](examples/cross-domain/README.md)，不代替实际业务制度 |
 
-它提供本体建模与交付工具，不承担多人协作管理、企业权限、生产查询或业务执行。核心解析和离线读取在本机；可选数据库连接使用明确授权的端点。文件解析有范围限制，语义包可能包含业务定义与引用片段。[架构](references/architecture.md) · [实际验证](references/v0.3.4-release-validation.md)
+它提供本体建模与交付工具，不承担多人协作管理、企业权限、生产查询或业务执行。核心解析和离线读取在本机；可选数据库连接使用明确授权的端点。文件解析有范围限制，语义包可能包含业务定义与引用片段。[架构](references/architecture.md) · [实际验证](references/v0.3.5-release-validation.md)
 
-0.3.4 缩短了结构导入、可视化编辑与 CLI 导出的衔接，并保留原有候选核对和问题诊断能力。已有模型不会自动迁移或覆盖；升级前保留备份。欢迎提交具体操作中卡住的步骤和脱敏材料：[反馈](https://github.com/franklinxkk/ai-data-delivery/issues)。
+0.3.5 补齐成组维护、按范围核对依赖和统一证据读取，保持 CLI 为主的短链路。已有模型不会自动迁移或覆盖；升级前保留备份。欢迎提交具体操作中卡住的步骤和脱敏材料：[反馈](https://github.com/franklinxkk/ai-data-delivery/issues)。
 
 [MIT](LICENSE) · [Skill 指令](SKILL.zh-CN.md) · [改动历史](CHANGELOG.md)

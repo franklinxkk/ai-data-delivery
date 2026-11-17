@@ -1,0 +1,3 @@
+合成业务政策，非真实行业法规。
+
+范围为tenant=A、business_day处于2025年7月且落在订阅[valid_from,valid_to)的posted用量事件。逻辑事件身份为subscription_id+event_id，重复上报取最大version。MB=1000000字节，MiB=1048576字节，不能混为一谈。手机号会重新分配，不能仅按phone_number当终身客户或订阅身份；设备数不增加用量。void排除。未提供套餐免费额度、阶梯价格或税，不可据用量推算账单。 本次新增已授权政策：新增要求void用量事件单列追踪，账单计量仍排除；单位置换规则不变。

@@ -1,0 +1,135 @@
+{
+  "date": "2026-11-18",
+  "stage": "guided_recovery_not_blind_first_use",
+  "author_model": "gpt-6.1-sol",
+  "independent_consumer_model": "gpt-6.1-terra",
+  "consumer_assessment": {
+    "met": 7,
+    "partial_due_to_source_boundaries": 5
+  },
+  "initial_cold_authoring": "did_not_pass",
+  "terra_authoring_trial": "incomplete",
+  "calculation_boundary": "Host SQLite read-only execution over synthetic fixtures; not native Skill query execution or production validation",
+  "cases": [
+    {
+      "industry": "transport",
+      "final_package_sha256": "71251b4a136e852a6921a45fc0a743c1b39d88c0efc28738f455835a177aa82f",
+      "asset_count": 25,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    },
+    {
+      "industry": "manufacturing",
+      "final_package_sha256": "c85d9e1d1718cd2aaf70825d697d3a520449d112e23a927dbf5f2b7b90a579fc",
+      "asset_count": 24,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    },
+    {
+      "industry": "retail",
+      "final_package_sha256": "2e4434d5c8a833040d4fe46c442c34c777aa5febcd7b34941c70570485128df9",
+      "asset_count": 26,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    },
+    {
+      "industry": "finance",
+      "final_package_sha256": "108a4d9cae3f87e33b54f4ad4829679d5ae7b621bde8b7f097ccc3ccab432a28",
+      "asset_count": 24,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    },
+    {
+      "industry": "real_estate",
+      "final_package_sha256": "3a8f1e652ff3140e76c2a3451a26b187890f7553c0cde56b75196c4df0b6b7c9",
+      "asset_count": 27,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    },
+    {
+      "industry": "construction",
+      "final_package_sha256": "ad05c612a5f3109bdf55bbf5e07e546fa81ef9fccc0a1a939e68cd3f8a5f9e80",
+      "asset_count": 26,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    },
+    {
+      "industry": "energy",
+      "final_package_sha256": "1f9f83fe2e1f349a819d0323e86452f259d8e3cb7c199439d5d4ef4a0d1a97d1",
+      "asset_count": 25,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    },
+    {
+      "industry": "agriculture",
+      "final_package_sha256": "16af3740e2a7a04847820a81b61d7338b2d87f49fd4dd9e69af35eac14efcfa8",
+      "asset_count": 27,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    },
+    {
+      "industry": "healthcare",
+      "final_package_sha256": "8d7652705f096f9ec5acda2a48316706cc90d75628c8ceb7f76e48567421ff23",
+      "asset_count": 24,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    },
+    {
+      "industry": "education",
+      "final_package_sha256": "c59c9591d505987d3347a00f52e67f21cacb14e2e596716724508777a489957d",
+      "asset_count": 24,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    },
+    {
+      "industry": "ict",
+      "final_package_sha256": "c8489872f804f5020816c22baa25408fa6a268266fd8edd9c044f0d26c7a592e",
+      "asset_count": 28,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    },
+    {
+      "industry": "hospitality",
+      "final_package_sha256": "f0d2ead5bff83a063ce95aca0fd9f4079f2602f69b5aa7d4c714284d1df12230",
+      "asset_count": 25,
+      "cli_calls": 13,
+      "declared_context_and_evidence_complete": true,
+      "host_calculation_matches_independent_fixture_oracle": true,
+      "source_update_requires_review": true,
+      "old_package_unchanged": true
+    }
+  ]
+}

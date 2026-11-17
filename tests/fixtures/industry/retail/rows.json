@@ -1,0 +1,73 @@
+{
+  "sales_order": [
+    {
+      "id": "O1",
+      "tenant": "A",
+      "paid_day": "2025-07-01",
+      "state": "paid",
+      "currency": "CNY",
+      "gross": 100
+    },
+    {
+      "id": "O2",
+      "tenant": "A",
+      "paid_day": "2025-07-01",
+      "state": "cancelled",
+      "currency": "CNY",
+      "gross": 100
+    },
+    {
+      "id": "O3",
+      "tenant": "A",
+      "paid_day": "2025-07-02",
+      "state": "paid",
+      "currency": "USD",
+      "gross": 50
+    },
+    {
+      "id": "O4",
+      "tenant": "B",
+      "paid_day": "2025-07-01",
+      "state": "paid",
+      "currency": "CNY",
+      "gross": 900
+    }
+  ],
+  "refund": [
+    {
+      "id": "F1",
+      "order_id": "O1",
+      "state": "posted",
+      "amount": 20
+    },
+    {
+      "id": "F2",
+      "order_id": "O1",
+      "state": "pending",
+      "amount": 5
+    },
+    {
+      "id": "F3",
+      "order_id": "O2",
+      "state": "posted",
+      "amount": 100
+    }
+  ],
+  "order_tag": [
+    {
+      "id": "T1",
+      "order_id": "O1",
+      "label": "new"
+    },
+    {
+      "id": "T2",
+      "order_id": "O1",
+      "label": "campaign"
+    },
+    {
+      "id": "T3",
+      "order_id": "O3",
+      "label": "new"
+    }
+  ]
+}

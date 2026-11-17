@@ -61,7 +61,9 @@ def make_parser():
     get.add_argument("--id", required=True)
     get.add_argument("--as-of")
     sources = commands.add_parser("sources", help="Read exact evidence excerpts and locations")
-    sources.add_argument("--id", required=True)
+    sources.add_argument("--id", required=True, action="append", dest="ids")
+    sources.add_argument("--limit", type=int, default=100)
+    sources.add_argument("--offset", type=int, default=0)
     neighbors = commands.add_parser("neighbors", help="Traverse declared edges without inventing reverse facts")
     neighbors.add_argument("--id", required=True)
     neighbors.add_argument("--direction", choices=["in", "out", "both"], default="both")
@@ -111,7 +113,7 @@ def main(argv=None):
         elif args.command == "get":
             result = package.get(args.id, as_of=args.as_of)
         elif args.command == "sources":
-            result = package.sources(args.id)
+            result = package.sources(args.ids, limit=args.limit, offset=args.offset)
         elif args.command == "neighbors":
             result = package.neighbors(args.id, direction=args.direction, depth=args.depth,
                                        relation_types=args.relation_type, limit=args.limit, offset=args.offset,

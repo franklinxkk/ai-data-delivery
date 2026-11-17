@@ -1,0 +1,87 @@
+{
+  "subscription": [
+    {
+      "id": "S1",
+      "tenant": "A",
+      "phone_number": "0001",
+      "valid_from": "2025-01-01",
+      "valid_to": "2025-08-01"
+    },
+    {
+      "id": "S2",
+      "tenant": "A",
+      "phone_number": "0001",
+      "valid_from": "2025-08-01",
+      "valid_to": "2026-01-01"
+    },
+    {
+      "id": "S3",
+      "tenant": "B",
+      "phone_number": "0002",
+      "valid_from": "2025-01-01",
+      "valid_to": "2026-01-01"
+    }
+  ],
+  "usage_event": [
+    {
+      "row_id": "R1",
+      "event_id": "EV1",
+      "subscription_id": "S1",
+      "business_day": "2025-07-01",
+      "version": 1,
+      "qty": 1,
+      "unit": "MB",
+      "state": "posted"
+    },
+    {
+      "row_id": "R2",
+      "event_id": "EV1",
+      "subscription_id": "S1",
+      "business_day": "2025-07-01",
+      "version": 2,
+      "qty": 1,
+      "unit": "MB",
+      "state": "posted"
+    },
+    {
+      "row_id": "R3",
+      "event_id": "EV2",
+      "subscription_id": "S1",
+      "business_day": "2025-07-02",
+      "version": 1,
+      "qty": 1,
+      "unit": "MiB",
+      "state": "posted"
+    },
+    {
+      "row_id": "R4",
+      "event_id": "EV3",
+      "subscription_id": "S3",
+      "business_day": "2025-07-02",
+      "version": 1,
+      "qty": 999,
+      "unit": "MB",
+      "state": "posted"
+    },
+    {
+      "row_id": "R5",
+      "event_id": "EV4",
+      "subscription_id": "S1",
+      "business_day": "2025-07-02",
+      "version": 1,
+      "qty": 1,
+      "unit": "MB",
+      "state": "void"
+    }
+  ],
+  "device": [
+    {
+      "id": "D1",
+      "subscription_id": "S1"
+    },
+    {
+      "id": "D2",
+      "subscription_id": "S1"
+    }
+  ]
+}
