@@ -39,6 +39,40 @@ class KnowledgeCliTests(unittest.TestCase):
         self.assertEqual(state["assets"], [])
         return state["groups"][0]["id"]
 
+    def test_superseded_cli_edits_never_remove_another_edit(self):
+        f = self.write("item.json", {"id":"x","kind":"entity","name":"Before"})
+        self.run_cli("edit", "--file", f)
+        base = self.run_cli("state")["result"]
+        a = base["assets"][0]
+        a["aliases"] = ["new alias"]
+        self.run_cli("--revision", str(base["revision"]), "edit", "--file", self.write("a.json", a))
+        for options in ([], ["--revision", str(base["revision"])]):
+            self.assertEqual(self.run_cli(*options, "edit", "--file", f, code=2)["status"], "conflict")
+        self.assertEqual(self.run_cli("state")["result"]["assets"][0]["aliases"], ["new alias"])
+
+    def test_inspecting_wrong_project_creates_no_database(self):
+        self.assertEqual(self.run_cli("inspect", code=2)["status"], "project_not_found")
+        self.assertFalse(self.project.exists())
+
+    def test_large_receipts_keep_evidence_without_repeating_project_inventory(self):
+        ddl = self.root/"large.sql"
+        ddl.write_text("\n".join(f"DROP TABLE IF EXISTS t{i}; CREATE TABLE t{i}(id INTEGER PRIMARY KEY);" for i in range(62)),encoding="utf8")
+        seed = self.run_cli("import","--file",str(ddl),"--seed-draft")["result"]["result"]
+        self.assertEqual(seed["seeded"]["asset_id_count"],124)
+        self.assertTrue(seed["warnings_truncated"])
+        package = self.root/"large.zip"
+        receipt=self.run_cli("export","--draft","--out",str(package))["result"]["result"]["manifest"]
+        self.assertEqual(receipt["scope"]["id_counts"]["included_ids"],124)
+        def read(*args):
+            return json.loads(subprocess.check_output([sys.executable,"-X","utf8",str(ROOT/"scripts/semantic_read.py"),"--package",str(package),*args],encoding="utf8"))
+        brief,full=read("verify"),read("--full-scope","verify")
+        self.assertEqual(brief["issue_count"],len(full["issues"]))
+        aid=full["scope"]["package"]["included_ids"][0]
+        small,large=(read(*flags,"sources","--id",aid)["evidence"][0] for flags in ([],["--full-scope"]))
+        self.assertEqual((small["assertion"],small["fragment"]),(large["assertion"],large["fragment"]))
+        self.assertEqual(small["parse"]["warning_count"],len(large["parse"]["warnings"]))
+        self.assertLess(len(small["parse"]["warnings"]),small["parse"]["warning_count"])
+
     def test_review_requires_explicit_decision_and_preserves_receipt_and_conflict(self):
         group = self.proposal()
         self.run_cli("review", "--group", group, "--action", "accept", "--reason", " ", code=2)
@@ -71,7 +105,8 @@ class KnowledgeCliTests(unittest.TestCase):
         self.run_cli("edit", "--file", file, "--confirm", code=2)
         self.assertEqual(self.run_cli("state")["result"]["assets"][0]["status"], "draft")
         asset["properties"] = {"condition": "H1", "requirement": "人工核对"}
-        self.run_cli("edit", "--file", self.write("规则.json", asset), "--confirm")
+        revision = self.run_cli("state")["result"]["revision"]
+        self.run_cli("--revision", str(revision), "edit", "--file", self.write("规则.json", asset), "--confirm")
         self.assertEqual(self.run_cli("state")["result"]["assets"][0]["status"], "confirmed")
 
     def test_short_structure_flow_exports_physical_drafts_without_server_or_question(self):
@@ -86,7 +121,7 @@ class KnowledgeCliTests(unittest.TestCase):
         self.assertTrue(all(a["status"] == "draft" and a["evidence"] and "confirmed_by" not in a for a in state["assets"]))
         edited = state["assets"][0]
         edited["definition"] = "Manually refined physical definition"
-        self.run_cli("edit", "--file", self.write("edit.json", edited))
+        self.run_cli("--revision", str(state["revision"]), "edit", "--file", self.write("edit.json", edited))
         self.run_cli("review", "--group", state["groups"][0]["id"], "--action", "accept", "--reason", "Cannot overwrite editing", code=2)
         current = self.run_cli("state")["result"]
         self.run_cli("import", "--file", str(path), "--seed-draft", code=2)

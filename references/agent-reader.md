@@ -1,5 +1,7 @@
 # Read a semantic package with an Agent
 
+Large-model CLI receipts summarize package-wide IDs above 100 included assets, long verification issue lists, and source-wide parser warnings (above 20, show five samples and total). This never removes the requested source quotation or fragment or suppresses validation. For all IDs, issues and warnings use `semantic_read.py --package MODEL.zip --full-scope sources --id ID` or `--full-scope verify`. To request the original verbose authoring receipt use `knowledge.py --project DIR --full-output` before the import or export command. Do not repeat a write just to inspect a receipt: use the saved source or package. In context and resolve, read `decision` before using a definition; `complete` describes structural coverage, not applicability.
+
 ## Read a model directly
 
 ```bash

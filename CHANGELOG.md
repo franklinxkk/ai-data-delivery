@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.6 — 2026-11-18
+
+- Follow saved changes in the open local graph without replacing an in-progress form. Share a focused view, create objects or relations directly, and attach exact source passages.
+- Plain model exports include all active assets when no roots are selected. An explicitly scoped question still cannot expand to the whole model.
+- Keep source quotations and summarize large global inventories and warning lists. The CLI options `--full-scope` (reader) and `--full-output` (authoring) retain verbose access.
+- **CLI migration:** updating existing asset IDs now requires `--revision N` from the read used to prepare the edit. New IDs do not. Reconcile changes on conflict.
+- An added paragraph in a text/Markdown source that retains the previous paragraphs triggers review of cited definitions. Existing snapshots stay immutable. Read applicability using `decision`; completeness alone is insufficient.
+- [Verification and limits](references/v0.3.6-release-validation.md).
+
 ## 0.3.5 — 2026-11-18
 
 - Why: cross-industry trials exposed incomplete task dependencies, repetitive per-asset edits and avoidable reader retries.

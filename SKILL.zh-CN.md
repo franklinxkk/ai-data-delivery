@@ -4,7 +4,7 @@ description: CLI 优先的本体工具：导入 SQL 或指定数据库目录，�
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.5
+  version: 0.3.6
   runtime_environment: Python 3.10+; install the pinned requirements.txt. Core modeling and package reading are local; optional live adapters need an explicitly authorized
     destination.
   language: English / 简体中文；按用户语言回复，原文和业务定义保留原语言。
@@ -24,6 +24,8 @@ metadata:
 
 围绕“导入结构 → 按需可视化编辑 → 导出／读取”完成短链路。浏览器是临时打开的编辑辅助，不要求用户建立业务问题、任务或验收记录，也不要求常驻服务。宿主理解业务，本地工具保存、编辑和交付同一模型；不内置大模型。
 
+人与 Agent 共同建模时，在第一张有用的图和重要关系、口径变化后，直接呈现同一项目的局部图。复用 start.py 实际返回的本机地址，在 #graph 前加 &focus=编码后的资产ID 或 &domain=编码后的领域，优先在宿主内置浏览器打开；不能嵌入时，给真实截图或已验证可打开的链接，说明改了哪条关系。仅输出命令不算已展示。明确要求无界面时跳过。已打开的图会在空闲时同步，勿覆盖正在填写的表单。优先用 DDL、目录、字段注释与业务材料佐证；具体歧义确实影响结论、且获授权时才索取最小数据证据，不让用户为推断每条关系跑 SQL。
+
 [English](SKILL.md) · [直接体验](README.zh-CN.md) · [架构分工](references/architecture.md)
 
 ## 按当前任务进入
@@ -36,7 +38,7 @@ metadata:
 | 补充或维护业务语义 | [建模短链](references/modeling.md)：最小业务对象、字段、映射和关系，成组维护，不要求先保存问题 |
 | 导入材料、提出修改 | 提议前读[候选合同](references/m1-m2-contract.md)；格式与恢复见[工作台说明](workbench/README.zh-CN.md) |
 | 读取收到的包 | `semantic_read.py --package PACKAGE search --query TEXT`，用实际 ID 读取 `context` / `sources`；问题包再用 `brief`；[读取指南](references/agent-reader.md)说明取证与分页 |
-| 维护身份、规则或映射 | `state --summary`、`edit --file`（单对象或数组）、`inspect --id`；保留稳定 ID 和依据，不直接改项目 SQLite |
+| 维护身份、规则或映射 | `state --summary`、`--revision READ_REVISION edit --file`（单对象或数组）、`inspect --id`；保留稳定 ID 和依据，不直接改项目 SQLite |
 | 连接目录、跟踪表结构变化 | [只读元数据](references/readonly-metadata.md)；明确连接与选表范围 |
 | 核对字段与统计口径 | [查询控制](references/query-control.md)；修改原指标、使用可读核对界面，不另存一套模型 |
 | 检查问题预期与变更影响 | [问题交付](references/question-delivery.md)；使用独立预期及实际观察 |

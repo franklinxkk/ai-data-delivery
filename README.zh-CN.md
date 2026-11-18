@@ -2,7 +2,7 @@
 
 **把已有表结构变成可编辑、可交给 Agent 的语义模型。**
 
-[English](README.md) · [下载 0.3.5 ZIP](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.5) · [安全说明](SECURITY.zh-CN.md)
+[English](README.md) · [下载 0.3.6 ZIP](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.6) · [安全说明](SECURITY.zh-CN.md)
 
 导入 SQL，或读取数据库目录，先得到表、字段和外键草稿；再补充“车辆、企业、线路”等业务对象、属性与关系。导出一份带来源的语义包，其他本机 Agent 可以直接用 CLI 读取。
 
@@ -13,6 +13,8 @@
 ![0.3.4 图谱编辑器：企业、车辆及数据字段](https://raw.githubusercontent.com/franklinxkk/ai-data-delivery/main/docs/images/graph-v034-zh.png)
 
 *实际界面，使用随包提供的合成交通表结构。虚线节点表示草稿，物理外键不自动解释为业务归属。*
+
+**和 Agent 一起画图：** 初次生成结构、补完一组业务关系或修改主体口径时，让宿主直接显示同一项目的图。打开后可用“新建对象 / 新建关系”，选择业务域、连接类型和端点。空闲页面会同步 Agent 的保存；编辑中的表单不会因同步被替换。可先存草稿，确认时再补定义、范围和来源。已有资料请用“引用已导入原文”。
 
 ## 两条命令，得到第一份模型
 
@@ -71,8 +73,8 @@ python -X utf8 scripts/semantic_read.py --package "./work/transport.zip" search 
 | 将模型交给 Neo4j 或 ontology-graph-spec | [离线交换](references/neo4j-interop.md)：Neo4j 不是必装依赖 |
 | 试交通、农业、高校、金融场景 | [四域合成练习](examples/cross-domain/README.md)，不代替实际业务制度 |
 
-它提供本体建模与交付工具，不承担多人协作管理、企业权限、生产查询或业务执行。核心解析和离线读取在本机；可选数据库连接使用明确授权的端点。文件解析有范围限制，语义包可能包含业务定义与引用片段。[架构](references/architecture.md) · [实际验证](references/v0.3.5-release-validation.md)
+它提供本体建模与交付工具，不承担多人协作管理、企业权限、生产查询或业务执行。核心解析和离线读取在本机；可选数据库连接使用明确授权的端点。文件解析有范围限制，语义包可能包含业务定义与引用片段。[架构](references/architecture.md) · [实际验证](references/v0.3.6-release-validation.md)
 
-0.3.5 补齐成组维护、按范围核对依赖和统一证据读取，保持 CLI 为主的短链路。已有模型不会自动迁移或覆盖；升级前保留备份。欢迎提交具体操作中卡住的步骤和脱敏材料：[反馈](https://github.com/franklinxkk/ai-data-delivery/issues)。
+0.3.6 支持打开图谱后同步查看 Agent 的修改；数千项资产的单次取证默认只返回相关内容。CLI 修改已有对象时须传入实际读取时的修订号，避免旧稿覆盖他人的编辑。已有模型不会自动迁移或覆盖；升级前保留备份。欢迎提交具体操作中卡住的步骤和脱敏材料：[反馈](https://github.com/franklinxkk/ai-data-delivery/issues)。
 
 [MIT](LICENSE) · [Skill 指令](SKILL.zh-CN.md) · [改动历史](CHANGELOG.md)

@@ -18,6 +18,7 @@ class Parser(argparse.ArgumentParser):
 def make_parser():
     p = Parser(description=__doc__)
     p.add_argument("--package", required=True, help="Explicit ZIP file or extracted package directory")
+    p.add_argument("--full-scope", action="store_true", help="Include full package-wide ID lists and verify issues even for large models; place before the command")
     commands = p.add_subparsers(dest="command", required=True, parser_class=Parser)
     commands.add_parser("verify", help="Verify bytes, references, states and evidence, not business truth")
     commands.add_parser("describe", help="Discover read-only tools and execution boundaries")
@@ -85,6 +86,7 @@ def main(argv=None):
     try:
         args = make_parser().parse_args(argv)
         package = read_package(args.package)
+        package.compact_cli = not args.full_scope
         if args.command == "verify":
             result = package.verify()
         elif args.command == "describe":
@@ -152,7 +154,7 @@ def main(argv=None):
         error = exc.as_dict() if isinstance(exc, PackageError) else {"code": "IO_ERROR" if isinstance(exc, OSError) else "INVALID_INPUT", "message": str(exc)}
         result = {"status": "error", "complete": False, "error": error}
         if package is not None:
-            result.update(snapshot_id=package.manifest["snapshot_id"], scope=package.manifest["scope"])
+            result.update(snapshot_id=package.manifest["snapshot_id"], scope=package.reader_scope())
         print(json.dumps(result, ensure_ascii=False, allow_nan=False))
         return 2
 

@@ -22,6 +22,8 @@ Take the actual connection ID from `result.result.connection.id`. `--seed-draft`
 
 For a synthetic SQLite file, run `python -X utf8 examples/readonly-metadata/create_example.py --out "../metadata-demo"` in a new directory outside the installation. It prints the file path for the profile above. Alternatively use **Import → Connect database** in the editor: choose exact tables and **Read structure and create draft**. Existing models receive change candidates instead.
 
+A successful profile registration is not a connection or catalog receipt. Record which database/layer and selected tables were actually observed. When a scan fails, distinguish unknown visibility from absent structure. Supply a trusted CA and matching hostname where available; otherwise use an authorized schema-only DDL export and label it as design or dated evidence. Do not request business rows merely to complete a structural draft.
+
 ## Optional: review later changes / 可选：维护后续变化
 
 Scan again after source changes. Review the before/after candidates and preserve business definitions. If affected business questions have been registered, regression checks and observations must be current before confirmed publication. A schema-only draft needs no question workflow. Catalog absence can mean lost visibility; it does not authorize deletion. See the contracts below for freshness and publication guards.

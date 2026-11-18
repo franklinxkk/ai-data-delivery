@@ -437,8 +437,14 @@ class KnowledgeService:
                 same_name = [s for s in know["sources"] if s["name"] == filename]
                 if same_name:
                     raise ValueError("同名来源内容不同，请选择更新已有来源，或保留独立来源")
+            added_policy_context = False
             if current:
                 old = current["revisions"][-1]
+                if parsed["format"] in {"text", "markdown"}:
+                    prior_text = {f["text"] for f in old["parsed"].get("fragments", [])}
+                    new_text = {f["text"] for f in parsed.get("fragments", [])}
+                    # Appended exceptions may change an unchanged quoted paragraph.
+                    added_policy_context = bool(prior_text and prior_text < new_text)
                 if old["sha256"] == attached["sha256"] and old["parsed"] == parsed:
                     if req.get("seed_draft"):
                         raise ValueError("Already imported; review existing candidates or use a new model directory / 材料已导入；请核对已有候选，或使用新的模型目录初始化")
@@ -468,7 +474,7 @@ class KnowledgeService:
             affected = []
             for asset in sem["assets"]:
                 old_evidence = [e for e in asset.get("evidence", []) if e.get("source_id") == current["id"]]
-                changed_context = False
+                changed_context = bool(old_evidence and added_policy_context)
                 for evidence in old_evidence:
                     _, original_revision = source_revision(know["sources"], evidence)
                     original = find(original_revision["parsed"]["fragments"], evidence["fragment_id"], "原依据片段")
@@ -482,7 +488,7 @@ class KnowledgeService:
                 if changed_context:
                     if asset["status"] == "confirmed":
                         asset["status"] = "needs_review"
-                        asset["review_reason"] = f"来源 {current['name']} 更新为修订 {number}，引用片段已变化"
+                        asset["review_reason"] = f"来源 {current['name']} 更新为修订 {number}，请核对引用片段或新增上下文"
                     affected.append(asset["id"])
             mark_dependents(sem["assets"], affected)
             batch = {"id": uid("batch"), "status": "pending", "sources": [{"source_id": current["id"], "revision": number, "extraction_id": extraction_id}],
@@ -764,6 +770,9 @@ class KnowledgeService:
                 plan["semantic_fingerprint"] = semantic_fingerprint(a)
                 a["evidence"].append({"type": "manual", "quote": reason.strip(), "actor": "local", "created": now()})
             old = next((x for x in sem["assets"] if x["id"] == a["id"]), None)
+            if old and req.get("create_only"):
+                from workbench.store import Conflict
+                raise Conflict("Existing asset: compare your input with the model, then pass its original --revision before edit / 已有对象需要读取时的修订号；请比对并合并修改，不要直接用最新版本号重试")
             if old and a["kind"] != old["kind"]:
                 raise ValueError("已有对象的类型不可直接改写，请新建正确类型并重绑引用")
             if old and old["status"] == "retired":
@@ -953,6 +962,10 @@ class KnowledgeService:
         from workbench.semantic_package import PackageError, build_package, package_preview
         def apply(doc, sem, know, db):
             selected = req.get("asset_ids") or None
+            if selected is None and not req.get("scenario_id"):
+                selected = [a["id"] for a in sem["assets"] if a["status"] != "retired"]
+                if not selected:
+                    raise ValueError("No active model assets / 没有可导出的有效资产")
             task = None
             if req.get("scenario_id"):
                 scenario = find(know["scenarios"], req["scenario_id"], "业务问题")

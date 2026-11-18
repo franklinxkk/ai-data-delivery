@@ -16,7 +16,7 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from workbench.store import Store, Conflict
 from workbench.knowledge import KnowledgeService
-from workbench.semantic_package import PackageError
+from workbench.semantic_package import PackageError, bounded_warnings, scope_summary
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -29,6 +29,7 @@ class JsonArgumentParser(argparse.ArgumentParser):
 def main(argv=None):
     parser = JsonArgumentParser(description=__doc__)
     parser.add_argument("--project", required=True)
+    parser.add_argument("--full-output", action="store_true", help="Return the full import/export receipt including all asset IDs, issues and parser warnings; place before command")
     parser.add_argument("--revision", type=int)
     parser.add_argument("--language", choices=['en', 'zh'], default='en')
     parser.add_argument("--operation-id", help="Reuse this ID with identical input after an uncertain result")
@@ -91,6 +92,9 @@ def main(argv=None):
     receipt = commands.add_parser("receipt", help="Read the durable result of an earlier operation")
     receipt.add_argument("id")
     args = parser.parse_args(argv)
+    if args.command in {"state", "inspect", "check", "impact", "receipt", "export", "handoff"} and not (Path(args.project) / "project.sqlite").is_file():
+        print(json.dumps({"ok": False, "status": "project_not_found", "error": "No project.sqlite here; check --project or import a schema first / 未找到项目，请核对路径或先导入结构"}, ensure_ascii=False))
+        return 2
     store = Store(args.project)
     service = KnowledgeService(store)
     operation_id = args.operation_id or uuid.uuid4().hex
@@ -145,6 +149,13 @@ def main(argv=None):
                     path.unlink(missing_ok=True)
                 raise
             result["output"] = str(path.resolve())
+            manifest = result["result"]["manifest"]
+            if not args.full_output and len(manifest["scope"].get("included_ids", [])) > 100:
+                from collections import Counter
+                result["result"]["manifest"] = {**{k:v for k,v in manifest.items() if k not in ("scope", "issues")},
+                    "scope": scope_summary(manifest["scope"]), "issue_count": len(manifest["issues"]),
+                    "issue_counts": dict(Counter(i["code"] for i in manifest["issues"])),
+                    "full_receipt_option": "--full-output"}
         elif args.command == "import":
             path = Path(args.file)
             result = service.import_material({**req, "filename": path.name, "content_base64": base64.b64encode(path.read_bytes()).decode(),
@@ -168,7 +179,8 @@ def main(argv=None):
                 raise ValueError("Describe the operator decision / 请填写操作者的核对理由")
             result = service.review({**req, "group_id": args.group, "action": args.action, "reason": args.reason, "assets": assets})
         elif args.command == "edit":
-            result = service.edit({**req, "asset": json.loads(Path(args.file).read_text(encoding="utf-8-sig")), "confirm": args.confirm})
+            result = service.edit({**req, **({"create_only": True} if args.revision is None else {}),
+                                   "asset": json.loads(Path(args.file).read_text(encoding="utf-8-sig")), "confirm": args.confirm})
         else:
             data = json.loads(Path(args.file).read_text(encoding="utf-8-sig"))
             groups = data if isinstance(data, list) else data.get("groups")
@@ -177,8 +189,15 @@ def main(argv=None):
             detail = result["result"]
             result = {"revision": result["revision"], "result": {
                 **{k: detail[k] for k in ("source_id", "batch_id", "seeded", "status") if k in detail},
-                "warnings": detail.get("parsed", {}).get("warnings", []),
+                **bounded_warnings(detail.get("parsed", {}).get("warnings", []), full=args.full_output),
                 "optional_editor_argv": [sys.executable, str(Path(__file__).with_name("start.py")), "--project", str(Path(args.project).resolve()), "--language", args.language]}}
+            receipt = result["result"]
+            seeded = receipt.get("seeded") or {}
+            if not args.full_output and len(seeded.get("asset_ids", [])) > 100:
+                receipt["seeded"] = {**{k:v for k,v in seeded.items() if k!="asset_ids"},
+                                    "asset_id_count": len(seeded["asset_ids"]), "ids_omitted": True}
+            if receipt.get("warnings_truncated") or (receipt.get("seeded") or {}).get("ids_omitted"):
+                receipt["full_receipt_hint"] = "state for stored source details and asset IDs; --full-output before a command for verbose output"
         print(json.dumps({"ok": True, "operation_id": operation_id, "result": result}, ensure_ascii=False, allow_nan=False))
         return 0
     except (ValueError, OSError, TypeError) as exc:

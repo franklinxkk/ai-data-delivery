@@ -3,8 +3,9 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const source=fs.readFileSync(require('node:path').join(__dirname,'../workbench/static/knowledge.js'),'utf8');
 const context={window:{},document:{addEventListener(){}},console};
 vm.createContext(context);
-vm.runInContext(source.replace('return {configure,update,render,mount,transact,pendingHtml,scopeFields,readScope,scopeText,deliver,locate,bindings};','return {configure,update,render,mount,scopeFields,scopeText,readAsset};'),context);
-const {scopeFields,scopeText,readAsset}=context.window.KnowledgeWorkbench;
+vm.runInContext(source.replace('  function readAsset(', '  window.readAssetForTest=readAsset;\n  function readAsset('),context);
+const {scopeFields,scopeText}=context.window.KnowledgeWorkbench;
+const readAsset=context.window.readAssetForTest;
 const clone=x=>JSON.parse(JSON.stringify(x));
 const scope={currency:'模拟人民币',ledger:{id:'L1',allowed:['只做多','股票']},minimum:0,approved:false,unknown:null,empty:{}};
 const html=scopeFields(scope);

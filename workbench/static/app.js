@@ -28,6 +28,21 @@ function assets(kind) { return kind==='entities'||kind==='relations' ? state.doc
 function ident(kind,x) { if(kind==='entities')return x.uid||x.name; if(kind==='relations')return x.id||`${x.from}->${x.to}:${x.predicate}`; if(kind==='relationships')return x.id||`${x.from}->${x.to}:${(Array.isArray(x.join_key)?x.join_key:[x.join_key||'']).join(',')}`; return x[{datasets:'name',concepts:'term'}[kind]||'id']; }
 const attr = (kind,key) => `data-kind="${kind}" data-key="${esc(key||'')}"`;
 const title = (heading, sub, action='') => `<div class="page-head"><div><span class="eyebrow">SEMANTIC WORKSPACE</span><h1>${heading}</h1><div class="sub">${sub}</div></div>${action}</div>`;
+// Poll only the revision number; defer loading external changes while the person edits.
+let polling=false;
+function graphIdle(){return state && page==='graph' && !document.hidden && !document.querySelector('dialog[open]') &&
+  !document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') && window.KnowledgeWorkbench.idle();}
+async function syncGraph(){if(polling||!graphIdle())return;polling=true;try{
+  const stamp=await api('knowledge/revision');
+  if(stamp.revision>window.KnowledgeWorkbench.revision() && graphIdle()){
+    const [next,legacy]=await Promise.all([api('knowledge/state'),api('state')]);
+    if(next.revision>window.KnowledgeWorkbench.revision() && graphIdle()){
+      state=legacy;positions=legacy.layout;window.KnowledgeWorkbench.update(next); $('#revision').textContent=tr('项目版本 ')+next.revision;
+      render();notify(tr('图谱已同步'));
+    }
+  }
+}catch(_){/* manual Refresh remains available */}finally{polling=false;}}
+setInterval(syncGraph,3000);window.addEventListener('focus',syncGraph);
 function go(next) { page=next;location.hash=next;selected=null;connection=null;render(); }
 function render() {
   if(!state)return;

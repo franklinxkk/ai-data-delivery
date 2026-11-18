@@ -109,6 +109,7 @@ class SemanticTaskTests(unittest.TestCase):
         r = p.resolve("dated", asset_ids=["dated"], as_of="2026-01-01")
         self.assertEqual(r["decision"], "needs_review")
         self.assertIn("OUTSIDE_KNOWN_INTERVAL", [g["code"] for g in r["context"]["gaps"]])
+        self.assertEqual(p.context(["dated"], as_of="2026-01-01")["decision"], r["decision"])
         self.assertEqual(p.resolve("dated", as_of="2026-01-01")["total"], 0)
 
     def test_query_action_and_calculate_require_actual_executors_or_data(self):

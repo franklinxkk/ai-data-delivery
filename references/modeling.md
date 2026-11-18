@@ -2,6 +2,12 @@
 
 Use this when the user wants business meaning, not just an editable schema. The host handles IDs, JSON and CLI calls. Keep one local model; no saved question, server or separate SQL model is required.
 
+## Show the part being edited
+
+In an interactive session show the first useful graph, then a small change when its business meaning changes. Reuse the temporary local editor for the same project. Append `&focus=ACTUAL_ID#graph` or `&domain=URL_ENCODED_DOMAIN#graph` to the startup URL containing `?lang=...`. If reusing an open tab, follow a change chip, or open the new focus URL. Only present a screenshot from the actual saved project; include the project revision. Do not send private schema or screenshots to an outside service. Headless users can stay on CLI.
+
+For a new business, distinguish a thing (object), a verb between two things (relation), and a condition, responsibility or deadline (rule). Reuse physical datasets/columns as mappings; absent columns stay gaps. The editor supplies type-specific endpoints and source citations. Use the graph to show both a supported fact and a material gap before asking for more documents.
+
 ## Work from the current task
 
 Import the schema with `--seed-draft` only into an empty model, then import the business notes. `state --summary` finds source, batch and asset IDs without returning full project history. Read full `state` or the relevant `task --batch ID` once when exact fields and source fragments are needed; save that JSON locally rather than repeatedly pasting it into conversation.
@@ -26,9 +32,11 @@ The [asset contract](m1-m2-contract.md) defines the fields and evidence identiti
 
 ```bash
 python -X utf8 scripts/knowledge.py --project MODEL state --summary
-python -X utf8 scripts/knowledge.py --project MODEL edit --file ASSETS.json
+python -X utf8 scripts/knowledge.py --project MODEL --revision READ_REVISION edit --file ASSETS.json
 python -X utf8 scripts/knowledge.py --project MODEL inspect --id ROOT_ID
 ```
+
+Replace READ_REVISION with the project revision returned when you read the model used to prepare that file. New identities alone need no revision. For existing assets, use the original read revision; after a conflict compare and merge the two versions before retrying. Do not simply fetch a new number.
 
 An edit without `--confirm` saves drafts. After review, when the user or operator has already authorized confirmation of these supported definitions, use the same array with `--confirm`; do not ask again or leave supported dependencies draft merely because several assets are involved. Unknown business decisions remain draft or explicit `knowledge_gaps`. Permission to inspect data is not by itself permission to confirm business policy.
 

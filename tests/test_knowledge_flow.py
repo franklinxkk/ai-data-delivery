@@ -29,8 +29,30 @@ class KnowledgeFlowTests(unittest.TestCase):
         self.store = Store(self.temp.name)
         self.service = KnowledgeService(self.store)
 
+    def test_unscoped_service_export_matches_active_graph_and_explicit_slice_stays_small(self):
+        self.source(DDL, filename="schema.sql", seed_draft=True)
+        self.call("edit", asset={"kind":"entity","id":"ticket","name":"Complaint"})
+        active={a["id"] for a in self.service.state()["assets"] if a["status"]!="retired"}
+        self.assertGreater(len(active), 1)
+        for selection in ({}, {"asset_ids":[]}):
+            scope=self.call("publish", draft=True, **selection)["result"]["manifest"]["scope"]
+            self.assertEqual(set(scope["included_ids"]),active)
+        scope=self.call("publish", draft=True, asset_ids=["ticket"])["result"]["manifest"]["scope"]
+        self.assertEqual(scope["included_ids"],["ticket"])
+
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_new_policy_paragraph_requires_review_without_rewriting_history(self):
+        source, _ = self.source("Only completed cases count.")
+        self.call("edit", asset=self.entity("case-count", "Count", source, "completed cases"), confirm=True)
+        old = self.call("publish", asset_ids=["case-count"])["result"]["snapshot_id"]
+        original = self.service.download(old)
+        self.source("Only completed cases count.\n\nException: include waived cases.", source_id=source["id"])
+        self.assertEqual(self.service.state()["assets"][0]["status"], "needs_review")
+        with self.assertRaises(ValueError):
+            self.call("publish", asset_ids=["case-count"])
+        self.assertEqual(original, self.service.download(old))
 
     def call(self, method, **data):
         req = {"revision": self.store.read()["revision"], "operation_id": uuid.uuid4().hex, **data}

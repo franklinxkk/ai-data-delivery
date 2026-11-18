@@ -75,7 +75,14 @@ def make_server(service, port=0):
                 if path == "/api/state":
                     return self.response(200, service.state())
                 if path == "/api/knowledge/state":
-                    return self.response(200, service.knowledge.state())
+                    from workbench.semantic_package import ENDPOINT_KINDS, REQUIRED_PROPERTIES
+                    return self.response(200, {**service.knowledge.state(), "editor_contract": {
+                        "ends": {k: [sorted(a), sorted(b)] for k, (a,b) in ENDPOINT_KINDS.items()},
+                        "confirm_fields": REQUIRED_PROPERTIES}})
+                if path == "/api/knowledge/revision":
+                    with service.store.connect() as db:
+                        revision = db.execute("SELECT MAX(revision) FROM revisions").fetchone()[0]
+                    return self.response(200, {"revision": revision})
                 if path.startswith("/api/knowledge/download/"):
                     sid = path.rsplit("/", 1)[-1]
                     if urlsplit(self.path).query == 'format=neo4j':

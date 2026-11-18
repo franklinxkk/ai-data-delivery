@@ -184,12 +184,15 @@ def asset_dependencies(asset, *, include_execution=False):
     return _dependencies(asset, include_execution)
 
 
-def _semantic_issues(index, redirects):
-    issues, hierarchy = [], set()
-    allowed = {"is_a": ({"entity"}, {"entity"}), "denotes": ({"term"}, {"entity", "metric", "rule", "term"}),
+ENDPOINT_KINDS = {"is_a": ({"entity"}, {"entity"}), "denotes": ({"term"}, {"entity", "metric", "rule", "term"}),
                "has_attribute": ({"entity", "dataset"}, {"attribute", "field"}),
                "measures": ({"metric"}, {"entity", "attribute"}), "applies_to": ({"rule"}, {"entity", "attribute", "metric"}),
                "maps_to": (KINDS - {"dataset", "field"}, {"dataset", "field"}), "physical_fk": ({"dataset"}, {"dataset"})}
+
+
+def _semantic_issues(index, redirects):
+    issues, hierarchy = [], set()
+    allowed = ENDPOINT_KINDS
     for asset in index.values():
         aid = asset["id"]
         if asset["status"] == "confirmed":
@@ -759,6 +762,19 @@ def _fallback_candidates(index, *, domain, scope, kind, date, limit, offset):
             "next_step": "核对范围内名称后重新搜索；候选不表示语义等价，不自动选择。"}
 
 
+def scope_summary(scope, full=False):
+    if full or len(scope.get("included_ids", [])) <= 100:
+        return copy.deepcopy(scope)
+    return {**{k: v for k, v in scope.items() if not isinstance(v, list)},
+            "id_counts": {k: len(v) for k, v in scope.items() if isinstance(v, list)}, "ids_omitted": True}
+
+
+def bounded_warnings(warnings, full=False):
+    if full or len(warnings) <= 20:
+        return {"warnings": list(warnings)}
+    return {"warnings": list(warnings[:5]), "warning_count": len(warnings), "warnings_truncated": True}
+
+
 class SemanticPackage:
     """Verified read-only snapshot; all result envelopes identify its actual scope."""
     def __init__(self, entries):
@@ -826,10 +842,16 @@ class SemanticPackage:
         # Caller reference can detect mismatch, never prove global freshness or authorize execution.
         return result
 
+    def reader_scope(self):
+        result = scope_summary(self.manifest["scope"], full=not getattr(self, "compact_cli", False))
+        if result.get("ids_omitted"):
+            result["full_scope_option"] = "--full-scope"
+        return result
+
     def _result(self, status="ok", request=None, **payload):
         return {"status": status, "snapshot_id": self.manifest["snapshot_id"],
                 "source_revision": self.manifest.get("source_revision"), "draft": self.manifest["draft"],
-                "scope": {"package": copy.deepcopy(self.manifest["scope"]), "request": request or {}},
+                "scope": {"package": self.reader_scope(), "request": request or {}},
                 "complete": not self.actual_issues, "package_complete": not self.actual_issues,
                 "is_latest": "unknown_offline", **payload}
 
@@ -870,8 +892,15 @@ class SemanticPackage:
             usage="CLI 的 resolve/context/export 可重复 --id；Python API 使用 asset_ids 列表。resolve 无 ID 时仅推荐候选；有明确 ID 时返回所需上下文。分页未取完不得宣称上下文完整。")
 
     def verify(self):
+        if getattr(self, "compact_cli", False) and len(self.actual_issues) > 100:
+            from collections import Counter
+            issue_fields = {"issue_count": len(self.actual_issues), "issues_omitted": True,
+                            "issue_counts": dict(Counter(i["code"] for i in self.actual_issues)),
+                            "full_issues_option": "--full-scope"}
+        else:
+            issue_fields = {"issues": copy.deepcopy(self.actual_issues)}
         return self._result("verified", files_verified=len(self.manifest["files"]), asset_count=len(self.index),
-                            issues=copy.deepcopy(self.actual_issues), checks=["format", "file_hashes", "model_hash", "identities", "dependencies", "evidence", "knowledge_state"],
+                            **issue_fields, checks=["format", "file_hashes", "model_hash", "identities", "dependencies", "evidence", "knowledge_state"],
                             boundary="验证固定包的一致性，不证明来源真实性、业务正确或为最新版本")
 
     def _resolve(self, asset_id):
@@ -970,7 +999,7 @@ class SemanticPackage:
                                          "act": "Verify permissions, interface, inputs and receipts in the target system. No business action was performed here."}[intent]})
         steps.append({"code": "VERIFY_QUESTION_COVERAGE", "message": "核对这些定义是否覆盖问题各部分，并与独立预期或反例比较；明确选择不代表问题已经得到正确回答。",
                       "message_en": "Check that these definitions cover every part of the question against independent expectations or counterexamples. Explicit selection does not verify an answer."})
-        decision = "needs_review" if semantic_gaps else "requires_execution" if intent != "explain" else "context_available"
+        decision = context["decision"]
         return self._result(decision, request=request, decision=decision, selected_asset_ids=roots,
                             resolution={"method": "explicit_ids", "question_coverage": "not_verified"},
                             context=context, next_steps=steps, answer_verified=False,
@@ -1002,7 +1031,9 @@ class SemanticPackage:
                          "source_scope": copy.deepcopy(source[0].get("scope")) if source else None,
                          "source_sha256": version[0].get("sha256") if version else None,
                          "observed_revision_at_export": source[0].get("observed_revision_at_export") if source else None,
-                          "parse": {k: copy.deepcopy(parsed[k]) for k in ("status", "warnings", "coverage", "source_coverage") if k in parsed},
+                          "parse": {**{k: copy.deepcopy(parsed[k]) for k in ("status", "coverage", "source_coverage") if k in parsed},
+                                    **(bounded_warnings(parsed["warnings"], full=not getattr(self, "compact_cli", False))
+                                       if "warnings" in parsed else {})},
                          "fragment": copy.deepcopy(fragment)})
         return rows
 
@@ -1115,6 +1146,8 @@ class SemanticPackage:
                 row["evidence"] = [{k: pointer(v) if k == "assertion" else v
                                     for k, v in e.items() if k != "fragment"} for e in row["evidence"]]
         return self._result("ok" if request_complete else "incomplete",
+            decision=("needs_review" if any(g["code"] not in {"NO_DATA_CONNECTOR", "NO_ACTION_EXECUTOR"} for g in gaps)
+                      else "requires_execution" if intent != "explain" else "context_available"),
             detail_level=detail, evidence_details_included=detail == "full",
             evidence_next_step="sources --id ASSET_ID, or context/resolve/task --detail full" if detail == "summary" else None,
             request={"ids": ids, "intent": intent, "as_of": as_of}, root_ids=roots,

@@ -2,7 +2,9 @@
 
 **Turn an existing database schema into an editable semantic model your Agent can read.**
 
-[简体中文](README.zh-CN.md) · [Download 0.3.5 ZIP](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.5) · [Security](SECURITY.md)
+Interactive modeling: ask your host to show the saved object and its neighborhood after the first import or a material business change. The same graph follows CLI writes while idle and preserves open forms. Create objects or relations directly; attach an imported passage or an operator statement before confirming.
+
+[简体中文](README.zh-CN.md) · [Download 0.3.6 ZIP](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.6) · [Security](SECURITY.md)
 
 Import SQL or read a database catalog to get a draft of tables, fields and foreign keys. Enrich it with business objects, attributes and relationships. Export a source-linked semantic package that another local Agent can read through the CLI.
 
@@ -71,8 +73,8 @@ For business semantics, the Agent can save related objects, attributes, mappings
 | Exchange with Neo4j or ontology-graph-spec | [Offline interchange](references/neo4j-interop.md); Neo4j is optional |
 | Try transport, agriculture, university or finance examples | [Synthetic exercises](examples/cross-domain/README.md), not business policy |
 
-This is a modeling and delivery tool. It does not provide multi-user administration, enterprise authorization, production queries or business execution. Core parsing and offline reading are local; optional connections use explicitly authorized endpoints. Parsing has documented limits, and packages can contain business definitions and source excerpts. [Architecture](references/architecture.md) · [Actual validation](references/v0.3.5-release-validation.md)
+This is a modeling and delivery tool. It does not provide multi-user administration, enterprise authorization, production queries or business execution. Core parsing and offline reading are local; optional connections use explicitly authorized endpoints. Parsing has documented limits, and packages can contain business definitions and source excerpts. [Architecture](references/architecture.md) · [Actual validation](references/v0.3.6-release-validation.md)
 
-0.3.5 adds atomic batch maintenance, scoped dependency inspection and consistent evidence reading, keeping the CLI-first workflow. Existing models are not automatically migrated or overwritten; back up before upgrading. Report a specific blocked step with sanitized inputs: [feedback](https://github.com/franklinxkk/ai-data-delivery/issues).
+0.3.6 shows model changes in the open graph, protects existing assets against stale CLI edits, and keeps large-package receipts short. To update an existing asset, pass the revision you actually read before the edit command. Existing models are not automatically migrated or overwritten; back up before upgrading. Report a specific blocked step with sanitized inputs: [feedback](https://github.com/franklinxkk/ai-data-delivery/issues).
 
 [MIT](LICENSE) · [Skill instructions](SKILL.md) · [Changelog](CHANGELOG.md)
