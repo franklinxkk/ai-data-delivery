@@ -212,6 +212,149 @@ ENDPOINT_KINDS = {"is_a": ({"entity"}, {"entity"}), "denotes": ({"term"}, {"enti
                "maps_to": (KINDS - {"dataset", "field"}, {"dataset", "field"}), "physical_fk": ({"dataset"}, {"dataset"})}
 
 
+def _physical_columns(index, redirects):
+    fields = {}
+    for field in index.values():
+        column = field.get("properties", {}).get("column")
+        if field["kind"] != "field" or not isinstance(column, str) or not column:
+            continue
+        for table in {redirects.get(ref, ref) for ref in field.get("refs", [])}:
+            if index.get(table, {}).get("kind") == "dataset":
+                fields.setdefault((table, column), []).append(field)
+    return fields
+
+
+def _fk_endpoints(asset, redirects):
+    for end in ("from", "to"):
+        table = asset.get(end)
+        yield end, redirects.get(table, table), asset.get("properties", {}).get(end + "_fields")
+
+
+def _table_evidence(dataset, source_index):
+    for evidence in dataset.get("evidence", []):
+        if not isinstance(evidence, dict) or evidence.get("type") == "manual":
+            continue
+        sid, revision = evidence.get("source_id"), evidence.get("revision")
+        if not isinstance(sid, str) or type(revision) is not int:
+            continue
+        source, revisions = source_index.get(sid, ({}, {}))
+        fragment, _, error = _fragment(revisions.get(revision), evidence)
+        quote = evidence.get("quote")
+        if not error and isinstance(quote, str) and quote.strip() and " ".join(quote.split()) in " ".join(fragment["text"].split()):
+            yield source, fragment
+
+
+def legacy_ddl_name(name):
+    """Recreate the flattened identifier used by older DDL extractions."""
+    from scripts.ingest_ddl import IDENTIFIER, identifier
+    return ".".join(identifier(part) for part in re.findall(IDENTIFIER, name))
+
+
+def bound_ddl_table(dataset, source_index, *, match_name=True):
+    from scripts.ingest_ddl import parse_sql
+    for source, fragment in _table_evidence(dataset, source_index):
+        location = fragment.get("location")
+        if (source.get("format") == "ddl" and isinstance(location, dict)
+                and location.get("type") == "ddl" and "part" not in location):
+            tables, failures = parse_sql(fragment["text"], "material.sql")
+            if not failures and len(tables) == 1:
+                table = tables[0]
+                name = table["name"]
+                # Older packages dropped quoting around each qualified component.
+                if not match_name or dataset["name"] in {name, legacy_ddl_name(name)}:
+                    return table
+            return {"unreadable_declaration": True}
+    return None
+
+
+def _dataset_catalog(dataset, source_index, ddl_table):
+    """Only bound table observations establish an exhaustive list of columns."""
+    if ddl_table and ddl_table.get("columns_complete") is True:
+        names = [col["name"] for col in ddl_table["columns"]]
+        if names and len(names) == len(set(names)):
+            return set(names)
+    props = dataset.get("properties", {})
+    for source, fragment in _table_evidence(dataset, source_index):
+        location = fragment.get("location")
+        if source.get("format") != "metadata" or not isinstance(location, dict) or location.get("type") != "catalog":
+            continue
+        try:
+            payload = json.loads(fragment["text"])
+        except ValueError:
+            continue
+        table, scope = props.get("metadata_table"), source.get("scope")
+        if (isinstance(payload, dict) and isinstance(scope, dict) and table
+                and scope.get("connection") == props.get("metadata_connection")
+                and scope.get("table") == table == location.get("table") == payload.get("table")):
+            record = payload.get("observation")
+            if isinstance(record, dict) and record.get("name") == table:
+                columns = record.get("columns")
+                if (isinstance(columns, list) and columns
+                        and all(isinstance(col, dict) and isinstance(col.get("name"), str) for col in columns)):
+                    return {col["name"] for col in columns}
+    return None
+
+
+def physical_fk_issues(index, redirects, source_index, *, selected=None):
+    """Check FK columns against model identities and available table evidence."""
+    from collections import Counter
+    from workbench.ddl_integrity import ddl_primary_key_issues
+    fields = _physical_columns(index, redirects)
+    ddl_tables, catalogs, issues = {}, {}, []
+    for asset in index.values():
+        if (asset["kind"] == "dataset" and asset["status"] != "retired"
+                and (selected is None or asset["id"] in selected)):
+            table = bound_ddl_table(asset, source_index)
+            ddl_tables[asset["id"]] = table
+            issues.extend(ddl_primary_key_issues(asset, table))
+    for asset in index.values():
+        aid = asset["id"]
+        if (asset.get("relation_type") != "physical_fk" or asset["status"] == "retired"
+                or (selected is not None and aid not in selected)):
+            continue
+        endpoints = list(_fk_endpoints(asset, redirects))
+        left, right = (item[2] for item in endpoints)
+        if (not isinstance(left, list) or not isinstance(right, list) or not left or len(left) != len(right)
+                or any(not isinstance(col, str) or not col.strip() for col in left + right)):
+            issues.append({"code": "INVALID_FOREIGN_KEY", "asset_id": aid,
+                           "message": "物理外键两端字段必须是同长度的非空字段列表"})
+            continue
+        for end, table, columns in endpoints:
+            dataset = index.get(table, {})
+            if dataset.get("kind") != "dataset":
+                continue
+            if table not in catalogs:
+                ddl_table = ddl_tables[table] if table in ddl_tables else bound_ddl_table(dataset, source_index)
+                catalogs[table] = _dataset_catalog(dataset, source_index, ddl_table)
+            catalog = catalogs[table]
+            for column, count in Counter(columns).items():
+                matches = fields.get((table, column), [])
+                active = [field for field in matches if field["status"] != "retired"]
+                issue = {"code": "INVALID_FOREIGN_KEY", "asset_id": aid, "endpoint": end,
+                         "dataset_id": table, "column": column}
+                if count > 1:
+                    message = "同一端的物理外键字段不可重复"
+                elif dataset["status"] == "retired":
+                    message = "物理外键端点数据集已停用"
+                elif len(active) > 1:
+                    message = "物理外键字段对应多个有效字段资产，需核对身份"
+                elif matches and not active:
+                    message = "物理外键字段对应的字段资产已停用"
+                elif catalog is not None and column not in catalog:
+                    message = "物理外键字段不存在于所引完整表结构"
+                elif active or catalog is not None:
+                    continue
+                else:
+                    issue.update(code="UNRESOLVED_JOIN_KEY", severity="advisory")
+                    message = "缺少对应字段资产或完整表结构依据，无法核实此连接键"
+                issues.append(dict(issue, message=message))
+    return issues
+
+
+def _blocking(issues):
+    return [issue for issue in issues if issue.get("severity") != "advisory"]
+
+
 def _semantic_issues(index, redirects):
     issues, hierarchy = [], set()
     allowed = ENDPOINT_KINDS
@@ -246,11 +389,6 @@ def _semantic_issues(index, redirects):
                            f"终点「{index[right]['name']}」是{KIND_LABELS[index[right]['kind']]}。请重新选择符合要求的端点，或核对关系类型"})
         if rt == "is_a" and asset["status"] != "retired" and left in index and right in index:
             hierarchy.add((left, right))
-        if rt == "physical_fk":
-            keys = asset.get("properties", {})
-            a, b = keys.get("from_fields"), keys.get("to_fields")
-            if not isinstance(a, list) or not isinstance(b, list) or not a or len(a) != len(b) or any(not isinstance(x, str) or not x for x in a + b):
-                issues.append({"code": "INVALID_FOREIGN_KEY", "asset_id": aid, "message": "物理外键两端字段必须是同长度的非空字段列表"})
     # Iterative cycle check also handles large hierarchies without Python recursion.
     adjacency, indegree = {}, {}
     for left, right in hierarchy:
@@ -274,13 +412,26 @@ def _semantic_issues(index, redirects):
     return issues
 
 
-def validate_semantic_assets(assets, redirects=None, *, include_execution=False):
+def validate_semantic_assets(assets, redirects=None, *, include_execution=False, sources=None, previous=None,
+                             reasserted=()):
     """Common authoring/consumer checks. Confirmed content requires typed fields."""
     index = _asset_index(assets)
     redirect_map = _redirects(redirects, index)
     _, missing = _closure(index, list(index), redirect_map, include_execution)
     issues = [{"code": "MISSING_DEPENDENCY", **entry, "message": "必须依赖未定义"} for entry in missing]
     issues += _semantic_issues(index, redirect_map)
+    def confirmed_issues(graph, redirects, source_records):
+        confirmed = {aid for aid, asset in graph.items() if asset["status"] == "confirmed"}
+        return _blocking(physical_fk_issues(graph, redirects, _source_index(source_records), selected=confirmed))
+
+    physical = confirmed_issues(index, redirect_map, sources or [])
+    if physical and previous is not None:
+        old_assets, old_sources = previous
+        old_index = _asset_index(old_assets)
+        existing = {_json(issue) for issue in confirmed_issues(old_index, redirect_map, old_sources)}
+        # A legacy conflict should only obstruct reasserting it or handing off its own scope.
+        physical = [issue for issue in physical if issue["asset_id"] in reasserted or _json(issue) not in existing]
+    issues += physical
     if issues:
         first = issues[0]
         affected = index.get(first.get("asset_id"))
@@ -293,6 +444,7 @@ def validate_semantic_assets(assets, redirects=None, *, include_execution=False)
 
 def _closure(index, roots, redirects, include_execution=False):
     selected, missing, queue = set(), [], list(roots)
+    fields = _physical_columns(index, redirects)
     while queue:
         raw = queue.pop()
         aid = redirects.get(raw, raw)
@@ -308,6 +460,14 @@ def _closure(index, roots, redirects, include_execution=False):
                 missing.append({"asset_id": aid, "dependency": ref})
             elif resolved not in selected:
                 queue.append(resolved)
+        if index[aid].get("relation_type") == "physical_fk":
+            for _, table, columns in _fk_endpoints(index[aid], redirects):
+                if isinstance(columns, list):
+                    for column in columns:
+                        if isinstance(column, str):
+                            matches = fields.get((table, column), [])
+                            active = [field for field in matches if field["status"] != "retired"]
+                            queue.extend(field["id"] for field in active or matches)
     unique = {(x["asset_id"], x["dependency"]): x for x in missing}
     return selected, sorted(unique.values(), key=lambda x: (x["asset_id"] or "", x["dependency"]))
 
@@ -496,8 +656,9 @@ def _prepare(assets, sources, *, project_id, revision, asset_ids=None, draft=Fal
     needed, evidence_issues = _evidence(chosen, source_index, normalize=True)
     issues = [{"code": "MISSING_DEPENDENCY", **entry, "message": "必须依赖未定义"} for entry in missing] + evidence_issues
     issues += _semantic_issues({a["id"]: a for a in chosen}, retained_redirects)
+    issues += physical_fk_issues(index, redirect_map, source_index, selected=selected)
     issues += _readiness_issues(chosen)
-    if issues and not draft:
+    if _blocking(issues) and not draft:
         raise PackageError("NOT_PUBLISHABLE", "所选范围尚不能确认发布；请处理具体缺口或导出草稿", issues=issues)
     model = {"schema_version": SCHEMA, "assets": chosen, "redirects": retained_redirects}
     selected_sources = _selected_sources(source_index, needed)
@@ -511,7 +672,7 @@ def _prepare(assets, sources, *, project_id, revision, asset_ids=None, draft=Fal
         raise PackageError("INVALID_INPUT", "snapshot_id 只能包含字母、数字、点、下划线和连字符")
     manifest = {"format_version": FORMAT, "snapshot_id": snapshot_id or "sem_" + fingerprint[:24],
                 "project_id": project_id, "source_revision": revision, "scope": scope, "draft": draft,
-                "complete": not issues, "issues": issues, "model_sha256": _sha(_json(model)),
+                "complete": not _blocking(issues), "issues": issues, "model_sha256": _sha(_json(model)),
                 "hash_kind": "sha256_utf8_canonical_json", "is_latest": "unknown_offline",
                 "limits": ["固定知识快照，不执行规则或 SQL。", "确认及指纹不证明业务事实或来源真实性。", "离线无法判断是否已有更新，文件访问由操作系统控制。"]}
     return model, selected_sources, manifest
@@ -841,8 +1002,9 @@ class SemanticPackage:
         self.actual_issues = ([{"code": "MISSING_DEPENDENCY", **x, "message": "必须依赖未定义",
                                "next_step": "补入所指依赖或核对引用身份后重新交付"} for x in missing] + issues
                               + _semantic_issues(self.index, self.redirects)
+                              + physical_fk_issues(self.index, self.redirects, self.source_index)
                               + _readiness_issues(self.index.values()))
-        if self.actual_issues and (not self.manifest["draft"] or self.manifest["complete"]):
+        if _blocking(self.actual_issues) and (not self.manifest["draft"] or self.manifest["complete"]):
             raise PackageError("PACKAGE_CORRUPT", "包内状态、依据或引用不支持声明的发布/完整性状态", issues=self.actual_issues)
         if not include_execution and any("execution" in a.get("properties", {}) for a in self.index.values()):
             raise PackageError("PACKAGE_CORRUPT", "包声明未含执行内容，但实际包含 execution 块")
@@ -879,7 +1041,7 @@ class SemanticPackage:
         return {"status": status, "snapshot_id": self.manifest["snapshot_id"],
                 "source_revision": self.manifest.get("source_revision"), "draft": self.manifest["draft"],
                 "scope": {"package": self.reader_scope(), "request": request or {}},
-                "complete": not self.actual_issues, "package_complete": not self.actual_issues,
+                "complete": not _blocking(self.actual_issues), "package_complete": not _blocking(self.actual_issues),
                 "is_latest": "unknown_offline", **payload}
 
     def _required(self, roots):
@@ -929,7 +1091,7 @@ class SemanticPackage:
         else:
             issue_fields = {"issues": copy.deepcopy(self.actual_issues)}
         return self._result("verified", files_verified=len(self.manifest["files"]), asset_count=len(self.index),
-                            **issue_fields, checks=["format", "file_hashes", "model_hash", "identities", "dependencies", "evidence", "knowledge_state"],
+                            **issue_fields, checks=["format", "file_hashes", "model_hash", "identities", "dependencies", "evidence", "knowledge_state", "physical_structure"],
                             boundary="验证固定包的一致性，不证明来源真实性、业务正确或为最新版本")
 
     def _resolve(self, asset_id):
@@ -1377,7 +1539,7 @@ class SemanticPackage:
                             node_applicability={aid: _applicability(self.index[aid], date) for aid in sorted(node_ids)},
                             total=len(found), offset=offset, limit=limit, truncated=truncated,
                             next_offset=offset + limit if offset + limit < len(found) else None, missing_dependencies=missing,
-                            complete=not truncated and not missing and not self.actual_issues,
+                            complete=not truncated and not missing and not _blocking(self.actual_issues),
                             boundary="仅显式关系；逆向遍历不改写关系原始方向，不推断新事实")
 
     def export(self, asset_ids, *, draft=None, include_execution=None, snapshot_id=None):

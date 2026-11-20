@@ -1,10 +1,8 @@
-# AI Data Delivery · 0.3.7
+# AI Data Delivery · 0.3.8
 
 **Turn an existing database schema into an editable semantic model your Agent can read.**
 
-Interactive modeling: ask your host to show the saved object and its neighborhood after the first import or a material business change. The same graph follows CLI writes while idle and preserves open forms. Create objects or relations directly; attach an imported passage or an operator statement before confirming.
-
-[简体中文](README.zh-CN.md) · [Previous stable release (0.3.6)](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.6) · [Security](SECURITY.md)
+[简体中文](README.zh-CN.md) · [GitHub releases](https://github.com/franklinxkk/ai-data-delivery/releases) · [Security](SECURITY.md)
 
 Import SQL or read a database catalog to get a draft of tables, fields and foreign keys. Enrich it with business objects, attributes and relationships. Export a source-linked semantic package that another local Agent can read through the CLI.
 
@@ -14,9 +12,9 @@ Import SQL or read a database catalog to get a draft of tables, fields and forei
 
 Try asking your Agent, “Show me which company is responsible for resolving this work order.” A company key gives you a structural reference. Add a policy passage to establish the role, see the revised relationship, then let a second Agent trace that definition to a field in the exported package. Checking an individual work order still requires its own evidence.
 
-![0.3.4 graph editor showing company, vehicle and their fields](https://raw.githubusercontent.com/franklinxkk/ai-data-delivery/main/docs/images/graph-v034-en.png)
+**Try drawing “Transport company resolves work order”.** Click **New object**, enter “Transport company” and save the draft. Repeat for “Work order”. Click **Connect**, then pick the company and the work order in that order. Enter “resolves” under **How are they related?** and check the arrow before saving. You can swap the two ends.
 
-*Actual interface using the bundled synthetic transport schema. Dashed nodes are drafts; a physical foreign key does not establish business ownership.*
+Ask your Agent to show each saved change in the same graph. Open forms preserve your typing. When you are ready to confirm a relationship, add its scope and supporting evidence.
 
 Start with your own SQL if available. For a trial use the included transport schema, then import `transport-v1.txt` from the same folder to distinguish a vehicle’s company reference from the company’s maintenance responsibility. Add global `--progress` before the command for stage feedback. The write receipt includes the next review question and a local graph location.
 
@@ -37,6 +35,8 @@ python -X utf8 scripts/knowledge.py --project "./work/transport" export --out ".
 
 The result contains **2 tables, 5 fields and 1 foreign key**, with source excerpts. SQL is parsed, never executed; business rules are not guessed. Substitute your own DDL path. `--seed-draft` requires an empty model. For an existing model, omit that flag and review change candidates so manual edits remain intact.
 
+For a schema with few declared foreign keys, run `python scripts/knowledge.py --project "./work/transport" relation-hints` to see which columns are worth comparing and why. For a GBK export add `--encoding gb18030` to the import. If a statement is incomplete, the receipt identifies what to correct before importing again.
+
 Identical DDL bytes produce the same table, field and foreign-key IDs in fresh projects. For evolving exports, set a stable logical source on first import, e.g. `--source-key fleet/prod`, and use separate keys for distinct databases. Existing projects retain their IDs when updating their source with `--source-id`. The editor initially includes every asset kind and restores your chosen project view on return.
 
 To retire assets with history, read the IDs and revision with `state`, then run `python scripts/knowledge.py --project ./work/transport --revision N retire --id ASSET_ID --reason "superseded"`. Substitute `--file ids.json` for `--id ASSET_ID` to retire a JSON array of IDs atomically.
@@ -51,7 +51,7 @@ On Windows, if `python` is unavailable, check `py -3 --version` and substitute `
 python -X utf8 scripts/start.py --project "./work/transport"
 ```
 
-Open the printed local URL. The first graph includes all asset types. Click to inspect sources, double-click to edit, or connect objects to define a relationship. Save drafts freely; confirm definitions after review. CLI and editor use the same local model.
+Open the printed local URL to see the tables and foreign keys. Click a table to see its columns, choose **Show columns** to draw them individually, or search for a column by name. Columns used in business relationships or mappings stay visible. Double-click to edit an object. Click **Connect** and choose both ends, or drag a connection. Press Esc to cancel. The CLI and editor use the same local model.
 
 Use **Export** to download a package, then close the page and press **Ctrl+C** in the terminal to stop the editor. Reopen with the same project path. CLI use requires no server, saved business question or acceptance workflow.
 

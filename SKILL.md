@@ -4,7 +4,7 @@ description: Build and edit a source-linked ontology from DDL or selected databa
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.7
+  version: 0.3.8
   runtime_environment: Python 3.10+ with pinned local dependencies. No model key.
   file_read: Authorized materials, local project and semantic packages.
   file_write: Authorized local project and export paths.
@@ -33,6 +33,7 @@ For a material task, select an object using `task --batch B --id ID`; a temporar
 | Task | Read/use next |
 | --- | --- |
 | Start from SQL | `knowledge.py --project DIR import --file SCHEMA.sql --seed-draft`; creates source-linked physical drafts in an empty graph, never confirmed business meaning |
+| Investigate missing joins | `relation-hints` lists field pairs and supporting metadata. Compare the scope and business evidence before saving a relationship. |
 | Inspect or edit visually | `start.py --project DIR`; opens the same model in the graph editor; stop with Ctrl+C when finished |
 | Export without a question/server | `knowledge.py --project DIR export --out MODEL.zip --draft`; default is all active assets including physical structure, or repeat `--id` for selected scope |
 | Build/refine business semantics | [Short modeling path](references/modeling.md): smallest useful objects, fields, mappings and relationships; atomic batch edits, no saved question required |

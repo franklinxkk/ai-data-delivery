@@ -209,12 +209,41 @@ class KnowledgeCliTests(unittest.TestCase):
         with closing(sqlite3.connect(self.project / 'project.sqlite')) as db:
             self.assertEqual(db.execute('SELECT COUNT(*) FROM attachments').fetchone()[0], 1)
 
+    def test_dirty_schema_retry_and_equivalent_fk_declarations(self):
+        ddl = self.root / "结构.sql"
+        for definition, name in [
+            ("CREATE TABLE broker(id INT); CREATE TABLE broker(code INT);", "broker"),
+            ("CREATE TABLE broker(code INT, code INT);", "code"),
+        ]:
+            ddl.write_text(definition, encoding="utf-8")
+            result = self.run_cli("import", "--file", str(ddl), "--seed-draft", code=2)
+            self.assertIn(name, result["error"])
+            self.assertEqual(self.run_cli("state")["result"]["revision"], 0)
+        ddl.write_text(
+            "CREATE TABLE agency(id INT PRIMARY KEY, name VARCHAR(10) COMMENT '企业');"
+            "CREATE TABLE trips(agency_id INT REFERENCES agency(id), day INT,"
+            "PRIMARY KEY(agency_id, day), FOREIGN KEY(agency_id) REFERENCES agency(id));"
+            "CREATE TABLE notes(label TEXT);", encoding="gbk")
+        flags = ("import", "--file", str(ddl), "--seed-draft", "--source-key", "mock/dispatch")
+        failure = self.run_cli(*flags, code=2)
+        self.assertIn("GB18030", failure["error"])
+        self.assertEqual(self.run_cli("state")["result"]["revision"], 0)
+        receipt = self.run_cli(*flags, "--encoding", "gb18030")["result"]["result"]["seeded"]
+        self.assertEqual(receipt["primary_keys"], {"single": 1, "composite": 1, "not_declared": 1, "unverified": 0})
+        state = self.run_cli("state")["result"]
+        self.assertEqual(state["revision"], 1)
+        edge, = (a for a in state["assets"] if a["kind"] == "relation")
+        self.assertEqual(len({e["fragment_id"] for e in edge["evidence"]}), 2)
+        self.assertTrue(any(a["definition"] == "企业" for a in state["assets"]))
+
     def test_large_receipts_keep_evidence_without_repeating_project_inventory(self):
         ddl = self.root/"large.sql"
-        ddl.write_text("\n".join(f"DROP TABLE IF EXISTS t{i}; CREATE TABLE t{i}(id INTEGER PRIMARY KEY);" for i in range(62)),encoding="utf8")
+        ddl.write_text("\n".join(f"CREATE TABLE t{i}(id INTEGER PRIMARY KEY); ALTER TABLE t{i} ADD COLUMN extra INTEGER;" for i in range(62)),encoding="utf8")
         seed = self.run_cli("import","--file",str(ddl),"--seed-draft")["result"]["result"]
         self.assertEqual(seed["seeded"]["asset_id_count"],124)
         self.assertTrue(seed["warnings_truncated"])
+        self.assertIsNone(seed["guidance"]["focus_id"])
+        self.assertNotIn("--focus", seed["guidance"]["preview"]["launch_argv"])
         package = self.root/"large.zip"
         receipt=self.run_cli("export","--draft","--out",str(package))["result"]["result"]["manifest"]
         self.assertEqual(receipt["scope"]["id_counts"]["included_ids"],124)

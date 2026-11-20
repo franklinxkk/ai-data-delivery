@@ -4,6 +4,7 @@ The host proposes changes; only explicit operator review or a manual edit confir
 them. All write paths share validation and the same SQLite operation transaction.
 """
 import base64
+from collections import Counter
 import copy
 from datetime import date
 import hashlib
@@ -157,9 +158,9 @@ def normalize_asset(value, *, confirm=False):
     return a
 
 
-def validate_graph(assets, sources):
+def validate_graph(assets, sources, *, previous=None, reasserted=()):
     from workbench.semantic_package import validate_semantic_assets
-    validate_semantic_assets(assets, include_execution=True)
+    validate_semantic_assets(assets, include_execution=True, sources=sources, previous=previous, reasserted=reasserted)
     for a in assets:
         check_evidence(a.get("evidence", []), sources, required=a["status"] == "confirmed")
 
@@ -205,7 +206,17 @@ def seed_physical_drafts(sem, know, group_ids):
             c["target_fingerprint"] = digest(meaningful(current[c["target_id"]]))
             c["dependency_fingerprints"] = {key: digest(meaningful(current[key])) if key in current else None
                                               for key in dependencies(c["asset"])}
-    return {"status": "draft", "asset_ids": list(current),
+    key_counts = {"single": 0, "composite": 0, "not_declared": 0, "unverified": 0}
+    for table in (a for a in assets if a["kind"] == "dataset"):
+        props = table["properties"]
+        key = props.get("primary_key")
+        if props.get("primary_key_invalid") or not isinstance(key, list) or props.get("columns_complete") is False and not key:
+            key_counts["unverified"] += 1
+        elif not key:
+            key_counts["not_declared"] += 1
+        else:
+            key_counts["single" if len(key) == 1 else "composite"] += 1
+    return {"status": "draft", "asset_ids": list(current), "primary_keys": key_counts,
             "counts": {kind: sum(a["kind"] == kind for a in assets) for kind in ("dataset", "field", "relation")}}
 
 
@@ -249,7 +260,13 @@ class KnowledgeService:
             sem, know = containers(doc)
             before_sem, before_know = copy.deepcopy(sem), copy.deepcopy(know)
             result = fn(doc, sem, know, db)
-            validate_graph(sem["assets"], know["sources"])
+            reasserted = set()
+            if ((stage == "edit" and req.get("confirm")) or (stage == "review" and req.get("action") == "accept")):
+                reasserted.update(result.get("asset_ids", []))
+                if result.get("asset_id"):
+                    reasserted.add(result["asset_id"])
+            validate_graph(sem["assets"], know["sources"], previous=(before_sem["assets"], before_know["sources"]),
+                           reasserted=reasserted)
             from workbench.scenario_contract import change_event
             event = change_event(before_sem, before_know, sem, know, req["revision"] + 1, summary)
             if event:
@@ -473,6 +490,13 @@ class KnowledgeService:
             self.progress("parsed", status=parsed["status"], tables=len(parsed.get("structure", {}).get("tables", [])),
                           warnings=len(parsed.get("warnings", [])))
         source_key = req.get("source_key")
+        tables = parsed.get("structure", {}).get("tables", [])
+        if not tables and (req.get("seed_draft") or source_key is not None):
+            if parsed["format"] == "ddl":
+                details = " ".join(parsed.get("warnings", [])[:5])
+                raise ValueError(f"{filename}: DDL import failed / 没有可用于建模的表结构。{details}")
+            if req.get("seed_draft"):
+                raise ValueError("Choose a SQL DDL file / 初始化需要 SQL 建表文件。导入业务材料时请关闭初始化选项。")
         if source_key is not None and (not isinstance(source_key, str) or not source_key.strip()
                 or len(source_key) > 200 or not parsed.get("structure", {}).get("tables") or req.get("distinct_source")):
             raise ValueError("Use a nonempty DDL source key without --distinct-source / 逻辑来源标识仅适用于 DDL，不能与独立来源同时使用")
@@ -489,8 +513,16 @@ class KnowledgeService:
         def apply(doc, sem, know, db):
             if type(req.get("seed_draft", False)) is not bool:
                 raise ValueError("seed_draft must be boolean")
-            if req.get("seed_draft") and (sem["assets"] or not parsed.get("structure", {}).get("tables")):
-                raise ValueError("Draft initialization needs table DDL and an empty graph / 初始草稿需要表结构 DDL 和空图；已有模型请按候选核对变化")
+            if req.get("seed_draft") and sem["assets"]:
+                raise ValueError("Draft initialization requires an empty graph / 已有模型，请关闭初始化选项后核对变更。")
+            if req.get("seed_draft"):
+                duplicates = [name for name, count in Counter(t["name"] for t in tables).items() if count > 1]
+                if duplicates:
+                    raise ValueError(f"{filename}: duplicate table definitions / 表被重复定义，请核对同名建表语句：" + "、".join(duplicates[:12]))
+                for t in tables:
+                    repeated = [name for name, count in Counter(c["name"] for c in t["columns"]).items() if count > 1]
+                    if repeated:
+                        raise ValueError(f"{filename}: duplicate columns / 表 {t['name']} 有重复列，请核对：" + "、".join(repeated[:12]))
             current = find(know["sources"], req["source_id"], "来源") if req.get("source_id") else None
             if namespace:
                 if current and current.get("ddl_namespace") != namespace:
@@ -621,6 +653,11 @@ class KnowledgeService:
                     return [{"summary": "核对导入模型的定义与当前图谱差异", "candidates": candidates}]
             return []
         candidates, ids = [], {}
+        table_counts = Counter(t["name"] for t in tables)
+        tables = [t for t in tables if table_counts[t["name"]] == 1 and
+                  len({c["name"] for c in t["columns"]}) == len(t["columns"])]
+        if not tables:
+            return []
         def stable(kind, value):
             return kind + "_" + digest([source.get("ddl_namespace", source["id"]), value])[:18]
         def ev(fragment_id):
@@ -631,24 +668,66 @@ class KnowledgeService:
             return {"id": stable(kind, key), "kind": kind, "name": name, "definition": definition,
                     "domain": source["domain"] or ("数据库结构" if zh else "Database structure"), "scope": source.get("scope") or ("本份 DDL 明确声明的结构" if zh else "Structure explicitly declared in this DDL"),
                     "aliases": [], "refs": [], "properties": {}, "evidence": ev(fragment_id), **extra}
-        for table in tables:
-            ids[table["name"]] = stable("dataset", table["name"])
+        relations_by_table = {}
+        for fk in parsed["structure"].get("relationships", []):
+            key = (tuple(fk["from_columns"]), fk["to_table"], tuple(fk["to_columns"]))
+            declarations = relations_by_table.setdefault(fk["from"], {}).setdefault(key, [])
+            if fk["fragment_id"] not in declarations:
+                declarations.append(fk["fragment_id"])
+        # Older extractions flattened quoted components. Reuse their IDs only
+        # when the exact declaration proves they refer to the incoming table.
+        identity_names = {table["name"]: table["name"] for table in tables}
+        existing_ids = {asset["id"] for asset in sem["assets"]}
+        old_tables = {}
+        if any("." in name or '"' in name for name in identity_names):
+            from workbench.semantic_package import PackageError, _source_index, bound_ddl_table, legacy_ddl_name
+            source_index = _source_index([source])
+            candidate_ids = {stable("dataset", key) for name in identity_names
+                             for key in (name, legacy_ddl_name(name))}
+            for existing in sem["assets"]:
+                if existing["kind"] != "dataset" or existing["id"] not in candidate_ids:
+                    continue
+                old_table = bound_ddl_table(existing, source_index, match_name=False)
+                if not old_table or "name" not in old_table:
+                    continue
+                name = old_table["name"]
+                old_tables[existing["id"]] = name
+                legacy = legacy_ddl_name(name)
+                if ("ddl_namespace" in source and name in identity_names and legacy != name
+                        and existing["id"] == stable("dataset", legacy) and stable("dataset", name) not in existing_ids):
+                    identity_names[name] = legacy
+            for name, key in identity_names.items():
+                aid = stable("dataset", key)
+                old_name = old_tables.get(aid)
+                if old_name is not None and old_name != name:
+                    raise PackageError("DDL_IDENTITY_COLLISION",
+                        f"建表语句 {name} 与已有表 {old_name} 使用同一历史 ID。请使用 --distinct-source 独立导入，再核对原引用。",
+                        asset_id=aid, source_table=old_name, incoming_table=name)
+        ids = {name: stable("dataset", key) for name, key in identity_names.items()}
         for table in tables:
             a = asset("dataset", table["name"], (f"DDL 声明的数据表 {table['name']}" if zh else f"Table {table['name']} declared by DDL"), table["fragment_id"],
-                      properties={"primary_key": table.get("pk_guess", [])})
+                      identity=identity_names[table["name"]],
+                      properties={"primary_key": table.get("pk_guess", []),
+                                  **({"columns_complete": False} if table.get("columns_complete") is False else {}),
+                                  **({"primary_key_invalid": True} if table.get("primary_key_invalid") else {})})
             candidates.append({"op": "upsert", "target_id": a["id"], "asset": a})
             for column in table["columns"]:
-                name = table["name"] + "." + column["name"]
+                column_name = column["name"]
+                display_column = '"' + column_name.replace('"', '""') + '"' if any(c in column_name for c in '."') else column_name
+                name = table["name"] + "." + display_column
                 field = asset("field", name, column.get("comment") or (f"{table['name']} 的 {column['name']} 字段" if zh else f"Field {column['name']} of {table['name']}"), column["fragment_id"],
-                              identity=[table["name"], column["name"]],
-                              refs=[a["id"]], properties={"value_type": column["type"], "column": column["name"], "primary_key": bool(column.get("pk"))})
+                              identity=[identity_names[table["name"]], column["name"]],
+                              refs=[a["id"]], properties={"value_type": column["type"], "column": column_name,
+                              "raw_type": column.get("raw_type", column["type"]), "primary_key": bool(column.get("pk"))})
                 candidates.append({"op": "upsert", "target_id": field["id"], "asset": field})
-            for fk in [r for r in parsed["structure"].get("relationships", []) if r["from"] == table["name"]]:
-                name = table["name"] + "→" + fk["to_table"] + ":" + ",".join(fk["from_columns"])
-                relation = asset("relation", name, ("DDL 显式外键，只表达物理引用，不推断业务所有权" if zh else "Explicit DDL foreign key: physical reference, not business ownership"), fk["fragment_id"],
-                                 identity=[table["name"], fk["from_columns"], fk["to_table"], fk["to_columns"]],
-                                 **{"from": a["id"], "to": ids[fk["to_table"]], "predicate": "外键引用" if zh else "foreign key", "relation_type": "physical_fk"},
-                                 properties={"from_fields": fk["from_columns"], "to_fields": fk["to_columns"]})
+            for (from_fields, target, to_fields), fragments in relations_by_table.get(table["name"], {}).items():
+                name = table["name"] + "→" + target + ":" + ",".join(from_fields)
+                relation = asset("relation", name, ("DDL 显式外键，只表达物理引用，不推断业务所有权" if zh else "Explicit DDL foreign key: physical reference, not business ownership"), fragments[0],
+                                 identity=[identity_names[table["name"]], list(from_fields), identity_names[target], list(to_fields)],
+                                 **{"from": a["id"], "to": ids[target], "predicate": "外键引用" if zh else "foreign key", "relation_type": "physical_fk"},
+                                 properties={"from_fields": list(from_fields), "to_fields": list(to_fields)})
+                for fragment in fragments[1:]:
+                    relation["evidence"].extend(ev(fragment))
                 candidates.append({"op": "upsert", "target_id": relation["id"], "asset": relation})
         return [{"summary": "核对 DDL 明确声明的表、字段与外键" if zh else "Review explicitly declared DDL tables, fields and foreign keys", "candidates": candidates}]
 

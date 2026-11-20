@@ -40,6 +40,10 @@ def main(argv=None):
     state.add_argument("--summary", action="store_true", help="Compact identities, revisions and pending work")
     inspect = commands.add_parser("inspect", help="Inspect model dependency closure and authoring gaps; read only")
     inspect.add_argument("--id", action="append", dest="asset_ids")
+    hints = commands.add_parser("relation-hints", help="Find relationship leads from current physical metadata; read only")
+    hints.add_argument("--id", help="Show leads touching this dataset asset ID")
+    hints.add_argument("--limit", type=int, default=20)
+    hints.add_argument("--offset", type=int, default=0)
     connection = commands.add_parser("connect", help="Register a metadata-only connection; credentials use environment variable names")
     connection.add_argument("--file", required=True, help="Connection profile JSON, never a password or SQL")
     for command in ("scan", "regress"):
@@ -71,6 +75,7 @@ def main(argv=None):
     export.add_argument("--include-execution", action="store_true", help="Also include existing execution declarations; does not authorize execution")
     material = commands.add_parser("import", help="Register material without overwriting the graph")
     material.add_argument("--file", required=True)
+    material.add_argument("--encoding", choices=("utf-8-sig", "utf-16", "gb18030"), help="Text input encoding. Default: UTF-8 or UTF-16 BOM. Choose gb18030 for GBK exports.")
     material.add_argument("--domain", default="")
     material.add_argument("--scope", default="")
     material.add_argument("--effective-from", help="Declared start date for this source revision (YYYY-MM-DD)")
@@ -118,7 +123,7 @@ def main(argv=None):
     picture.add_argument("--id", help="Active asset to focus, including a relationship")
     picture.add_argument("--out", required=True, help="New local .svg file")
     args = parser.parse_args(argv)
-    if args.command in {"state", "inspect", "check", "impact", "receipt", "export", "handoff", "retire", "separate", "graph-image"} and not (Path(args.project) / "project.sqlite").is_file():
+    if args.command in {"state", "inspect", "relation-hints", "check", "impact", "receipt", "export", "handoff", "retire", "separate", "graph-image"} and not (Path(args.project) / "project.sqlite").is_file():
         print(json.dumps({"ok": False, "status": "project_not_found", "error": "No project.sqlite here; check --project or import a schema first / 未找到项目，请核对路径或先导入结构"}, ensure_ascii=False))
         return 2
     store = Store(args.project)
@@ -143,6 +148,16 @@ def main(argv=None):
             from workbench.authoring_inspect import inspect_model
             current = service.state()
             result = {"revision": current["revision"], **inspect_model(current["assets"], current["sources"], asset_ids=args.asset_ids)}
+        elif args.command == "relation-hints":
+            from workbench.knowledge import containers
+            from workbench.relation_hints import relation_hints
+            current = store.read(args.revision)
+            semantic, knowledge = containers(current["document"])
+            result = {"revision": current["revision"], **relation_hints(
+                semantic["assets"], knowledge["sources"], args.id, args.limit, args.offset)}
+            result["editor_argv_prefix"] = [sys.executable, str(Path(__file__).with_name("start.py")),
+                                           "--project", str(Path(args.project).resolve()), "--language", args.language]
+            result["editor_focus_argument"] = "--focus"
         elif args.command == "connect":
             result = service.metadata_connect({**req, "connection": json.loads(Path(args.file).read_text(encoding="utf-8-sig"))})
         elif args.command in {"scan", "regress"}:
@@ -207,6 +222,7 @@ def main(argv=None):
             path = Path(args.file)
             result = service.import_material({**req, "filename": path.name, "content_base64": base64.b64encode(path.read_bytes()).decode(),
                 "domain": args.domain, "scope": args.scope, "language": args.language, "source_id": args.source_id, "distinct_source": args.distinct_source,
+                **({"options": {"encoding": args.encoding}} if args.encoding else {}),
                 **{key: getattr(args, key) for key in ("effective_from", "effective_to") if getattr(args, key) is not None},
                 **({"source_key": args.source_key} if args.source_key is not None else {}),
                 "seed_draft": args.seed_draft})
@@ -258,6 +274,11 @@ def main(argv=None):
                 "optional_editor_argv": [sys.executable, str(Path(__file__).with_name("start.py")), "--project", str(Path(args.project).resolve()), "--language", args.language]}}
             receipt = result["result"]
             seeded = receipt.get("seeded") or {}
+            counts = seeded.get("counts", {})
+            if counts.get("dataset") and counts.get("relation", 0) * 4 <= counts["dataset"]:
+                receipt["optional_relation_hints_argv"] = [
+                    sys.executable, str(Path(__file__).resolve()), "--project", str(Path(args.project).resolve()),
+                    "--language", args.language, "relation-hints"]
             if not args.full_output and len(seeded.get("asset_ids", [])) > 100:
                 receipt["seeded"] = {**{k:v for k,v in seeded.items() if k!="asset_ids"},
                                     "asset_id_count": len(seeded["asset_ids"]), "ids_omitted": True}

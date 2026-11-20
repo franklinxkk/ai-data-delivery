@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.8
+
+- 导入时定位缺逗号、错误主键和重名列，保留扩展字段类型，区分带点的表名和库表限定名。GBK 文件可显式选择编码重试。
+- 无外键或少外键的库可用 `relation-hints` 查看字段线索与来源。确认、按范围导出及离线复核都会检查物理连接字段，草稿保留未决问题。
+- 在同一画布上建对象、选两端连线，保存前可按一句话核对关系、交换方向。普通对象只填名称就能保存草稿。
+- 首次导入表结构先显示表和外键。表内字段可以展开、搜索、逐个定位，参与独立业务关系的字段保留在图上。
+- Bring the graph into the first viewport on desktop and narrow screens. Search for an object, inspect its neighbors, and use the same editing controls in full screen. Keyboard users can pick both ends of a relationship and cancel with Escape.
+
 ## 0.3.7
 
 - Material tasks accept a temporary question or explicit roots, explain source recommendations across jurisdictions and retain explicit full-model access.

@@ -123,6 +123,130 @@ CREATE TABLE vehicle(
         self.assertIn('FOREIGN KEY', fragment['text'])
         self.assertEqual(result['structure']['tables'][0]['source_file'], '结构.sql')
 
+    def test_ddl_does_not_promote_missing_comma_or_invalid_primary_key(self):
+        sql = b"""
+CREATE TABLE bad(a INTEGER b INT PRIMARY KEY);
+CREATE TABLE also_bad(a INTEGER PRIMARY KEY(a));
+CREATE TABLE absent(a INTEGER, PRIMARY KEY(missing));
+CREATE TABLE repeated(a INTEGER, PRIMARY KEY(a,a));
+CREATE TABLE double_pk(a INTEGER PRIMARY KEY, PRIMARY KEY(a));
+CREATE TABLE valid(a INTEGER, b INTEGER, CONSTRAINT named PRIMARY KEY(b,a));
+CREATE TABLE inline_valid(a INTEGER PRIMARY KEY);
+"""
+        result = parse_material("schema.sql", sql)
+        tables = {table["name"]: table for table in result["structure"]["tables"]}
+        self.assertEqual(set(tables), {"absent", "repeated", "double_pk", "valid", "inline_valid"})
+        self.assertEqual(result["status"], "partial")
+        self.assertTrue(any("bad" in warning and "逗号" in warning for warning in result["warnings"]))
+        for name in ("absent", "repeated", "double_pk"):
+            self.assertTrue(tables[name]["primary_key_invalid"])
+            self.assertEqual(tables[name]["pk_guess"], [])
+            self.assertFalse(any(column["pk"] for column in tables[name]["columns"]))
+        self.assertEqual(tables["valid"]["pk_guess"], ["b", "a"])
+        self.assertEqual(tables["inline_valid"]["pk_guess"], ["a"])
+
+    def test_ddl_identical_foreign_key_declarations_have_distinct_evidence(self):
+        sql = (b"CREATE TABLE t(id INT PRIMARY KEY); CREATE TABLE child(a INT, "
+               b"FOREIGN KEY(a) REFERENCES t(id), FOREIGN KEY(a) REFERENCES t(id));")
+        result = parse_material("schema.sql", sql)
+        fragments = [f for f in result["fragments"] if f["location"].get("part") == "foreign_key"]
+        self.assertEqual(len(fragments), 2)
+        first, second = fragments
+        self.assertEqual(first["text"], second["text"])
+        self.assertEqual(first["id"], "f_9f747a84b48efdc968f35563")
+        self.assertNotEqual(first["id"], second["id"])
+        self.assertNotIn("statement_offset", first["location"])
+        statement = sql.split(b";")[1]
+        self.assertEqual(second["location"]["statement_offset"], statement.rindex(b"FOREIGN KEY"))
+
+    def test_ddl_table_clauses_do_not_invent_columns(self):
+        result = parse_material("schema.sql", b"""
+CREATE TABLE indexed (id INT PRIMARY KEY, title TEXT, pt GEOMETRY,
+    FULLTEXT KEY ft (title), SPATIAL INDEX sp (pt), EXCLUDE USING gist (pt WITH &&));
+CREATE TABLE derived (LIKE base.catalog INCLUDING DEFAULTS, additional INT);
+""")
+        indexed, derived = result["structure"]["tables"]
+        self.assertEqual([f["name"] for f in indexed["columns"]], ["id", "title", "pt"])
+        self.assertTrue(indexed["columns_complete"])
+        self.assertEqual([f["name"] for f in derived["columns"]], ["additional"])
+        self.assertFalse(derived["columns_complete"])
+        self.assertTrue(any("继承列未展开" in message for message in result["warnings"]))
+        self.assertTrue(any("FULLTEXT KEY" in message for message in result["warnings"]))
+
+    def test_mysql_primary_key_index_method_and_order(self):
+        result = parse_material("mysql.sql", b"""
+CREATE TABLE t1 (a INT, b INT, PRIMARY KEY (b DESC, a ASC) USING BTREE);
+CREATE TABLE t2 (a INT, CONSTRAINT pk PRIMARY KEY USING HASH (`a`));
+CREATE TABLE t3 (a VARCHAR(16), PRIMARY KEY (a(3)) USING BTREE);
+CREATE TABLE t4 (a INT, PRIMARY KEY ((abs(a))) USING BTREE);
+CREATE TABLE t5 (a INT, PRIMARY KEY (a) USING CUSTOM);
+CREATE TABLE t6 (a INT, PRIMARY KEY USING HASH (a) USING BTREE);
+""")
+        tables = result["structure"]["tables"]
+        self.assertEqual([t["pk_guess"] for t in tables], [["b", "a"], ["a"], [], [], [], []])
+        self.assertTrue(all(t.get("primary_key_invalid") for t in tables[2:]))
+        self.assertTrue(all(t["columns_complete"] for t in tables))
+        self.assertTrue(any("索引方法重复" in message for message in result["warnings"]))
+
+    def test_mysql_export_notes_follow_schema_risk_and_preserve_source(self):
+        result = parse_material("mysql.sql", b"""
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS=0;
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (id INT, KEY idx (id) USING BTREE) ROW_FORMAT=DYNAMIC AUTO_INCREMENT=4;
+CREATE TABLE t2 (id INT, INDEX idx (id DESC), UNIQUE KEY uq (id))
+    ROW_FORMAT=DYNAMIC AUTO_INCREMENT=9;
+ALTER TABLE t2 ADD PRIMARY KEY (id);
+CREATE TABLE uncertain (id INT, PRIMARY KEY (missing));
+""")
+        warnings = result["warnings"]
+        self.assertEqual(result["status"], "partial")
+        self.assertIn("CREATE TABLE", warnings[0])  # Unmodeled ALTER remains a separate issue.
+        self.assertIn("主键", warnings[1])
+        self.assertTrue(any("普通索引声明共 2 条" in message for message in warnings[2:]))
+        self.assertTrue(any("唯一索引声明共 1 条" in message for message in warnings[2:]))
+        self.assertTrue(any("SET 声明共 2 条" in message for message in warnings[2:]))
+        self.assertTrue(any("ROW_FORMAT=DYNAMIC 出现 2 次" in message for message in warnings[2:]))
+        self.assertTrue(any("AUTO_INCREMENT 出现 2 次" in message for message in warnings[2:]))
+        self.assertTrue(any("ALTER TABLE" in item["text"] for item in result["fragments"]))
+        self.assertTrue(any("AUTO_INCREMENT=9" in item["text"] for item in result["fragments"]))
+
+    def test_ddl_preserves_extended_types_and_distinct_qualified_names(self):
+        serial = parse_material("inventory.sql", b'CREATE TABLE "public"."ledger" (id SERIAL PRIMARY KEY);')
+        self.assertEqual(serial["structure"]["tables"][0]["pk_guess"], ["id"])
+        self.assertTrue(any("SERIAL" in msg for msg in serial["warnings"]))
+        sql = b"""
+CREATE TABLE main.b(id INTEGER PRIMARY KEY);
+CREATE TABLE "main.b"(id INTEGER PRIMARY KEY);
+CREATE TABLE child(
+    x INT REFERENCES main.b(id), y INT REFERENCES `main.b`(id),
+    tags Integer[], began timestamp with time zone, score DOUBLE PRECISION
+);
+"""
+        result = parse_material("schema.sql", sql)
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual([item["to"] for item in result["structure"]["relationships"]],
+                         ["main.b", '"main.b"'])
+        fields = result["structure"]["tables"][-1]["columns"]
+        self.assertEqual([field["type"] for field in fields[2:]],
+                         ["INTEGER[]", "TIMESTAMP WITH TIME ZONE", "DOUBLE PRECISION"])
+        self.assertEqual([field["raw_type"] for field in fields[2:]],
+                         ["Integer[]", "timestamp with time zone", "DOUBLE PRECISION"])
+        self.assertEqual(sum("未完全解释" in warning for warning in result["warnings"]), 3)
+
+    def test_ddl_warns_about_unknown_options_and_groups_common_options_after_errors(self):
+        sql = b"""
+CREATE TABLE a(id INT, PRIMARY KEY(missing)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE b(id INT) ENGINE=innodb CHARACTER SET utf8mb4 EXTRA_FEATURE=1;
+"""
+        result = parse_material("schema.sql", sql)
+        warnings = result["warnings"]
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(len(warnings), 4)
+        self.assertIn("主键", warnings[0])
+        self.assertIn("EXTRA_FEATURE=1", warnings[1])
+        self.assertTrue(all("出现 2 次" in message for message in warnings[-2:]))
+
     def test_ddl_literals_never_create_fake_keys(self):
         sql = '''CREATE TABLE "vehicle records" (
  id INTEGER,

@@ -37,7 +37,7 @@ try{
  // Edit the actual dependency through the graph UI, not a private database write.
  await page.locator('nav [data-page=graph]').click();await page.locator('#kw-canvas-view').selectOption('all');
  await page.locator('[data-kw-node="demo.scope"]').dblclick();await page.locator('#kw-asset-fields').waitFor();
- const aliases=page.locator('#kw-asset-fields [data-field=aliases]');await aliases.fill((await aliases.inputValue())+', lab scope reviewed '+Date.now());
+ await page.locator('#kw-asset-fields [data-extra-settings] > summary').click();const aliases=page.locator('#kw-asset-fields [data-field=aliases]');await aliases.fill((await aliases.inputValue())+', lab scope reviewed '+Date.now());
  await page.getByRole('button',{name:'Save and confirm',exact:true}).click();await page.locator('dialog[open]').waitFor({state:'hidden'});
  await page.goto(origin+'/?lang=zh#questions');await page.locator(`[data-sq=open][data-id="${scenario.id}"]`).click();await check();
  await page.getByRole('heading',{name:'验收记录 · 已变化，待复验',exact:true}).waitFor();

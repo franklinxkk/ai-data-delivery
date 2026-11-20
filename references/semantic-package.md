@@ -70,11 +70,12 @@ python -X utf8 scripts/semantic_read.py --package "C:\交付资料\交通语义.
 
 范围选择规则：
 
-- `asset_ids` 为空时选择所有知识资产；默认不把 `dataset/field/mapping/physical_fk` 作为根节点。显式选定任何这些资产仍会交付它们。
+- 在建模项目使用 `knowledge.py export` 时，省略 `--id` 会交付全部在用资产，包括表、字段和物理外键。按业务问题交付时，使用该问题已选的根节点。
+- 单独导出物理外键时，工具补齐两端数据表及图中对应的连接字段。字段与完整来源冲突会阻止正式导出，草稿在 `manifest.issues` 中列明原因。来源只覆盖部分字段且无法核实时，包会标明连接键待核实。离线 `verify` 也会根据包内依据检查。
 - 顶层 `refs` 以及关系的 `from/to` 永远是必须依赖。递归补齐至引用闭合，循环去重。遇到跨领域或物理资产仍带上定义，不能为了缩图删掉必需内容。
 - properties.query_plan 中明确声明的数据集、字段、粒度、规则、映射和所选关系也是必需依赖，始终加入上下文与影响追踪。
 - 不自动展开这些依赖的所有邻接关系。因此只选一条规则可以带齐规则所需对象，而不夹带这些对象的无关业务网络。
-- `include_execution` 额外包含物理资产根节点和 `properties.execution` 块。执行块中的 `refs/data_refs` 仅在包含执行块时参与闭合；默认移除整个执行块，并在 `omitted_execution_ids` 中列明。其他业务属性保留。
+- `include_execution` 包含已有的 `properties.execution` 块及其 `refs/data_refs` 依赖。默认省略此块，并在 `omitted_execution_ids` 中列明。其他业务属性保留。
 - `scope.root_ids/dependency_ids/included_ids` 分别说明根节点、自动补入项和最终范围；`omitted_asset_count` 仅相对于输入模型，不代表整个领域的未知知识数量。
 
 从离线包再导出子图只能使用父包已有内容。父包没有携带执行配置时，不能通过参数凭空恢复它。程序读取这些说明不会执行其中的 SQL、脚本、业务动作或 URL。

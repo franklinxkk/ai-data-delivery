@@ -125,6 +125,7 @@ def main():
     p.add_argument('--postgres-port',type=int,default=55432);p.add_argument('--mysql-port',type=int,default=53306)
     p.add_argument('--database',default='metadata_test');p.add_argument('--admin-env',default='METADATA_TEST_ADMIN');p.add_argument('--reader-env',default='METADATA_TEST_PASSWORD')
     args=p.parse_args()
+    args.out = args.out.resolve()
     if args.out.exists() and any(args.out.iterdir()):p.error('Choose a new empty output directory')
     args.out.mkdir(parents=True,exist_ok=True)
     results=[run_domain(e,d,args.out/(e+'-'+d),args) for e in args.engine or ['sqlite','postgresql','mysql'] for d in ['agriculture','traffic','university','finance']]

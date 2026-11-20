@@ -92,6 +92,29 @@ class MetadataTests(unittest.TestCase):
         self.s=KnowledgeService(Store(self.root/'project'))
         self.assertEqual(self.scan()['status'],'unchanged')
 
+    def test_physical_foreign_key_checks_real_catalog_evidence(self):
+        self.accept(self.scan())
+        fk = next(a for a in self.s.state()["assets"] if a.get("relation_type") == "physical_fk")
+        self.call("metadata_regress", connection_id=self.conn)
+        correct = self.call("publish", asset_ids=[fk["id"]])
+        with zipfile.ZipFile(io.BytesIO(self.s.download(correct["snapshot_id"]))) as z:
+            package = SemanticPackage({name: z.read(name) for name in z.namelist()})
+        self.assertEqual(package.verify()["issues"], [])
+        self.assertIn(asset_id(self.conn, "care", "plant_id"), package.index)
+        self.assertIn(asset_id(self.conn, "plant", "id"), package.index)
+        self.assertNotIn(asset_id(self.conn, "plant", "moisture"), package.index)
+
+        fk["properties"]["from_fields"] = ["absent_column"]
+        self.call("edit", asset=fk)
+        with self.assertRaises(ValueError) as failure:
+            self.call("edit", asset=fk, confirm=True)
+        self.assertEqual(failure.exception.details["issues"][0]["code"], "INVALID_FOREIGN_KEY")
+        draft = self.call("publish", asset_ids=[fk["id"]], draft=True)
+        with zipfile.ZipFile(io.BytesIO(self.s.download(draft["snapshot_id"]))) as z:
+            package = SemanticPackage({name: z.read(name) for name in z.namelist()})
+        self.assertIn(("INVALID_FOREIGN_KEY", "absent_column"),
+                      [(issue["code"], issue.get("column")) for issue in package.verify()["issues"]])
+
     def test_manual_column_change_and_stale_external_capture_block_review(self):
         self.accept(self.scan());self.question()
         self.sql('ALTER TABLE plant ADD COLUMN humidity REAL')

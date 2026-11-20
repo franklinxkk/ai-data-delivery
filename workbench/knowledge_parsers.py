@@ -5,6 +5,7 @@ The project service owns source identities, revisions, storage and proposals.
 """
 from __future__ import annotations
 
+from collections import Counter
 import csv
 import hashlib
 import io
@@ -106,11 +107,24 @@ def _text(content, options, fmt):
     return _finish(result)
 
 
+_COMMON_TABLE_OPTION = re.compile(
+    r"(?<!\S)(ENGINE|(?:DEFAULT\s+)?(?:CHARSET|CHARACTER\s+SET)|COLLATE|ROW_FORMAT)"
+    r"\s*=?\s*([\w-]+)(?=\s|$)|(?<!\S)(AUTO_INCREMENT)\s*=\s*\d+(?=\s|$)",
+    re.I)
+_EXPORT_SET = re.compile(
+    r"SET\s+(?:(?:SESSION\s+)?FOREIGN_KEY_CHECKS\s*=\s*[01]|"
+    r"NAMES\s+[\w-]+(?:\s+COLLATE\s+[\w-]+)?)", re.I)
+
+
 def _ddl(content, options, progress=None):
-    from scripts.ingest_ddl import CREATE_RE, COMMENT_RE, extract_table_bodies, identifier, mask_quoted, parse_sql, strip_comments
+    from scripts.ingest_ddl import CREATE_RE, COMMENT_RE, extract_table_bodies, qualified_identifier, mask_quoted, parse_sql, split_columns, strip_comments, QUALIFIED_IDENTIFIER
     text = _decode(content, options)
     clean = strip_comments(text)
     result = _result("ddl", structure={"tables": [], "relationships": []})
+    common_options = {}
+    routine_declarations = Counter()
+    index_counts = Counter()
+    export_drop = re.compile(r'DROP\s+TABLE\s+IF\s+EXISTS\s+' + QUALIFIED_IDENTIFIER, re.I)
     starts, start, quoted, i = [], 0, None, 0
     while i < len(clean):
         c = clean[i]
@@ -144,12 +158,19 @@ def _ddl(content, options, progress=None):
                "line_end": text.count('\n', 0, end) + 1}
         sid = _fragment(result, loc, part)
         if not CREATE_RE.match(masked.lstrip()):
+            statement = masked.strip().removesuffix(';').strip()
+            if _EXPORT_SET.fullmatch(statement):
+                routine_declarations["SET"] += 1
+                continue
+            if export_drop.fullmatch(statement):
+                routine_declarations["DROP TABLE IF EXISTS"] += 1
+                continue
             _warn(result, f"第 {number} 条语句未提取结构：仅支持 SQLite/MySQL CREATE TABLE；原文已保留，未执行 SQL。")
             continue
         tables, failures = parse_sql(part, "material.sql")
         for fail in failures:
             _warn(result, f"第 {number} 条语句 / {fail.get('table', '?')}：{fail['reason']}；请修复该语句后重试。")
-        create_offsets = [(identifier(m.group(1)), m.start()) for m in CREATE_RE.finditer(masked)]
+        create_offsets = [(qualified_identifier(m.group(1)), m.start()) for m in CREATE_RE.finditer(masked)]
         position = 0
         for table in tables:
             matching = next((j for j in range(position, len(create_offsets)) if create_offsets[j][0] == table['name']), position)
@@ -166,21 +187,57 @@ def _ddl(content, options, progress=None):
                 if match:
                     table['comment'] = match.group(1).replace("''", "'")
                     tail = tail[:table_comment.start()] + tail[table_comment.start() + match.end():]
+            remaining = []
+            cursor = 0
+            masked_tail = mask_quoted(tail)
+            for option in _COMMON_TABLE_OPTION.finditer(tail):
+                if masked_tail[option.start():option.end()] != option.group():
+                    continue
+                remaining.append(tail[cursor:option.start()])
+                cursor = option.end()
+                key = (option.group(1) or option.group(3)).upper()
+                if key.endswith(('CHARSET', 'CHARACTER SET')):
+                    key = 'CHARSET'
+                value = option.group(2)
+                identity = (key, value.casefold() if value else None)
+                spelling, count = common_options.get(identity, (option.group() if value else key, 0))
+                common_options[identity] = spelling, count + 1
+            remaining.append(tail[cursor:])
+            tail = ''.join(remaining)
             if tail.strip():
                 _warn(result, f"表 {table['name']} 的附加选项仅保留原文、未解释：{tail.strip()}")
+            index_counts.update(table.get("unmodeled_index_counts", {}))
             for warning in table.get("unsupported", []):
                 _warn(result, f"表 {table['name']}：{warning}")
+            occurrences = {}
+            cursor = opening.end()
+            for definition in split_columns(body):
+                offset = masked.find(definition, cursor)
+                if definition and offset >= 0:
+                    occurrences.setdefault(definition, []).append(offset)
+                    cursor = offset + len(definition)
             for kind, items in (("column", table["columns"]), ("foreign_key", table["foreign_keys"])):
+                used = Counter()
+                locations = set()
                 for item in items:
                     raw = item.pop("raw_definition", "")
-                    offset = masked.find(raw, table_offset)
-                    if offset < 0:
+                    offsets = occurrences.get(raw, ())
+                    index = used[raw]
+                    used[raw] += 1
+                    if index >= len(offsets):
                         item["fragment_id"] = sid
-                    else:
-                        item_loc = {**loc, "part": kind, "table": table["name"],
-                                    "line_start": text.count('\n', 0, begin + offset) + 1,
-                                    "line_end": text.count('\n', 0, begin + offset + len(raw)) + 1}
-                        item["fragment_id"] = _fragment(result, item_loc, part[offset:offset + len(raw)])
+                        continue
+                    offset = offsets[index]
+                    line_start = text.count('\n', 0, begin + offset) + 1
+                    line_end = text.count('\n', 0, begin + offset + len(raw)) + 1
+                    excerpt = part[offset:offset + len(raw)]
+                    item_loc = {**loc, "part": kind, "table": table["name"],
+                                "line_start": line_start, "line_end": line_end}
+                    identity = (line_start, line_end, excerpt)
+                    if identity in locations:
+                        item_loc["statement_offset"] = offset
+                    locations.add(identity)
+                    item["fragment_id"] = _fragment(result, item_loc, excerpt)
             for fk in table["foreign_keys"]:
                 own_fields = {c['name'] for c in table['columns']}
                 valid_source = set(fk['from_columns']) <= own_fields and len(set(fk['from_columns'])) == len(fk['from_columns'])
@@ -222,6 +279,14 @@ def _ddl(content, options, progress=None):
             continue
         checked.append(relation)
     result["structure"]["relationships"] = checked
+    for kind, count in routine_declarations.items():
+        label = "导出会话 SET" if kind == "SET" else kind
+        _warn(result, f"{label} 声明共 {count} 条；原文已保留，未执行 SQL。")
+    for kind, count in index_counts.items():
+        label = "唯一索引" if kind == "unique" else "普通索引"
+        _warn(result, f"{label}声明共 {count} 条；保留原文，未提取索引语义。")
+    for spelling, count in common_options.values():
+        _warn(result, f"附加选项 {spelling} 出现 {count} 次；仅保留原文、未解释。")
     return _finish(result)
 
 

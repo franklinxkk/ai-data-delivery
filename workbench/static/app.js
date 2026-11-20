@@ -52,12 +52,18 @@ async function syncGraph(){if(polling||!state||page!=='graph'||document.hidden)r
 }catch(_){/* manual Refresh remains available */}finally{polling=false;}}
 setInterval(syncGraph,3000);window.addEventListener('focus',syncGraph);
 function go(next) { if(page==='graph'&&next!==page)window.KnowledgeWorkbench.cancelLayout();page=next;location.hash=next;selected=null;connection=null;render(); }
+let renderedNavigation='';
 function render() {
   if(!state)return;
   if(!(state.model_only?menus:[...menus,...legacyMenus]).some(x=>x[0]===page))page='graph';
   const navButton=([id,label])=>btn(`<span class="nav-label">${label}</span>`,'navigate',`data-page="${id}" ${id===page?'aria-current="page"':''}`,id===page?'active':'');
-  $('nav').innerHTML=menus.slice(0,3).map(navButton).join('')+`<details class="tool-more" ${menus.slice(3).some(x=>x[0]===page)?'open':''}><summary>${tr('更多工具')}</summary><div>${menus.slice(3).map(navButton).join('')}${state.model_only?'':navButton(['check',tr('数值与明细核对')])}</div></details>`;
-  $('#breadcrumb').textContent=[...menus,...legacyMenus].find(x=>x[0]===page)[1];
+  const navKey=page+':'+String(state.model_only);
+  if(navKey!==renderedNavigation){
+    const other=menus.slice(3).find(([id])=>id===page);
+    $('nav').innerHTML=menus.slice(0,3).map(navButton).join('')+`<details class="tool-more"><summary>${other?other[1]:tr('更多工具')}</summary><div>${menus.slice(3).map(navButton).join('')}${state.model_only?'':navButton(['check',tr('数值与明细核对')])}</div></details>`;
+    renderedNavigation=navKey;
+  }
+  document.body.dataset.page=page;
   if(page==='connections'){$('#main').innerHTML=window.MetadataWorkbench.render();return;}
   if(page==='questions'){$('#main').innerHTML=window.ScenarioWorkbench.render();return;}
   if(menus.some(x=>x[0]===page)){$('#main').innerHTML=window.KnowledgeWorkbench.render(page);window.KnowledgeWorkbench.mount();return;}
@@ -243,6 +249,18 @@ async function action(button) {
     const u=URL.createObjectURL(await res.blob()),link=document.createElement('a');link.href=u;link.download=button.dataset.type==='backup'?'project-backup.zip':button.dataset.type==='review'?'human-review.html':'semantic-delivery.zip';link.click();setTimeout(()=>URL.revokeObjectURL(u),1000);notify(tr('交付文件已生成'));
   }
 }
+document.addEventListener('click',e=>{
+  const toolsMenu=$('nav .tool-more[open]');
+  if(toolsMenu&&(!toolsMenu.contains(e.target)||e.target.closest('button')))toolsMenu.open=false;
+});
+document.addEventListener('keydown',e=>{
+  const toolsMenu=$('nav .tool-more[open]');
+  if(e.key==='Escape'&&toolsMenu?.contains(e.target)){
+    toolsMenu.open=false;
+    toolsMenu.querySelector('summary').focus();
+    e.preventDefault();
+  }
+});
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-action]');if(!b)return;try{b.disabled=true;await action(b);}catch(err){notify(err.message);}finally{b.disabled=false;}});
 document.addEventListener('click',e=>{if(e.target.closest('[data-close]'))$('#editor').close();const edge=e.target.closest('[data-edge]');if(edge)editAsset(graphMode==='entities'?'relations':'relationships',edge.dataset.edge);});
 $('#refresh').addEventListener('click',()=>reload().catch(e=>notify(e.message)));

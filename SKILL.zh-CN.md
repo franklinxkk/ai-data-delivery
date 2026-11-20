@@ -4,7 +4,7 @@ description: 导入 SQL 或指定库表目录，建立带依据的语义图谱�
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.7
+  version: 0.3.8
   runtime_environment: Python 3.10+ with pinned local dependencies. No model key.
   file_read: Authorized materials, local project and semantic packages.
   file_write: Authorized local project and export paths.
@@ -35,6 +35,7 @@ metadata:
 | 任务 | 接下来使用 |
 | --- | --- |
 | 从 SQL 开始 | `knowledge.py --project DIR import --file SCHEMA.sql --seed-draft`；仅空图生成有来源的物理草稿，不确认业务含义 |
+| 核对缺失的连接 | `relation-hints` 列出值得核对的字段组合与依据。先核对来源范围和业务资料，再决定是否保存关系。 |
 | 看图或编辑 | `start.py --project DIR`；打开同一模型的图谱，结束后 Ctrl+C 关闭服务 |
 | 无问题、无服务导出 | `knowledge.py --project DIR export --out MODEL.zip --draft`；默认全部有效模型，包含表字段；重复 `--id` 可指定范围 |
 | 补充或维护业务语义 | [建模短链](references/modeling.md)：最小业务对象、字段、映射和关系，成组维护，不要求先保存问题 |

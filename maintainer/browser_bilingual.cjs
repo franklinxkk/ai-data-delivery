@@ -32,7 +32,7 @@ const nameInput=page.locator('#kw-asset-fields [data-field=name]'),originalName=
 await nameInput.fill('');await page.getByRole('button',{name:pick('Save and confirm','保存并确认'),exact:true}).click();
 await page.getByText(pick('Enter an asset name.','请填写资产名称'),{exact:true}).waitFor();assert.equal(await nameInput.inputValue(),'');await nameInput.fill(originalName);
 checks.push('Invalid edit is rejected in the selected language and input remains editable');
-const aliases=page.locator('#kw-asset-fields [data-field=aliases]');await aliases.fill((await aliases.inputValue())+', '+pick('Ready to lend','可供外借'));
+await page.locator('#kw-asset-fields [data-extra-settings] > summary').click();const aliases=page.locator('#kw-asset-fields [data-field=aliases]');await aliases.fill((await aliases.inputValue())+', '+pick('Ready to lend','可供外借'));
 await page.getByRole('button',{name:pick('Save and confirm','保存并确认'),exact:true}).click();await page.locator('dialog[open]').waitFor({state:'hidden'});
 await page.reload();await page.locator('[data-kw-node="demo.available"]').waitFor();state=await apiState();assert(state.assets.find(a=>a.id==='demo.available').aliases.includes(pick('Ready to lend','可供外借')));
 checks.push('Edit aliases, save and reload preserve knowledge');

@@ -63,9 +63,13 @@ function boot({state={},helper=createHelper(),api,session=new Map(),local=new Ma
   wb.update({project_id:'vm-project',revision:7,...clone(state)});
   return {wb,main,canvas,svg,inspector,count,error,controls,requests,notices,helper,session,local,
     mount(page='graph'){main.innerHTML=wb.render(page);wb.mount();},
+    key(key,id){
+      const target={closest(selector){return selector==='[data-kw-node]'&&id?{dataset:{kwNode:id}}:null;}};
+      for(const fn of listeners.keydown||[])fn({key,target,preventDefault(){}});
+    },
     async click(kw='publish',data={}){const button={dataset:{kw,...data},closest:()=>null,disabled:false};await listeners.click[0]({target:{closest:selector=>selector==='[data-kw]'?button:null}});},
     async dragNode(id,dx,dy){const selected={dataset:{kwNode:id},classList:{add(){}}};const target={classList:{contains:()=>false},closest:selector=>selector==='#kw-canvas'?canvas:selector==='[data-kw-node]'?selected:null};const start={target,clientX:100,clientY:100,preventDefault(){}};for(const fn of listeners.pointerdown||[])fn(start);for(const fn of listeners.pointermove||[])fn({target,clientX:100+dx,clientY:100+dy});for(const fn of listeners.pointerup||[])await fn({target,clientX:100+dx,clientY:100+dy});},
-    change(id,value){const element={id,value,dataset:{},matches:()=>false,closest:()=>null};for(const fn of listeners.change||[])fn({target:element});},
+    change(id,value){const element={id,value,dataset:{},matches:()=>false,closest:()=>null,hasAttribute:()=>false};for(const fn of listeners.change||[])fn({target:element});},
     input(id,value){const element={id,value,dataset:{},matches:()=>false,closest:()=>null,hasAttribute:()=>false};for(const fn of listeners.input||[])fn({target:element});},
     view(){return JSON.parse(local.get('kw-view:'+(state.project_id||'vm-project'))||'{}');}
   };
@@ -77,11 +81,17 @@ async function checkReadOnlyCanvasActions(){
   const initial=clone(savedLayout),initialAssets=clone(assets);
   const app=boot({savedView:'business',state:{project_id:'canvas-actions',assets,layout:initial}});app.mount();
   const before=positionsOnScreen(app.svg);
-  assert.match(app.main.innerHTML,/aria-expanded="false"[^>]*>展开画布/);
+  assert.match(app.main.innerHTML,/aria-expanded="false"[^>]*>全屏/);
   await app.click('expand-canvas');
   assert.match(app.main.innerHTML,/kw-canvas-expanded/);
-  assert.match(app.main.innerHTML,/aria-expanded="true"[^>]*>退出专注/);
+  assert.match(app.main.innerHTML,/aria-expanded="true"[^>]*>退出全屏/);
   assert.equal(app.view().inspector,false);
+  await app.click('connect');app.key('Enter','left');
+  assert.equal(app.wb.idle(),false,'choosing a source keeps the connection in progress');
+  app.key('Escape');
+  assert.equal(app.wb.idle(),true,'Escape cancels the connection before exiting fullscreen');
+  assert.equal(app.view().expanded,true);
+  assert.equal([...app.svg.innerHTML.matchAll(/data-kw-edge="reverse" tabindex="0"/g)].length,1,'one focusable element per authored relation');
   await app.click('toggle-inspector');assert.match(app.main.innerHTML,/kw-inspector-visible/);
   await app.click('toggle-inspector');assert.equal(app.view().inspector,false);
   await app.click('fit-canvas');
@@ -96,7 +106,7 @@ async function checkReadOnlyCanvasActions(){
   assert.match(app.svg.innerHTML,/kw-edge-group\s+dimmed [^"]*" data-kw-edge="other"/);
   assert.match(app.inspector.innerHTML,/>left</);
   assert.equal(app.view().inspector,true);
-  await app.click('expand-canvas');assert.match(app.main.innerHTML,/aria-expanded="false"[^>]*>展开画布/);
+  await app.click('expand-canvas');assert.match(app.main.innerHTML,/aria-expanded="false"[^>]*>全屏/);
   assert.deepEqual(positionsOnScreen(app.svg),before);
   assert.deepEqual(initial,savedLayout);assert.deepEqual(assets,initialAssets);
   assert.equal(app.requests.length,0);assert.equal(app.helper.calls.layout.length,0);
@@ -248,7 +258,46 @@ async function checkMixedFirstGraph(){
   app.mount();assert.ok(!('metric' in positionsOnScreen(app.svg)));
   console.log('PASS: first mixed graph includes each kind within the page limit and respects subsequent view choices');
 }
+async function checkFieldFolding(){
+  const field=(id,refs)=>({...node(id),kind:'field',refs});
+  const table=id=>({...node(id),kind:'dataset'});
+  const data=[table('tableA'),table('tableB'),field('simple',['tableA']),field('orphan',[]),field('mapped',['tableB']),
+    {...edge('maps','business','mapped'),kind:'mapping'},node('business'),{...edge('fk','tableB','tableA'),relation_type:'physical_fk'}];
+  const app=boot({state:{project_id:'fold',assets:data}});app.mount();await tick();
+  assert.deepEqual(Object.keys(positionsOnScreen(app.svg)).sort(),['business','mapped','orphan','tableA','tableB']);
+  assert.match(app.svg.innerHTML,/data-kw-edge="fk" tabindex="0"/);
+  assert.match(app.count.textContent,/已收起 1 个表字段/);
+  await app.click('toggle-fields');assert.ok('simple' in positionsOnScreen(app.svg));
+  const reopen=boot({state:{project_id:'fold',assets:data},local:app.local});reopen.mount();
+  assert.ok('simple' in positionsOnScreen(reopen.svg));
+  await app.click('toggle-fields');
+  app.input('kw-graph-search','simple');assert.deepEqual(Object.keys(positionsOnScreen(app.svg)),['simple']);
+  app.input('kw-graph-search','');app.change('kw-kind','field');
+  assert.deepEqual(Object.keys(positionsOnScreen(app.svg)).sort(),['mapped','orphan','simple']);
+  assert.equal(app.requests.length,0);
+  console.log('PASS: owned columns fold without hiding explicit mappings, orphan fields, searches, or the table foreign key; preference survives reopening');
+}
+function checkRelationHintsPrompt(){
+  const table=i=>({...node('table'+i),kind:'dataset',status:'draft',evidence:[{source_id:'sql'}]});
+  const fk=i=>({...edge('fk'+i,'table'+i,'table'+(i+1)),relation_type:'physical_fk'});
+  const inventory=(tables,keys)=>[...Array.from({length:tables},(_,i)=>table(i)),
+    ...Array.from({length:keys},(_,i)=>fk(i)),...assets];
+  const state={project_directory:"D:\\含空格 path\\a'&b",sources:[{id:'sql',format:'ddl'}],
+    assets:inventory(50,3)};
+  const app=boot({state});app.mount();
+  assert.match(app.main.innerHTML,/查找可核对的关系线索/);
+  assert.match(app.main.innerHTML,/--project.*relation-hints/);
+  assert.ok(app.main.innerHTML.includes('a&#39;&amp;b'));
+  app.wb.update({...state,assets:inventory(331,6)});
+  assert.match(app.wb.render('graph'),/copy-relation-hints/);
+  app.wb.update({...state,assets:inventory(50,20)});
+  assert.doesNotMatch(app.wb.render('graph'),/copy-relation-hints/);
+  assert.equal(app.requests.length,0);
+  console.log('PASS: a sparse physical graph offers optional relationship review with an escaped project path');
+}
 (async()=>{await checkMixedFirstGraph();await checkQuestionDeliveryScope();
+  checkRelationHintsPrompt();
+  await checkFieldFolding();
   await checkPublishRecovery();await checkReadOnlyCanvasActions();await checkSavedArrangementAndUndo();
   await checkFailedWriteAndRetry();await checkStaleCalculation();await checkAutomaticPreview();
   await checkNewViewPreviewAfterPendingCalculation();await checkFirstDragAndPinPersistence();

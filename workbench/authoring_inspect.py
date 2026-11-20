@@ -69,9 +69,8 @@ def modeling_guidance(stage, assets, knowledge, event, result):
                     focus = root
                     break
     if result.get("seeded") and not issue:
-        # Small imports already fit. A dense import should first open a meaningful connected fragment.
-        focus = (next((a for a in changed if a["kind"] == "relation"), None)
-                 or next((a for a in changed if a["kind"] == "dataset"), None)) if len(changed) > 100 else None
+        # A schema import has no operator-selected subject. Open the table overview.
+        focus = None
     action = ("repair_material" if result.get("parsed", {}).get("status") in {"failed", "needs_conversion"}
               else "review_candidates" if groups else "review_evidence" if issue else "choose_business_question_or_export" if result.get("seeded")
               else "interpret_material" if stage == "import" and result.get("batch_id") else "inspect_change" if changed else "none")
@@ -122,6 +121,12 @@ def inspect_model(assets, sources, *, asset_ids=None):
             issue("DECLARED_KNOWLEDGE_GAP", [aid], "Review the declared gaps for this question / 核对当前问题依赖的已知缺口",
                   questions=properties["knowledge_gaps"])
 
+    from workbench.semantic_package import _source_index, physical_fk_issues
+    for problem in physical_fk_issues(index, {}, _source_index([s for s in sources if s.get("format") in {"ddl", "metadata"}]), selected=required):
+        details = dict(problem)
+        code, aid, message = (details.pop(key) for key in ("code", "asset_id", "message"))
+        issue(code, [aid], message, severity=details.pop("severity", "blocker"), **details)
+
     # Dataset membership comes only from explicit field references, never names.
     field_tables = {aid: {ref for ref in a.get('refs', []) if ref in index and index[ref]['kind'] == 'dataset'}
                     for aid, a in index.items() if a['kind'] == 'field'}
@@ -149,19 +154,16 @@ def inspect_model(assets, sources, *, asset_ids=None):
             needed = []
             for endpoint, field_key in [('from', 'from_fields'), ('to', 'to_fields')]:
                 table_id = a.get(endpoint)
-                for column in a.get('properties', {}).get(field_key, []):
+                columns = a.get('properties', {}).get(field_key)
+                for column in columns if isinstance(columns, list) else []:
                     matches = [fid for fid, tables in field_tables.items() if table_id in tables
-                               and index[fid].get('properties', {}).get('column') == column]
-                    if not matches:
-                        issue('UNRESOLVED_JOIN_KEY', [a['id']],
-                              'A declared join key has no matching field asset; recover its source definition / '
-                              '已声明连接键没有对应字段资产，请核对来源并补齐定义',
-                              dataset_id=table_id, column=column)
+                               and index[fid].get("status") != "retired"
+                               and index[fid].get("properties", {}).get("column") == column]
                     needed += [fid for fid in matches if fid not in required]
             if needed:
                 issue('JOIN_KEYS_OUTSIDE_CONTEXT', needed,
-                      'Selected physical relation omits its declared key fields; include those fields explicitly / '
-                      '已选物理关系的连接字段未进入上下文；请显式引用', relation_id=a['id'])
+                      'Some key fields are outside the explicitly selected graph; scoped export includes them / '
+                      '部分连接字段位于显式选择范围外；按范围导出时会自动纳入', relation_id=a['id'])
     if relation_candidates:
         issue('RELATIONS_OUTSIDE_CONTEXT', relation_candidates,
               'Existing links between selected endpoints are omitted. Review their purpose before adding refs; '

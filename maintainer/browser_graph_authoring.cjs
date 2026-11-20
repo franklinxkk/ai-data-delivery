@@ -50,9 +50,11 @@ async function write(page,route,payload){
     await write(page,'edit',{asset:[{...entity(start,'工单','整改工单'),evidence},
       {...entity(other,'企业','被检查单位'),evidence},{...entity('owner'+stamp,'企业','整改责任单位'),evidence}]});
     await page.reload();await page.waitForLoadState('networkidle');
-    await page.locator('[data-kw=create][data-kind=relation]').click();
+    await page.locator('.kw-tool-menu').filter({has:page.locator('[data-kw=create][data-kind=relation]')}).locator('summary').click();
+    await page.locator('[data-kw=create][data-kind=relation]:visible').click();
     const form=page.locator('#kw-form');
-    await form.locator('[data-field=name]').fill('流转至复核人');
+    assert.equal(await form.locator('[data-field=name]').isVisible(),false,'A relationship only needs one visible label');
+    assert.equal(await form.locator('[data-field=from]').evaluate(el=>el===document.activeElement),true);
     await form.locator('[data-field=predicate]').fill('提交复核');
     await form.locator('[data-field=from]').selectOption(start);
     const candidates=await form.locator('[data-field=to] option').allTextContents();
@@ -62,13 +64,26 @@ async function write(page,route,payload){
     await creator.locator('input').fill('复核人');await creator.locator('button').click();
     await page.waitForFunction(()=>document.querySelector('[data-field=to]').selectedOptions[0]?.text.includes('复核人'));
     const created=await form.locator('[data-field=to]').inputValue();
-    assert.equal(await form.locator('[data-field=name]').inputValue(),'流转至复核人');
+    assert.ok((await form.locator('[data-relation-preview]').innerText()).includes('工单 → 提交复核 → 复核人'));
+    await form.locator('[data-kw=swap-ends]').click();
+    assert.equal(await form.locator('[data-field=from]').inputValue(),created);
+    assert.ok((await form.locator('[data-relation-preview]').innerText()).includes('复核人 → 提交复核 → 工单'));
+    await form.locator('[data-kw=swap-ends]').click();
+    await form.locator('[data-field=definition]').fill('由复核人检查登记的整改工单。');
+    await form.locator('[data-confirm-fields] summary').click();
+    await form.locator('[data-field=domain]').fill('');
+    await form.locator('[data-confirm-fields] summary').click();
+    await form.locator('button[value=confirm]').click();
+    assert.equal(await form.locator('[data-confirm-fields]').evaluate(d=>d.open),true);
+    assert.equal(await form.locator('[data-field=domain]').evaluate(d=>d===document.activeElement),true);
+    assert.ok((await form.locator('#kw-dialog-error').innerText()).includes('业务分类'));
+    await page.screenshot({path:path.join(out,'relation-form-validation.png')});
     await form.locator('button[value=draft]').click();await page.locator('#kw-dialog').waitFor({state:'hidden'});
-    const saved=await api(page,'state'),localEdge=saved.assets.find(a=>a.name==='流转至复核人');
+    const saved=await api(page,'state'),localEdge=saved.assets.find(a=>a.name==='提交复核');
     assert.equal(localEdge.to,created);assert.equal(localEdge.from,start);assert.equal(saved.assets.find(a=>a.id===created).status,'draft');
     assert.equal(new URL(page.url()).searchParams.get('focus'),localEdge.id);
     await page.locator('[data-kw=expand-canvas]').click();
-    await page.locator('[data-kw=toggle-inspector]').click();
+    if(!await page.locator('#kw-inspector [data-kw=edit]').isVisible())await page.locator('[data-kw=toggle-inspector]').click();
     await page.locator('#kw-inspector [data-kw=edit]').click();
     await form.locator('[data-field=definition]').fill('未提交的描述');
     await form.locator('details').filter({has:page.locator('#kw-cite-source')}).locator('summary').click();
@@ -117,6 +132,46 @@ async function write(page,route,payload){
     const layout=(await api(focused,'state')).layout;
     assert.ok(Object.keys(layout).filter(key=>key.startsWith('semantic:all:')).length>=24,
       'Completed worker result saved node positions: '+JSON.stringify({count:Object.keys(layout).length,toast:await focused.locator('#toast').innerText(),errors}));
+    const table=initial.assets.find(a=>a.kind==='dataset');
+    const additionalFields=Array.from({length:13},(_,i)=>({
+      ...entity('reviewfield'+i,'审查字段 '+i,'用于字段检索的样例'),kind:'field',refs:[table.id],
+      properties:{column:'review_column_'+i,value_type:'TEXT'}
+    }));
+    await write(focused,'edit',{asset:additionalFields});
+    await focused.goto(origin+'/?lang=zh&focus='+encodeURIComponent(table.id)+'#graph');
+    const columns=focused.locator('[data-table-fields]');
+    await columns.waitFor();
+    assert.equal(await columns.locator('.kw-table-field').count(),12);
+    await columns.locator('[data-kw=more-table-fields]').click();
+    assert.ok(await columns.locator('.kw-table-field').count()>12);
+    await columns.getByRole('searchbox').fill('review_column_10');
+    assert.equal(await columns.locator('.kw-table-field').count(),1);
+    await columns.locator('.kw-table-field').click();
+    await focused.waitForURL(url=>url.searchParams.get('focus')==='reviewfield10');
+    assert.ok(await focused.locator('[data-kw-node=reviewfield10]').isVisible());
+    assert.ok((await focused.locator('#kw-inspector h2').innerText()).includes('审查字段 10'));
+    await focused.locator('[data-kw=create][data-kind=entity]:visible').click();
+    const object=focused.locator('#kw-form');
+    await object.locator('[data-field=name]').fill('整改责任单位');
+    await object.locator('[data-field=definition]').fill(memo);
+    await object.locator('[data-confirm-fields] summary').click();
+    await object.locator('[data-field=domain]').fill('投诉处理');
+    await object.locator('[data-field=scope]').fill('整改工单');
+    await object.locator('button[value=confirm]').click();
+    assert.equal(await object.locator('#kw-cite-source').evaluate(el=>el===document.activeElement),true);
+    await object.locator('#kw-cite-source').selectOption(source);
+    await object.locator('#kw-cite-fragment').selectOption(fragment.id);
+    await object.locator('#kw-cite-quote').fill('与原文不一致');
+    await object.locator('[data-citation] summary').click();
+    await object.locator('button[value=confirm]').click();
+    assert.equal(await object.locator('#kw-cite-quote').evaluate(el=>el===document.activeElement),true);
+    await object.locator('#kw-cite-quote').fill('责任单位负责整改');
+    await object.locator('button[value=confirm]').click();
+    await focused.locator('#kw-dialog').waitFor({state:'hidden'});
+    const confirmed=(await api(focused,'state')).assets.find(a=>a.name==='整改责任单位');
+    assert.equal(confirmed.status,'confirmed');
+    assert.equal(confirmed.evidence[0].quote,'责任单位负责整改');
+    assert.equal(confirmed.evidence[0].fragment_id,fragment.id);
     assert.deepEqual(errors,[]);
     console.log(JSON.stringify({localEdge:localEdge.id,externalEdge:relation,revision:change.revision,denseNodes:dense.length,denseLinks:edges.length,firstCancelMs,errors}));
   }finally{try{await browser?.close();}finally{server.kill();}}

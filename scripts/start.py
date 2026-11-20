@@ -14,7 +14,7 @@ sys.path.insert(0,str(ROOT))
 sys.path.insert(0,str(ROOT/'scripts'))
 
 
-def prepare(project, demo=None, model=None, ddl=None, sample=None, provenance='unknown', example=None, language='en'):
+def prepare(project, demo=None, model=None, ddl=None, sample=None, provenance='unknown', example=None, language='en', encoding=None):
     from workbench.serve import open_workspace
     if (demo or example or sample) and not (ROOT / 'workbench' / 'service.py').is_file():
         raise ValueError('This exercise requires the source repository. For the packaged example use --ddl examples/semantic-workbench/transport.sql / 旧演练需源码仓库，安装包可用 --ddl 导入交通样例')
@@ -65,6 +65,7 @@ def prepare(project, demo=None, model=None, ddl=None, sample=None, provenance='u
                 result = service.knowledge.import_material({
                     'revision':service.store.read()['revision'], 'operation_id':uuid.uuid4().hex,
                     'filename':path.name, 'content_base64':base64.b64encode(path.read_bytes()).decode(), 'language':language,
+                    **({'options': {'encoding': encoding}} if encoding else {}),
                     'seed_draft': kind == 'ddl'})['result']
                 parsed = result['parsed']
                 if parsed['status'] in {'failed', 'needs_conversion'}:
@@ -84,6 +85,7 @@ def main(argv=None):
     source.add_argument('--demo',nargs='?',const='traffic',choices=['traffic','retail'],help='Optional numeric demo (default: traffic) / 可选数值练习，默认交通' if legacy else argparse.SUPPRESS)
     source.add_argument('--model',help='Import YAML/JSON as material and candidates, not confirmed knowledge / 登记模型材料及候选，不覆盖图谱')
     source.add_argument('--ddl',help='Initialize editable physical drafts from CREATE TABLE, without executing SQL / 解析 DDL 生成可编辑结构草稿，不执行 SQL')
+    p.add_argument('--encoding',choices=['utf-8-sig','utf-16','gb18030'],help='Text input encoding for --ddl or --model; choose gb18030 for GBK')
     p.add_argument('--sample',help='Optional independent SQLite snapshot / 可选独立 SQLite 快照' if legacy else argparse.SUPPRESS)
     p.add_argument('--provenance',choices=['unknown','demo','deidentified','production'],default='unknown',help=None if legacy else argparse.SUPPRESS)
     p.add_argument('--prepare-only',action='store_true',help='Prepare project without starting server / 仅准备项目，不启动服务')
@@ -94,7 +96,7 @@ def main(argv=None):
     a=p.parse_args(argv)
     if not 0<=a.port<=65535:p.error('port 必须在0–65535之间')
     try:
-        _,result=prepare(a.project,a.demo,a.model,a.ddl,a.sample,a.provenance,a.example,a.language)
+        _,result=prepare(a.project,a.demo,a.model,a.ddl,a.sample,a.provenance,a.example,a.language,a.encoding)
         print(json.dumps(result,ensure_ascii=False),flush=True)
         if a.prepare_only:
             import shlex
