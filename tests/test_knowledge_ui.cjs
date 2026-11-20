@@ -45,7 +45,8 @@ function createHelper(){
   };
   return {helper,calls,controls};
 }
-function boot({state={},helper=createHelper(),api,session=new Map(),local=new Map()}={}){
+function boot({state={},helper=createHelper(),api,session=new Map(),local=new Map(),savedView}={}){
+  if(savedView)local.set('kw-view:'+state.project_id,JSON.stringify({view:savedView}));
   const listeners={},requests=[],notices=[];
   const main={innerHTML:''},canvas={clientWidth:820,clientHeight:500,scrollLeft:0,scrollTop:0};
   const svg={style:{},dataset:{},innerHTML:'',setAttribute(name,value){this[name]=value;},querySelectorAll:()=>[],createSVGPoint(){return {x:0,y:0,matrixTransform(){return {x:this.x,y:this.y};}};},getScreenCTM(){return {inverse(){return {};}};}};
@@ -74,7 +75,7 @@ function positionsOnScreen(svg){
 }
 async function checkReadOnlyCanvasActions(){
   const initial=clone(savedLayout),initialAssets=clone(assets);
-  const app=boot({state:{project_id:'canvas-actions',assets,layout:initial}});app.mount();
+  const app=boot({savedView:'business',state:{project_id:'canvas-actions',assets,layout:initial}});app.mount();
   const before=positionsOnScreen(app.svg);
   assert.match(app.main.innerHTML,/aria-expanded="false"[^>]*>展开画布/);
   await app.click('expand-canvas');
@@ -102,7 +103,7 @@ async function checkReadOnlyCanvasActions(){
   console.log('PASS: focus/exit, details, fit, zoom and selection preserve saved layout and semantic assets');
 }
 async function checkSavedArrangementAndUndo(){
-  const app=boot({state:{project_id:'arrangement',assets,layout:savedLayout}});app.mount();
+  const app=boot({savedView:'business',state:{project_id:'arrangement',assets,layout:savedLayout}});app.mount();
   const before=positionsOnScreen(app.svg);
   await app.click('fix',{id:'left'});
   assert.equal(app.requests.length,1);assert.deepEqual(app.requests[0].request.positions,savedLayout);
@@ -126,7 +127,7 @@ async function checkSavedArrangementAndUndo(){
 }
 async function checkFailedWriteAndRetry(){
   let rejectWrite=true;
-  const app=boot({state:{project_id:'failed-write',assets,layout:savedLayout},api:async(path)=>{assert.equal(path,'layout');if(rejectWrite)throw Error('Storage unavailable');return {};}});app.mount();
+  const app=boot({savedView:'business',state:{project_id:'failed-write',assets,layout:savedLayout},api:async(path)=>{assert.equal(path,'layout');if(rejectWrite)throw Error('Storage unavailable');return {};}});app.mount();
   const before=positionsOnScreen(app.svg);
   await app.click('arrange');
   assert.ok(app.notices.some(x=>x.includes('Storage unavailable')));
@@ -142,7 +143,7 @@ async function checkFailedWriteAndRetry(){
 }
 async function checkStaleCalculation(){
   const helper=createHelper();helper.controls.wait=deferred();
-  const app=boot({state:{project_id:'stale-calculation',assets,layout:savedLayout},helper});app.mount();
+  const app=boot({savedView:'business',state:{project_id:'stale-calculation',assets,layout:savedLayout},helper});app.mount();
   const pending=app.click('arrange');await tick();
   assert.equal(helper.calls.layout.length,1);assert.equal(app.controls.arrange.disabled,true);
   app.change('kw-canvas-view','all');const allBefore=positionsOnScreen(app.svg);
@@ -168,7 +169,7 @@ async function checkAutomaticPreview(){
 async function checkNewViewPreviewAfterPendingCalculation(){
   const helper=createHelper();helper.controls.wait=deferred();
   const withMetric=[...assets,{id:'metric',name:'Metric',kind:'metric',status:'confirmed'}];
-  const app=boot({state:{project_id:'new-view-preview',assets:withMetric,layout:savedLayout},helper});
+  const app=boot({savedView:'business',state:{project_id:'new-view-preview',assets:withMetric,layout:savedLayout},helper});
   // Keep positions only in business so the destination view needs an initial preview.
   const business=Object.fromEntries(Object.entries(savedLayout).filter(([key])=>key.startsWith('semantic:business:')));
   app.wb.update({project_id:'new-view-preview',revision:7,assets:withMetric,layout:business});app.mount();
@@ -183,7 +184,7 @@ async function checkNewViewPreviewAfterPendingCalculation(){
   console.log('PASS: switching to an unsaved view during layout still starts that new view preview after the old result is discarded');
 }
 async function checkFirstDragAndPinPersistence(){
-  const dragApp=boot({state:{project_id:'first-drag',assets}});dragApp.mount();await tick();
+  const dragApp=boot({savedView:'business',state:{project_id:'first-drag',assets}});dragApp.mount();await tick();
   const preview=positionsOnScreen(dragApp.svg);await dragApp.dragNode('right',40,25);
   assert.equal(dragApp.requests.length,1);
   const written=dragApp.requests[0].request.positions;
@@ -192,7 +193,7 @@ async function checkFirstDragAndPinPersistence(){
   assert.deepEqual(positionsOnScreen(reopened.svg),Object.fromEntries(Object.entries(preview).map(([id,pos])=>[id,id==='right'?{x:pos.x+40,y:pos.y+25}:pos])));
   assert.equal(reopened.helper.calls.layout.length,0,'Reopening should preserve every visible node, not auto-layout the siblings');
   let fail=true;
-  const pinApp=boot({state:{project_id:'first-pin',assets},api:async(path)=>{assert.equal(path,'layout');if(fail)throw Error('Pin storage unavailable');return {};}});pinApp.mount();await tick();
+  const pinApp=boot({savedView:'business',state:{project_id:'first-pin',assets},api:async(path)=>{assert.equal(path,'layout');if(fail)throw Error('Pin storage unavailable');return {};}});pinApp.mount();await tick();
   const pinPreview=positionsOnScreen(pinApp.svg);await pinApp.click('fix',{id:'left'});
   assert.ok(!pinApp.view().fixed?.includes('left'));assert.deepEqual(positionsOnScreen(pinApp.svg),pinPreview);
   fail=false;await pinApp.click('fix',{id:'left'});assert.ok(pinApp.view().fixed.includes('left'));
@@ -234,7 +235,20 @@ async function checkQuestionDeliveryScope(){
   await restored.click('reset-delivery');await restored.click('publish');assert.deepEqual(restored.requests.at(-1).request.asset_ids,['only','unrelated']);
   console.log('PASS: question delivery scope survives reload; empty never expands without explicit reset');
 }
-(async()=>{await checkQuestionDeliveryScope();
+async function checkMixedFirstGraph(){
+  const inventory=Array.from({length:90},(_,i)=>({...node('column'+i),kind:'field'}));
+  for(const kind of ['entity','metric','rule','dataset'])inventory.push({...node(kind),kind});
+  const app=boot({state:{project_id:'mixed',assets:inventory}});
+  app.mount();await tick();
+  const visible=positionsOnScreen(app.svg);
+  for(const id of ['entity','metric','rule','dataset','column0'])assert.ok(id in visible);
+  assert.equal(Object.keys(visible).length,80);
+  app.change('kw-canvas-view','data');
+  app.wb.update({project_id:'mixed',revision:8,assets:[...inventory,node('new')]});
+  app.mount();assert.ok(!('metric' in positionsOnScreen(app.svg)));
+  console.log('PASS: first mixed graph includes each kind within the page limit and respects subsequent view choices');
+}
+(async()=>{await checkMixedFirstGraph();await checkQuestionDeliveryScope();
   await checkPublishRecovery();await checkReadOnlyCanvasActions();await checkSavedArrangementAndUndo();
   await checkFailedWriteAndRetry();await checkStaleCalculation();await checkAutomaticPreview();
   await checkNewViewPreviewAfterPendingCalculation();await checkFirstDragAndPinPersistence();

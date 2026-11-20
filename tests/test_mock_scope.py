@@ -146,10 +146,12 @@ class RuntimePackageScope(unittest.TestCase):
                  'scripts/rebuild.py', 'scripts/_process.py', 'maintainer/rebuild.py',
                  'maintainer/_process.py', 'mocks/run_mock.py', 'mocks/retail/build_db.py',
                  'mocks/retail/semantic.yaml', 'tests/test_mock_scope.py',
-                 'examples/onboarding/run_demo.py', 'workbench/web/index.html']
+                 'examples/onboarding/run_demo.py', 'examples/semantic-workbench/transport.sql',
+                 'workbench/static/index.html', 'scripts/profile_db.py', 'scripts/run_eval.py',
+                 'starter_packs/finance.yaml', 'workbench/service.py']
         self.assertEqual(runtime_paths(paths), sorted([
             'SKILL.md', 'scripts/start.py', 'scripts/_contract.py',
-            'examples/onboarding/run_demo.py', 'workbench/web/index.html']))
+            'examples/semantic-workbench/transport.sql', 'workbench/static/index.html']))
         self.assertFalse((ROOT / 'scripts' / 'rebuild.py').exists())
         self.assertFalse((ROOT / 'scripts' / '_process.py').exists())
         self.assertTrue((ROOT / 'maintainer' / 'rebuild.py').is_file())

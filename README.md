@@ -1,10 +1,10 @@
-# AI Data Delivery
+# AI Data Delivery · 0.3.7
 
 **Turn an existing database schema into an editable semantic model your Agent can read.**
 
 Interactive modeling: ask your host to show the saved object and its neighborhood after the first import or a material business change. The same graph follows CLI writes while idle and preserves open forms. Create objects or relations directly; attach an imported passage or an operator statement before confirming.
 
-[简体中文](README.zh-CN.md) · [Download 0.3.6 ZIP](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.6) · [Security](SECURITY.md)
+[简体中文](README.zh-CN.md) · [Previous stable release (0.3.6)](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.6) · [Security](SECURITY.md)
 
 Import SQL or read a database catalog to get a draft of tables, fields and foreign keys. Enrich it with business objects, attributes and relationships. Export a source-linked semantic package that another local Agent can read through the CLI.
 
@@ -12,9 +12,13 @@ Import SQL or read a database catalog to get a draft of tables, fields and forei
 
 `Import structure → optionally inspect / edit → export or read locally`
 
+Try asking your Agent, “Show me which company is responsible for resolving this work order.” A company key gives you a structural reference. Add a policy passage to establish the role, see the revised relationship, then let a second Agent trace that definition to a field in the exported package. Checking an individual work order still requires its own evidence.
+
 ![0.3.4 graph editor showing company, vehicle and their fields](https://raw.githubusercontent.com/franklinxkk/ai-data-delivery/main/docs/images/graph-v034-en.png)
 
 *Actual interface using the bundled synthetic transport schema. Dashed nodes are drafts; a physical foreign key does not establish business ownership.*
+
+Start with your own SQL if available. For a trial use the included transport schema, then import `transport-v1.txt` from the same folder to distinguish a vehicle’s company reference from the company’s maintenance responsibility. Add global `--progress` before the command for stage feedback. The write receipt includes the next review question and a local graph location.
 
 ## Two commands to your first model
 
@@ -33,6 +37,10 @@ python -X utf8 scripts/knowledge.py --project "./work/transport" export --out ".
 
 The result contains **2 tables, 5 fields and 1 foreign key**, with source excerpts. SQL is parsed, never executed; business rules are not guessed. Substitute your own DDL path. `--seed-draft` requires an empty model. For an existing model, omit that flag and review change candidates so manual edits remain intact.
 
+Identical DDL bytes produce the same table, field and foreign-key IDs in fresh projects. For evolving exports, set a stable logical source on first import, e.g. `--source-key fleet/prod`, and use separate keys for distinct databases. Existing projects retain their IDs when updating their source with `--source-id`. The editor initially includes every asset kind and restores your chosen project view on return.
+
+To retire assets with history, read the IDs and revision with `state`, then run `python scripts/knowledge.py --project ./work/transport --revision N retire --id ASSET_ID --reason "superseded"`. Substitute `--file ids.json` for `--id ASSET_ID` to retire a JSON array of IDs atomically.
+
 `--draft` exports unconfirmed work with its status and gaps preserved. After reviewing and confirming definitions, omit it to export a confirmed snapshot. The output file must not already exist.
 
 On Windows, if `python` is unavailable, check `py -3 --version` and substitute `py -3`, or use your virtual environment's Python.
@@ -43,7 +51,7 @@ On Windows, if `python` is unavailable, check `py -3 --version` and substitute `
 python -X utf8 scripts/start.py --project "./work/transport"
 ```
 
-Open the printed local URL. A structure-only model opens directly in the data view. Click to inspect sources, double-click to edit, or connect objects to define a relationship. Save drafts freely; confirm definitions after review. CLI and editor use the same local model.
+Open the printed local URL. The first graph includes all asset types. Click to inspect sources, double-click to edit, or connect objects to define a relationship. Save drafts freely; confirm definitions after review. CLI and editor use the same local model.
 
 Use **Export** to download a package, then close the page and press **Ctrl+C** in the terminal to stop the editor. Reopen with the same project path. CLI use requires no server, saved business question or acceptance workflow.
 
@@ -71,9 +79,9 @@ For business semantics, the Agent can save related objects, attributes, mappings
 | Add documents, metrics, rules or mappings | [Short modeling path](references/modeling.md): batch maintenance, dependency review and scoped delivery |
 | Hand off a specific question with its context | [Optional question handoff](references/question-delivery.md): export with `handoff`, read with `brief` |
 | Exchange with Neo4j or ontology-graph-spec | [Offline interchange](references/neo4j-interop.md); Neo4j is optional |
-| Try transport, agriculture, university or finance examples | [Synthetic exercises](examples/cross-domain/README.md), not business policy |
+| Try transport, agriculture, university or finance examples | [Synthetic exercises](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/examples/cross-domain/README.md), not business policy |
 
-This is a modeling and delivery tool. It does not provide multi-user administration, enterprise authorization, production queries or business execution. Core parsing and offline reading are local; optional connections use explicitly authorized endpoints. Parsing has documented limits, and packages can contain business definitions and source excerpts. [Architecture](references/architecture.md) · [Actual validation](references/v0.3.6-release-validation.md)
+This is a modeling and delivery tool. It does not provide multi-user administration, enterprise authorization, production queries or business execution. Core parsing and offline reading are local; optional connections use explicitly authorized endpoints. Parsing has documented limits, and packages can contain business definitions and source excerpts. [Architecture](references/architecture.md) · [Stable 0.3.6 validation](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/references/v0.3.6-release-validation.md)
 
 0.3.6 shows model changes in the open graph, protects existing assets against stale CLI edits, and keeps large-package receipts short. To update an existing asset, pass the revision you actually read before the edit command. Existing models are not automatically migrated or overwritten; back up before upgrading. Report a specific blocked step with sanitized inputs: [feedback](https://github.com/franklinxkk/ai-data-delivery/issues).
 

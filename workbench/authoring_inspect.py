@@ -6,7 +6,79 @@ They never add dependencies, infer a join, confirm knowledge or execute SQL.
 from collections import Counter
 import copy
 
-from workbench.semantic_package import PackageError, asset_dependencies
+from workbench.semantic_package import PackageError, asset_dependencies, count_grain_review
+
+
+def evidence_origin(asset, sources):
+    if asset.get("properties", {}).get("assertion_basis") == "model_inferred":
+        return "model_inferred"
+    origins = set()
+    for item in asset.get("evidence", []):
+        if item.get("type") == "manual":
+            origins.add("operator_statement")
+        elif item.get("source_id") in sources:
+            fmt = sources[item["source_id"]]
+            origins.add(fmt if fmt in {"ddl", "metadata"} else "document")
+    return next(iter(origins)) if len(origins) == 1 else "mixed" if origins else "unattributed"
+
+
+def modeling_guidance(stage, assets, knowledge, event, result):
+    """Bound the feedback to this operation; never present a candidate as an applied edit."""
+    changes = set((event or {}).get("changed_asset_ids", []))
+    changed = [a for a in assets if a["id"] in changes]
+    sources = knowledge["sources"]
+    formats = {s["id"]: s["format"] for s in sources}
+    group_ids = set(result.get("group_ids", []) or result.get("scan", {}).get("group_ids", []))
+    groups = [g for g in knowledge["groups"] if g["id"] in group_ids and g["status"] == "pending" and not result.get("seeded")]
+    candidates = [c["asset"] for g in groups for c in g["candidates"] if c.get("asset")]
+    active = [a for a in changed if a["status"] != "retired"]
+    focus = next((a for a in active if a.get("properties", {}).get("conflict_resolutions")), None)
+    focus = focus or next((a for a in active if a["kind"] == "relation" and a.get("relation_type") != "physical_fk"), None)
+    focus = focus or next((a for a in active if a["kind"] in {"metric", "rule", "mapping"}), None)
+    focus = focus or next((a for a in changed if a["kind"] not in {"field", "dataset"} and a["status"] != "retired"), None)
+    focus = focus or next((a for a in changed if a["status"] != "retired"), None)
+    issue = None
+    for key, code in (("unresolved_conflicts", "conflicting_sources"), ("knowledge_gaps", "missing_evidence")):
+        for a in changed or candidates:
+            value = a.get("properties", {}).get(key)
+            if value and a["status"] != "retired":
+                detail = value[0] if isinstance(value, list) else value
+                if isinstance(detail, dict):
+                    claims = detail.get("claims", [])
+                    detail = " / ".join(str(c.get("claim") or c.get("quote") or "") for c in claims if isinstance(c, dict)) if isinstance(claims, list) else ""
+                issue = {"kind": code, "asset_id": a["id"], "asset_name": a["name"],
+                         "detail": str(detail)[:300]}
+                focus = a
+                break
+        if issue:
+            break
+    if not issue:
+        for a in changed or candidates:
+            if a["status"] == "needs_review" or (a["status"] == "draft" and evidence_origin(a, formats) == "model_inferred"):
+                issue = {"kind": "source_changed" if a["status"] == "needs_review" else "confirm_inference",
+                         "asset_id": a["id"], "asset_name": a["name"]}
+                focus = a
+                break
+    if stage == "edit" and not issue:
+        root = next((a for a in changed if a["kind"] in {"metric", "mapping", "rule"} and a.get("refs") and a["status"] != "retired"), None)
+        if root:
+            for problem in inspect_model(assets, sources, asset_ids=[root["id"]])["issues"]:
+                if problem["code"] in {"MULTI_DATASET_RELATION_REVIEW", "UNRESOLVED_JOIN_KEY", "JOIN_KEYS_OUTSIDE_CONTEXT"}:
+                    issue = {"kind": "review_relationship", "asset_id": root["id"], "detail": problem["message"],
+                             "related_ids": problem["asset_ids"][:5]}
+                    focus = root
+                    break
+    if result.get("seeded") and not issue:
+        # Small imports already fit. A dense import should first open a meaningful connected fragment.
+        focus = (next((a for a in changed if a["kind"] == "relation"), None)
+                 or next((a for a in changed if a["kind"] == "dataset"), None)) if len(changed) > 100 else None
+    action = ("repair_material" if result.get("parsed", {}).get("status") in {"failed", "needs_conversion"}
+              else "review_candidates" if groups else "review_evidence" if issue else "choose_business_question_or_export" if result.get("seeded")
+              else "interpret_material" if stage == "import" and result.get("batch_id") else "inspect_change" if changed else "none")
+    return {"stage": stage, "changed_count": len(changes), "by_kind": dict(Counter(a["kind"] for a in changed)),
+            "evidence_origins": dict(Counter(evidence_origin(a, formats) for a in changed)),
+            "candidate_count": sum(len(g["candidates"]) for g in groups),
+            "next_action": action, "attention": issue, "focus_id": focus["id"] if focus and focus["id"] in changes else None}
 
 
 def inspect_model(assets, sources, *, asset_ids=None):
@@ -42,6 +114,13 @@ def inspect_model(assets, sources, *, asset_ids=None):
         issue('UNCONFIRMED_ASSETS', unconfirmed,
               'Review supported definitions as a group under existing authorization; unknown meaning stays draft / '
               '按已有授权成组核对有据定义；业务含义未知的部分保留草稿', severity='blocker')
+    for aid in sorted(required):
+        properties = index[aid].get("properties", {})
+        if properties.get("unresolved_conflicts"):
+            issue("UNRESOLVED_CONFLICT", [aid], "Compare cited sources and record the applicable scope / 对照各方原文并记录适用范围", severity="blocker")
+        if properties.get("knowledge_gaps"):
+            issue("DECLARED_KNOWLEDGE_GAP", [aid], "Review the declared gaps for this question / 核对当前问题依赖的已知缺口",
+                  questions=properties["knowledge_gaps"])
 
     # Dataset membership comes only from explicit field references, never names.
     field_tables = {aid: {ref for ref in a.get('refs', []) if ref in index and index[ref]['kind'] == 'dataset'}
@@ -109,6 +188,9 @@ def inspect_model(assets, sources, *, asset_ids=None):
     for aid in sorted(required):
         asset = index[aid]
         if asset['kind'] == 'metric':
+            review = count_grain_review(asset)
+            if review:
+                issue(review['code'], [aid], review['message'], grain_ids=review['grain_ids'], aggregation=review['aggregation'])
             values = [asset.get('properties', {}).get(key) for key in ('inclusions', 'exclusions', 'time_scope')]
             if all(isinstance(v, str) and v.strip() for v in values) and len({v.strip() for v in values}) == 1:
                 issue('UNDISTINGUISHED_METRIC_PROPERTIES', [aid],

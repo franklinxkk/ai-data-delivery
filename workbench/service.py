@@ -275,7 +275,6 @@ class Service:
         if len(raw) > 32 * 1024 * 1024:
             raise ValueError("单个导入文件上限 32 MB；大库请先导出小范围 SQLite 快照")
         kind, name = req["kind"], req["filename"]
-        attachment = {"kind": kind, "filename": name, "sha256": hashlib.sha256(raw).hexdigest()}
         model, extra = None, {}
         if kind == "model":
             try:
@@ -317,8 +316,7 @@ class Service:
             extra["note"] = "保留原始指标/规则/案例清单；尚未自动转为可执行模型。请由 skill 对齐现有 ID、口径和来源。"
         else:
             raise ValueError("请选择模型、DDL、SQLite 快照或 JSON 清单")
-        def mutate(doc):
-            nonlocal attachment
+        def mutate(doc, db):
             if model is not None:
                 existing = doc["model"]
                 occupied = any(existing.get(k) for k in ("datasets", "metrics", "ontology"))
@@ -328,14 +326,12 @@ class Service:
             if kind in {'model', 'ddl', 'sample'} and doc.get('tutorial'):
                 doc.pop('tutorial', None)
                 doc['name'] = '语义项目（已更换资料）'
-            attachment = {**saved, **extra}
+            attachment = {**self.store.attach(name, kind, raw, db=db), **extra}
             doc["sources"].append(attachment)
             if kind == "sample":
                 doc["sample"] = attachment
             return attachment
-        # Attach before revision transaction to avoid nested SQLite write locks.
-        saved = self.store.attach(name, kind, raw)
-        return self.change(req, f"导入 {name}", mutate)
+        return self.store.change_with_db(req.get("revision"), req.get("actor", "local"), f"导入 {name}", mutate)
 
     def derive(self, req):
         def mutate(doc):

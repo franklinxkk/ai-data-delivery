@@ -11,18 +11,48 @@ from pathlib import Path
 import secrets
 import socket
 import sys
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlencode
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from workbench.service import Service
-from workbench.store import Conflict
+from workbench.knowledge import KnowledgeService
+from workbench.store import Store, Conflict
 
 STATIC = Path(__file__).with_name("static")
 
 
+def open_workspace(project):
+    if Path(__file__).with_name("service.py").is_file():
+        from workbench.service import Service
+        return Service(project)
+    return ModelWorkspace(project)
+
+
+class ModelWorkspace:
+    """The installed editor only needs the project store and its semantic graph."""
+    def __init__(self, project):
+        self.store = Store(project)
+        self.knowledge = KnowledgeService(self.store)
+
+    def state(self):
+        state = self.store.read()
+        return {"revision": state["revision"], "document": {"name": state["document"]["name"]},
+                "layout": self.store.layouts(), "runs": [], "model_only": True}
+
+    def backup(self):
+        import io, tempfile, zipfile
+        result = io.BytesIO()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "project.sqlite"
+            self.store.backup(path)
+            with zipfile.ZipFile(result, "w", zipfile.ZIP_DEFLATED) as archive:
+                archive.write(path, "project.sqlite")
+        return result.getvalue()
+
+
 def make_server(service, port=0):
     token = secrets.token_urlsafe(32)
+    model_only = isinstance(service, ModelWorkspace)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -76,7 +106,10 @@ def make_server(service, port=0):
                     return self.response(200, service.state())
                 if path == "/api/knowledge/state":
                     from workbench.semantic_package import ENDPOINT_KINDS, REQUIRED_PROPERTIES
-                    return self.response(200, {**service.knowledge.state(), "editor_contract": {
+                    from workbench.authoring_inspect import evidence_origin
+                    model = service.knowledge.state()
+                    formats = {s["id"]: s["format"] for s in model["sources"]}
+                    return self.response(200, {**model, "evidence_origins": {a["id"]: evidence_origin(a, formats) for a in model["assets"]}, "editor_contract": {
                         "ends": {k: [sorted(a), sorted(b)] for k, (a,b) in ENDPOINT_KINDS.items()},
                         "confirm_fields": REQUIRED_PROPERTIES}})
                 if path == "/api/knowledge/revision":
@@ -99,9 +132,11 @@ def make_server(service, port=0):
                 if path.startswith("/api/knowledge/operation/"):
                     receipt = service.store.operation(path.rsplit("/", 1)[-1])
                     return self.response(200, {"found": receipt is not None, "receipt": receipt})
-                if path == "/api/review":
+                if model_only and path == "/api/backup":
+                    return self.response(200, service.backup(), "application/zip", "project-backup.zip")
+                if not model_only and path == "/api/review":
                     return self.response(200, service.review_html(), "text/html; charset=utf-8", "human-review.html")
-                if path in {"/api/export", "/api/backup"}:
+                if not model_only and path in {"/api/export", "/api/backup"}:
                     return self.response(200, service.export(path.endswith("backup")), "application/zip", "project-backup.zip" if path.endswith("backup") else "semantic-delivery.zip")
                 if path == "/":
                     body = (STATIC / "index.html").read_bytes().replace(b"__SESSION_TOKEN__", token.encode())
@@ -127,13 +162,15 @@ def make_server(service, port=0):
                 req = json.loads(self.rfile.read(size))
                 if not isinstance(req, dict):
                     raise ValueError("请求必须是对象")
-                routes = {"/api/import": service.import_file, "/api/edit": service.edit, "/api/answer": service.answer,
+                routes = {"/api/layout": lambda r: service.store.save_layout(r["positions"])}
+                if not model_only:
+                    routes.update({"/api/import": service.import_file, "/api/edit": service.edit, "/api/answer": service.answer,
                           "/api/scene": service.scene, "/api/query": service.query, "/api/feedback": service.feedback,
                           "/api/consumer": service.consumer, "/api/context": service.context,
                           "/api/bundle": service.bundle, "/api/check": lambda _: service.check(),
                           "/api/resolve-feedback": service.resolve_feedback, "/api/derive": service.derive,
-                          "/api/layout": lambda r: service.store.save_layout(r["positions"]),
-                          "/api/restore": lambda r: service.store.restore(r["target"], r["revision"])}
+                          "/api/restore": lambda r: service.store.restore(r["target"], r["revision"]),
+                          "/api/knowledge/example": service.knowledge.example})
                 routes.update({"/api/knowledge/" + name: action for name, action in {
                     "metadata-connect": service.knowledge.metadata_connect, "metadata-scan": service.knowledge.metadata_scan,
                     "metadata-regress": service.knowledge.metadata_regress,
@@ -144,7 +181,7 @@ def make_server(service, port=0):
                     "edit": service.knowledge.edit, "merge": service.knowledge.merge,
                     "separate": service.knowledge.separate, "retire": service.knowledge.retire,
                     "review-source": service.knowledge.review_source, "undo": service.knowledge.undo,
-                    "publish": service.knowledge.publish, "example": service.knowledge.example}.items()})
+                    "publish": service.knowledge.publish}.items()})
                 action = routes.get(urlsplit(self.path).path)
                 if action is None:
                     return self.response(404, {"error": "操作不存在"})
@@ -180,12 +217,15 @@ def main(argv=None):
     ap.add_argument("--project", required=True, help="本地项目目录，自动创建 project.sqlite")
     ap.add_argument("--port", type=int, default=0, help="默认自动选取可用端口")
     ap.add_argument("--language", choices=['en', 'zh'], default='en')
+    ap.add_argument("--focus", help="Show this asset when the graph opens")
+    ap.add_argument("--page", choices=["graph", "knowledge", "review"], default="graph")
     args = ap.parse_args(argv)
-    service = Service(args.project)
+    service = open_workspace(args.project)
     server = make_server(service, args.port)
     address = f"http://127.0.0.1:{server.server_port}"
     (service.store.directory / "server.json").write_text(json.dumps({"url": address, "pid": os.getpid()}), encoding="utf-8")
-    print(f"Semantic Workbench / 语义工作台: {address}/?lang={args.language}\nProject / 项目: {service.store.directory}\nCtrl+C to stop / 停止。", flush=True)
+    query = urlencode({"lang": args.language, **({"focus": args.focus} if args.focus else {})})
+    print(f"Semantic Workbench / 语义工作台: {address}/?{query}#{args.page}\nProject / 项目: {service.store.directory}\nCtrl+C to stop / 停止。", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

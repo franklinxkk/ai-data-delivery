@@ -6,6 +6,7 @@ from pathlib import Path
 import sqlite3
 import os
 import socket
+import ssl
 import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
@@ -225,8 +226,24 @@ class MetadataTests(unittest.TestCase):
                 self.assertIn('READ ONLY',db.execute.call_args_list[0].args[0])
             with patch('pymysql.connect',return_value=db) as connect, patch('workbench.db_metadata._mysql_capture',return_value={'plant':None}):
                 capture({**p,'engine':'mysql','schema':'test'})
-                self.assertTrue(connect.call_args.kwargs['ssl_verify_cert']);self.assertTrue(connect.call_args.kwargs['ssl_verify_identity'])
+                context = connect.call_args.kwargs['ssl']
+                self.assertTrue(context.check_hostname)
+                self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
                 self.assertFalse(connect.call_args.kwargs['local_infile'])
+
+    def test_driver_errors_return_safe_stage_specific_diagnostics(self):
+        p = dict(name='test', engine='mysql', host='db.example.test', database='test', schema='test',
+                 user='reader', password_env='SYNTHETIC', tables=['plant'])
+        wrapped = OSError(2003, 'synthetic-private-text')
+        wrapped.original_exception = ssl.SSLCertVerificationError('synthetic-private-text')
+        cases = [(wrapped, 'tls_certificate'), (OSError(2026, 'private'), 'tls_handshake'),
+                 (OSError(1045, 'private'), 'authentication'), (OSError(1142, 'private'), 'catalog_permission'),
+                 (ValueError('private'), 'Check endpoint')]
+        for error, expected in cases:
+            with self.subTest(expected=expected), patch('workbench.db_metadata._endpoint', return_value=('synthetic', False)), patch('workbench.db_metadata._mysql', side_effect=error):
+                with self.assertRaisesRegex(ValueError, expected) as raised:
+                    capture(p)
+                self.assertNotIn('private', str(raised.exception))
 
     def test_metadata_and_mapped_ipv6_endpoints_are_denied(self):
         for address in ['169.254.169.254','::ffff:169.254.169.254','fd00:ec2::254']:

@@ -58,6 +58,13 @@ class WorkbenchTest(unittest.TestCase):
         c.close()
         self.imported(p.read_bytes(), "sample", provenance="demo")
 
+    def test_rejected_replacement_keeps_only_the_committed_attachment(self):
+        self.imported(b"CREATE TABLE plant(id INT);", "ddl")
+        with self.assertRaises(ValueError):
+            self.imported(b"CREATE TABLE other(id INT);", "ddl")
+        with self.service.store.connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM attachments").fetchone()[0], 1)
+
     def test_roundtrip_unknown_fields_history_and_export(self):
         m = model(); self.imported(m)
         self.service.edit(self.req(kind="datasets", key="tasks", patch={"cn": "任务表"}))

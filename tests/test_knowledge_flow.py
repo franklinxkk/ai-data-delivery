@@ -54,6 +54,26 @@ class KnowledgeFlowTests(unittest.TestCase):
             self.call("publish", asset_ids=["case-count"])
         self.assertEqual(original, self.service.download(old))
 
+    def test_confirmed_object_links_unrelated_vocabulary_and_changed_source_exposes_dependents(self):
+        source, _ = self.source("Calibrate the measuring instrument.")
+        other, imported = self.source("核对标尺。", "地方细则.txt")
+        obj = self.entity("scale", "标尺", source, "measuring instrument")
+        obj["evidence"] += self.evidence(other, "标尺")
+        self.call("edit", asset=obj, confirm=True)
+        dependent = self.entity("inspection", "设备核验", source, "Calibrate")
+        dependent["refs"] = ["scale"]
+        self.call("edit", asset=dependent, confirm=True)
+        result = self.call("task", batch_id=imported["batch_id"])["result"]
+        reason = result["related_sources"][0]["reasons"][0]
+        self.assertEqual((reason["kind"], reason["asset_id"]), ("shared_confirmed_asset", "scale"))
+        self.assertEqual((reason["primary"]["quote"], reason["counterpart"]["quote"]), ("标尺", "measuring instrument"))
+        old, _ = self.package("prior.zip")
+        _, update = self.source("复测仪器。", "地方细则.txt", source_id=other["id"])
+        self.assertEqual(update["affected"], ["scale"])
+        self.assertEqual(update["indirectly_affected"], ["inspection"])
+        self.assertEqual(update["other_cited_sources"]["scale"], [source["id"]])
+        self.assertIn("标尺", json.dumps(read_package(old).sources("scale"), ensure_ascii=False))
+
     def call(self, method, **data):
         req = {"revision": self.store.read()["revision"], "operation_id": uuid.uuid4().hex, **data}
         return getattr(self.service, method)(req)
@@ -302,6 +322,17 @@ class KnowledgeFlowTests(unittest.TestCase):
             self.package(asset_ids=["execution_bundle"], include_execution=True)
         self.call("separate", left_id="vehicle", right_id="vehicle2", reason="验收中明确保留两种适用定义")
         self.package("separated.zip", asset_ids=["bundle"])
+        state = self.service.state()
+        sem = {"assets": state["assets"]}
+        reviewed = next(a for a in sem["assets"] if a["id"] == "vehicle")
+        decision = {"separations": state["separations"], "groups": []}
+        def disputes():
+            return [p for p in self.service.problems(sem, decision) if set(p.get("asset_ids", [])) == {"vehicle", "vehicle2"}]
+        reviewed["evidence"][0]["revision"] += 1
+        reviewed["evidence"][0]["fragment_id"] = "relocated"
+        self.assertEqual(disputes(), [])
+        reviewed["definition"] += "不同的责任范围"
+        self.assertTrue(disputes())
 
     def test_pending_proposal_does_not_automatically_block_confirmed_definition(self):
         source, _ = self.seed()

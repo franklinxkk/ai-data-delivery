@@ -1,32 +1,34 @@
 ---
 name: ai-data-delivery
-description: CLI 优先的本体工具：导入 SQL 或指定数据库目录，维护带来源的语义图谱，导出并由本机 Agent 读取。适用于本体/语义建模、元数据复用、口径核对、指标与 NL2SQL 诊断；不是生产查询网关或通用 PRD 工具。
+description: 导入 SQL 或指定库表目录，建立带依据的语义图谱，核对业务关系，导出给本机 Agent。
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.6
-  runtime_environment: Python 3.10+; install the pinned requirements.txt. Core modeling and package reading are local; optional live adapters need an explicitly authorized
-    destination.
-  language: English / 简体中文；按用户语言回复，原文和业务定义保留原语言。
-  file_read: 用户授权的材料、项目及交付包路径 / user-authorized material, project and package paths
-  file_write: 用户授权的项目与输出路径；候选通过知识服务提交 / authorized project and output paths; proposals through knowledge service
-  network: 知识解析和离线读取不访问网络；可选适配工具只访问显式受控端点，公网需明确授权 / no network for parsing or offline reading; explicit guarded endpoints for optional adapters
-  subprocess: 仅运行本工具的 Python 入口；通用服务重建、进程替换工具不随安装包交付 / bundled Python entrypoints only; no general service rebuild or process replacement in the installed skill
-  environment: 元数据驱动仅读取宿主中明确指定的密码变量；子进程使用运行必需项的最小环境，不整包继承 token 或 cloud 变量 / minimal child environment; no blanket token or cloud-variable inheritance
-  sql: 可选元数据连接器只执行固定只读目录 SQL，不查询业务行；文本及 DDL 摄取、包读取不执行 SQL；可选数值工具执行模型编译的只读单表聚合、明细和快照约束检查 / no SQL in knowledge intake; optional read-only compiled numeric tools
-  authorization: Read is experimental reading preapproval, not the full capability list. Other operations use host permissions and existing user authorization. No
-    blanket shell preapproval.
-  compatibility: Python 3.10+ and pinned requirements.txt. Authoring needs authorized local writes and Python execution; browser uses loopback. Offline reading needs
-    no model key or network. Optional adapters need separately authorized destinations.
+  version: 0.3.7
+  runtime_environment: Python 3.10+ with pinned local dependencies. No model key.
+  file_read: Authorized materials, local project and semantic packages.
+  file_write: Authorized local project and export paths.
+  network: Loopback editor and optional selected database catalog only.
+  environment: Remote catalog adapters read the explicitly named database password variable.
+  sql: Offline DDL is parsed as text. Catalog connections issue fixed read-only metadata queries.
+  authorization: Python execution and writes use host permissions. Read is the experimental reading preapproval.
 ---
 
 # AI Data Delivery
 
 围绕“导入结构 → 按需可视化编辑 → 导出／读取”完成短链路。浏览器是临时打开的编辑辅助，不要求用户建立业务问题、任务或验收记录，也不要求常驻服务。宿主理解业务，本地工具保存、编辑和交付同一模型；不内置大模型。
 
-人与 Agent 共同建模时，在第一张有用的图和重要关系、口径变化后，直接呈现同一项目的局部图。复用 start.py 实际返回的本机地址，在 #graph 前加 &focus=编码后的资产ID 或 &domain=编码后的领域，优先在宿主内置浏览器打开；不能嵌入时，给真实截图或已验证可打开的链接，说明改了哪条关系。仅输出命令不算已展示。明确要求无界面时跳过。已打开的图会在空闲时同步，勿覆盖正在填写的表单。优先用 DDL、目录、字段注释与业务材料佐证；具体歧义确实影响结论、且获授权时才索取最小数据证据，不让用户为推断每条关系跑 SQL。
+有人参与建模时，首张图和重要关系变更都在当轮显示。用保存回执定位到实际打开的本机编辑器；宿主不能嵌入时，用回执的 image_argv_prefix 加 --out 新文件.svg，展示该修订的局部图，并给出继续编辑的入口。纯 CLI 交付可直接给定位信息。优先使用已有 SQL、字段注释和业务材料，遇到确实影响判断的歧义时，再按授权索取必要的行级证据。
 
 [English](SKILL.md) · [直接体验](README.zh-CN.md) · [架构分工](references/architecture.md)
+
+优先使用用户已提供的 SQL、选定库表或业务问题。只想体验时使用随包交通样例。有人参与时可加全局参数 `--progress`：标准错误显示阶段，标准输出保留单一 JSON。成功写入后读取 `result.result.guidance`，沿用同一项目，将返回的相对位置拼到已验证的编辑器地址；未启动时运行 `preview.launch_argv` 并在宿主打开它实际输出的网址。首图和业务含义变化时展示真实画面；暂不能展示时如实提供定位入口。结构已清楚且无待决问题时可直接导出。
+
+按当前任务仅追问一个最影响结果的问题。Agent 推断在资产的 `properties.assertion_basis` 标为 `model_inferred`；原文、人工说明与本项目确认分别记录。缺口写 `knowledge_gaps`。材料相互矛盾时用 `unresolved_conflicts` 记下两种说法、各自来源与适用范围，并把原文分别挂入 evidence。允许改写、暂缓、拒绝或保持分离；由操作者裁决后记录原因再清除冲突。
+
+已有冲突得到裁决后，在 `properties.conflict_resolutions` 追加一条记录。`previous` 保留原冲突，`decision` 保存操作者裁决原话，另附带 actor 和相同原话的 manual 依据。图谱编辑器会一次记录这三项。
+
+材料任务可以用 `task --batch B --id ID` 只看选中的对象和依赖，也可以用临时 `--question 问题` 找候选。看 `related_sources` 为什么推荐另一份材料，再用 `--compare-source SOURCE_ID` 对读原文。分别核对谁、在哪、何时、要做什么和留下什么凭证。同地名或同词不足以认定冲突或加码。有据的同名不同义可用带原修订号的 `separate --left ID --right ID --reason 理由` 保持分离。
 
 ## 按当前任务进入
 
@@ -36,20 +38,20 @@ metadata:
 | 看图或编辑 | `start.py --project DIR`；打开同一模型的图谱，结束后 Ctrl+C 关闭服务 |
 | 无问题、无服务导出 | `knowledge.py --project DIR export --out MODEL.zip --draft`；默认全部有效模型，包含表字段；重复 `--id` 可指定范围 |
 | 补充或维护业务语义 | [建模短链](references/modeling.md)：最小业务对象、字段、映射和关系，成组维护，不要求先保存问题 |
-| 导入材料、提出修改 | 提议前读[候选合同](references/m1-m2-contract.md)；格式与恢复见[工作台说明](workbench/README.zh-CN.md) |
+| 导入材料、提出修改 | 提议前读[候选合同](references/m1-m2-contract.md)；格式与恢复见[工作台说明](README.zh-CN.md) |
 | 读取收到的包 | `semantic_read.py --package PACKAGE search --query TEXT`，用实际 ID 读取 `context` / `sources`；问题包再用 `brief`；[读取指南](references/agent-reader.md)说明取证与分页 |
 | 维护身份、规则或映射 | `state --summary`、`--revision READ_REVISION edit --file`（单对象或数组）、`inspect --id`；保留稳定 ID 和依据，不直接改项目 SQLite |
 | 连接目录、跟踪表结构变化 | [只读元数据](references/readonly-metadata.md)；明确连接与选表范围 |
 | 核对字段与统计口径 | [查询控制](references/query-control.md)；修改原指标、使用可读核对界面，不另存一套模型 |
 | 检查问题预期与变更影响 | [问题交付](references/question-delivery.md)；使用独立预期及实际观察 |
-| 诊断数字、去重、关联 | [指标路径](references/metric-context.md)、[诊断指南](references/diagnosis-playbook.md)；数值工具独立使用 |
-| 复用行业例子或交换格式 | [四域练习](examples/cross-domain/README.md)、[起步包](starter_packs/README.md)、[标准](references/standards.md)、[Neo4j/OGS](references/neo4j-interop.md)；例子不是业务政策 |
 
 只读当前任务需要的参考。替用户处理 ID、命令和 JSON，复用已有答案与授权；仅在未知含义、范围或权限会改变当前结果时询问。已有图谱维护不必强行新建问题。
 
 业务建模时，让接收方读取的根定义引用实际需要的全部字段、连接键、映射、关系与规则，包含次表。指标用 metric，关系用有据 relation，不把整段政策或 SQL 放在单个对象上代替建模。补充资料支持的常用别名。用资产数组一次原子维护；只有已有确认授权时才用 `--confirm`。用 `inspect --id` 发现遗漏关系和未确认依赖，再按实际任务核对覆盖；检查提示不证明含义正确。
 
 ## 一份含义，一份依据
+
+业务方已独立给出指标粒度时，用 `edit --expect-grain 预期粒度` 核对后保存，并用一个重复样例验证计数。问到某一笔业务时，先用离线读取器的 `path --from-id A --to-id B` 追溯定义，再核对属于同一对象、同一期间的实际凭证。
 
 - `document.model.semantic.assets` 是统一图谱；问题引用它，包与控制单由它派生。旧数值/ontology 格式经显式摄取和核对复用，不静默同步。
 - 根据定义、领域和范围复用身份，不靠同名合并。外键不能证明业务责任。保留单位、粒度、排除条件、时间及 0/false/null，未知项不能代填默认值。

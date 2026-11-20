@@ -6,6 +6,7 @@ Package fingerprints prove integrity, not provenance authenticity or business tr
 from __future__ import annotations
 
 import copy
+from collections import defaultdict, deque
 import datetime as dt
 import hashlib
 import html
@@ -162,11 +163,16 @@ def _redirects(value, index):
     return out
 
 
-def _dependencies(asset, include_execution=False):
+def _definition_refs(asset):
     refs = list(asset.get("refs", []))
     if "query_plan" in asset.get("properties", {}):
         from workbench.query_control import plan_dependencies
         refs += plan_dependencies(asset["properties"]["query_plan"])
+    return refs
+
+
+def _dependencies(asset, include_execution=False):
+    refs = _definition_refs(asset)
     if asset.get("kind") in {"relation", "mapping"}:
         refs += [asset[key] for key in ("from", "to") if asset.get(key)]
     if include_execution:
@@ -182,6 +188,22 @@ def _dependencies(asset, include_execution=False):
 def asset_dependencies(asset, *, include_execution=False):
     """One dependency interpretation for authoring guards and package closure."""
     return _dependencies(asset, include_execution)
+
+
+def count_grain_review(asset):
+    """Expose a checkable counting risk without guessing cardinality or executing a query."""
+    plan = asset.get("properties", {}).get("query_plan")
+    aggregation = plan.get("aggregation") if isinstance(plan, dict) else None
+    if not isinstance(aggregation, dict):
+        return None
+    grain = plan.get("grain_ids")
+    operation, field = aggregation.get("function"), aggregation.get("field_id")
+    if not isinstance(grain, list) or not grain or not isinstance(field, str):
+        return None
+    if operation == "count" or (operation == "count_distinct" and set(grain) != {field}):
+        return {"code": "COUNT_GRAIN_REVIEW", "grain_ids": grain, "aggregation": aggregation,
+                "message": "核对同一业务对象对应多行时计几次；当前计数和声明粒度需要用重复样例验证。 / Check duplicate or composite business keys against the declared counting grain."}
+    return None
 
 
 ENDPOINT_KINDS = {"is_a": ({"entity"}, {"entity"}), "denotes": ({"term"}, {"entity", "metric", "rule", "term"}),
@@ -411,6 +433,7 @@ def _selected_sources(source_index, needed):
         selected_revision = next((r for r in selected_revisions if r["revision"] == number), None)
         if selected_revision is None:
             selected_revision = {"revision": number, "sha256": version.get("sha256"), "created": version.get("created")}
+            selected_revision.update({key: version[key] for key in ("effective_from", "effective_to") if key in version})
             selected_revisions.append(selected_revision)
         original = next((e.get("parsed", {}) for e in version.get("extractions", []) if e["id"] == eid), version.get("parsed", {}))
         parsed = {"format": original.get("format", source.get("format")), "status": original.get("status", "partial"),
@@ -434,6 +457,10 @@ def _readiness_issues(assets):
             issues.append({**common, "code": "UNCONFIRMED_ASSET", "status": asset["status"],
                            "message": "知识尚未确认、需复核或已停用", "next_step": "在知识维护入口核对该资产及其依据"})
         conflicts = asset.get("properties", {}).get("unresolved_conflicts")
+        if (asset.get("properties", {}).get("assertion_basis") == "model_inferred" and
+                not any(isinstance(e, dict) and e.get("type") == "manual" and e.get("actor") and e.get("quote") for e in asset.get("evidence", []))):
+            issues.append({**common, "code": "UNVERIFIED_INFERENCE", "message": "该推断仍缺本项目核对依据",
+                           "next_step": "核对原文，修订断言或记录具体人工判断"})
         if conflicts:
             issues.append({**common, "code": "UNRESOLVED_CONFLICT", "conflicts": copy.deepcopy(conflicts),
                            "message": "资产存在未处理冲突", "next_step": "按具体冲突核对；同名异义可明确保持分离，不要按别名自动合并"})
@@ -789,13 +816,13 @@ class SemanticPackage:
             raise PackageError("PACKAGE_CORRUPT", "Control contract and package version disagree")
         for name, expected in files.items():
             if expected != _sha(entries[name]):
-                raise PackageError("HASH_MISMATCH", "文件指纹与清单不符，拒绝消费", file=name)
+                raise PackageError("HASH_MISMATCH", "File digest differs from manifest / 文件指纹与清单不符，拒绝消费", file=name)
         self.model = _decode(entries["model.json"], "model.json")
         self.source_records = _decode(entries["sources.json"], "sources.json")
         if not isinstance(self.model, dict) or self.model.get("schema_version") != SCHEMA:
             raise PackageError("UNSUPPORTED_SCHEMA", "语义模型版本不受支持", supported=SCHEMA)
         if _sha(_json(self.model)) != self.manifest.get("model_sha256"):
-            raise PackageError("HASH_MISMATCH", "模型指纹与清单不符", file="model.json")
+            raise PackageError("HASH_MISMATCH", "Model digest differs from manifest / 模型指纹与清单不符", file="model.json")
         self.index = _asset_index(self.model.get("assets"))
         self.redirects = _redirects(self.model.get("redirects"), self.index)
         self.source_index = _source_index(self.source_records)
@@ -886,6 +913,8 @@ class SemanticPackage:
             {"name": "get", "required": ["asset_id"], "optional": ["as_of"], "purpose": "取得单个资产"},
             {"name": "sources", "required": ["asset_id"], "optional": ["limit", "offset"], "cli": "sources --id ID [--id ID] [--limit N] [--offset N]", "purpose": "回查所引来源片段"},
             {"name": "neighbors", "required": ["asset_id"], "purpose": "仅显式业务关系，定义依赖请用context"},
+            {"name": "path", "required": ["from_id", "to_id"], "optional": ["as_of", "max_depth"],
+             "purpose": "查找两项之间的一条有方向的定义或关系路径，显示每一段的身份和依据入口"},
             {"name": "export", "required": ["asset_ids"], "purpose": "导出本包内依赖闭合子图"},
             {"name": "verify", "purpose": "核对包完整性，不认证业务真值或最新性"}],
             capabilities=self._capabilities(),
@@ -1030,6 +1059,8 @@ class SemanticPackage:
                          "source_name": source[0].get("name") if source else None,
                          "source_scope": copy.deepcopy(source[0].get("scope")) if source else None,
                          "source_sha256": version[0].get("sha256") if version else None,
+                         "source_effective_from": version[0].get("effective_from") if version else None,
+                         "source_effective_to": version[0].get("effective_to") if version else None,
                          "observed_revision_at_export": source[0].get("observed_revision_at_export") if source else None,
                           "parse": {**{k: copy.deepcopy(parsed[k]) for k in ("status", "coverage", "source_coverage") if k in parsed},
                                     **(bounded_warnings(parsed["warnings"], full=not getattr(self, "compact_cli", False))
@@ -1225,6 +1256,79 @@ class SemanticPackage:
         result["task"] = copy.deepcopy(self.task_record)
         result["acceptance_status"] = "not_verified"
         return result
+
+    def path(self, from_id, to_id, *, as_of=None, max_depth=12):
+        """Trace one directed definition path. Case observations stay outside this offline model."""
+        start, end = self._resolve(from_id), self._resolve(to_id)
+        date = _date(as_of, "as_of")
+        if type(max_depth) is not int or not 0 <= max_depth <= 32:
+            raise PackageError("INVALID_INPUT", "max_depth 需为 0–32 的整数")
+        request = {"from_id": from_id, "to_id": to_id, "as_of": as_of, "max_depth": max_depth}
+        eligible = {aid for aid, asset in self.index.items()
+                    if asset["status"] != "retired" and _applicability(asset, date) != "outside_known_interval"}
+        excluded = [aid for aid in dict.fromkeys((start, end)) if aid not in eligible]
+        boundary = {"answer_verified": False, "record_evidence": "not_evaluated",
+                    "boundary": "路径说明模型如何关联定义。核验具体业务记录还需要同一对象、期间和口径的观测凭证。"}
+        if excluded:
+            return self._result("outside_scope", request, excluded_ids=excluded, steps=[], nodes=[],
+                                complete=False, **boundary)
+        arcs = defaultdict(set)
+        for aid in eligible:
+            asset = self.index[aid]
+            for ref in _definition_refs(asset):
+                target = self.redirects.get(ref, ref)
+                if target in eligible:
+                    arcs[aid].add((target, "definition_ref"))
+            if asset["kind"] in {"relation", "mapping"}:
+                left = self.redirects.get(asset.get("from"), asset.get("from"))
+                right = self.redirects.get(asset.get("to"), asset.get("to"))
+                if left in eligible and right in eligible:
+                    arcs[left].add((aid, "relation_from"))
+                    arcs[aid].add((right, "relation_to"))
+
+        # Prefer a reviewed path when an equally plausible shortcut is still a draft.
+        for allow_drafts in (False, True):
+            previous = {start: None}
+            queue = deque([(start, 0)])
+            limited = False
+            if not allow_drafts and self.index[start]["status"] != "confirmed":
+                continue
+            while queue and end not in previous:
+                current, level = queue.popleft()
+                for target, kind in sorted(arcs.get(current, ())):
+                    if target in previous or not allow_drafts and self.index[target]["status"] != "confirmed":
+                        continue
+                    if level >= max_depth:
+                        limited = True
+                        continue
+                    previous[target] = (current, kind)
+                    queue.append((target, level + 1))
+            if end in previous:
+                break
+        if end not in previous:
+            return self._result("depth_limit" if limited else "no_declared_path", request, steps=[], nodes=[],
+                                reached_count=len(previous), reachable_sample=list(previous)[-8:],
+                                complete=False, **boundary)
+        nodes, steps = [end], []
+        while previous[nodes[-1]] is not None:
+            target = nodes[-1]
+            origin, kind = previous[target]
+            steps.append({"from": origin, "to": target, "kind": kind})
+            nodes.append(origin)
+        nodes.reverse()
+        details = []
+        for aid in nodes:
+            asset = self.index[aid]
+            props = asset.get("properties", {})
+            details.append({"id": aid, "name": asset["name"], "kind": asset["kind"], "status": asset["status"],
+                            "scope": asset.get("scope"), "applicability": _applicability(asset, date),
+                            "predicate": asset.get("predicate"), "relation_type": asset.get("relation_type"),
+                            "grain": props.get("grain"), "knowledge_gaps": props.get("knowledge_gaps", []),
+                            "counting_review": count_grain_review(asset),
+                            "evidence_count": len(asset.get("evidence", []))})
+        issues = self._issues_for(set(nodes))
+        return self._result("path_found", request, nodes=details, steps=list(reversed(steps)), issues=issues,
+                            evidence_request={"command": "sources", "ids": nodes}, complete=not issues, **boundary)
 
     def neighbors(self, asset_id, *, direction="both", depth=1, relation_types=None, limit=100, offset=0, as_of=None):
         target = self._resolve(asset_id)

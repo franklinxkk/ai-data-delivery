@@ -46,6 +46,14 @@
 .kw-canvas-expanded.kw-inspector-visible .kw-inspector {display:block}
 .kw-canvas-expanded .graph-hint {padding:7px 14px;background:#fff}
 .kw-canvas-expanded .kw-more {padding:5px 14px;background:#fff}
+.kw-change{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 0;color:var(--muted);font-size:12px}
+.kw-change a{color:#176c56;text-decoration:underline}
+#kw-canvas-search{width:11rem;max-width:100%}
+[data-end-create]{margin:0 0 10px}
+[data-end-create][hidden]{display:none}
+[data-end-create]>summary{color:#176c56;font-size:12px}
+#kw-asset-fields .grid>*{min-width:0}
+#kw-asset-fields select{max-width:100%}
 .kw-graph-legend {display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11px;color:#52695e}
 .kw-graph-legend>span {display:inline-flex;align-items:center;gap:6px}
 .kw-legend-line {display:inline-block;width:25px;border-top:2px solid #668f7b;vertical-align:middle}

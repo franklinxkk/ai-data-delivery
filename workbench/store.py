@@ -73,6 +73,9 @@ class Store:
         return {"revision": row["revision"], "document": json.loads(row["document"]), "updated": row["created"]}
 
     def change(self, expected_revision, actor, summary, mutate):
+        return self.change_with_db(expected_revision, actor, summary, lambda doc, db: mutate(doc))
+
+    def change_with_db(self, expected_revision, actor, summary, mutate):
         if not isinstance(expected_revision, int):
             raise ValueError("操作需要当前项目版本，请刷新后重试")
         with self.connect() as db:
@@ -81,7 +84,7 @@ class Store:
             if row["revision"] != expected_revision:
                 raise Conflict("项目已被另一操作修改；请刷新后审阅差异再保存")
             doc = json.loads(row["document"])
-            result = mutate(doc)
+            result = mutate(doc, db)
             rendered = encode(doc)
             if rendered == row["document"]:
                 return {"revision": expected_revision, "result": result}
@@ -121,7 +124,7 @@ class Store:
                 return json.loads(receipt["result"])
             row = db.execute("SELECT * FROM revisions ORDER BY revision DESC LIMIT 1").fetchone()
             if type(req.get("revision")) is not int or req["revision"] != row["revision"]:
-                raise Conflict("项目已更新；保留当前输入，刷新并核对受影响内容后重试")
+                raise Conflict("Project revision changed; compare your input before retrying / 项目已更新；保留当前输入，刷新并核对受影响内容后重试")
             document = json.loads(row["document"])
             result = mutate(document, db)
             rendered = encode(document)
@@ -157,11 +160,13 @@ class Store:
         with self.connect() as db:
             db.executemany("INSERT OR REPLACE INTO layout VALUES (?,?,?)", rows)
 
-    def attach(self, filename, kind, content):
+    def attach(self, filename, kind, content, *, db=None):
+        if db is None:
+            with self.connect() as connection:
+                return self.attach(filename, kind, content, db=connection)
         sha = hashlib.sha256(content).hexdigest()
         aid = sha[:24]
-        with self.connect() as db:
-            db.execute("INSERT OR IGNORE INTO attachments VALUES (?,?,?,?,?)", (aid, Path(filename).name, kind, sha, content))
+        db.execute("INSERT OR IGNORE INTO attachments VALUES (?,?,?,?,?)", (aid, Path(filename).name, kind, sha, content))
         return {"id": aid, "filename": Path(filename).name, "kind": kind, "sha256": sha, "bytes": len(content)}
 
     def attachment(self, aid):

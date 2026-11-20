@@ -73,6 +73,11 @@ def make_parser():
     neighbors.add_argument("--limit", type=int, default=100)
     neighbors.add_argument("--offset", type=int, default=0)
     neighbors.add_argument("--as-of")
+    path = commands.add_parser("path", help="Trace one directed definition path with evidence pointers and remaining gaps")
+    path.add_argument("--from-id", required=True)
+    path.add_argument("--to-id", required=True)
+    path.add_argument("--as-of", help="Business date YYYY-MM-DD")
+    path.add_argument("--max-depth", type=int, default=12, help="Maximum hops (0–32, default 12)")
     export = commands.add_parser("export", help="Create a new dependency-closed subgraph ZIP")
     export.add_argument("--id", required=True, action="append", dest="ids")
     export.add_argument("--out", required=True)
@@ -120,6 +125,8 @@ def main(argv=None):
             result = package.neighbors(args.id, direction=args.direction, depth=args.depth,
                                        relation_types=args.relation_type, limit=args.limit, offset=args.offset,
                                        as_of=args.as_of)
+        elif args.command == "path":
+            result = package.path(args.from_id, args.to_id, as_of=args.as_of, max_depth=args.max_depth)
         elif args.command == "export":
             output = Path(args.out)
             if output.exists():

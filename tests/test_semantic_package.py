@@ -65,6 +65,34 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, code)
         return caught.exception
 
+    def test_directed_path_scope_and_individual_observation_boundary(self):
+        assets, sources = fixture()
+        assets += [asset("h1", "rule", refs=["company"]), asset("h2", "rule", refs=["receipt"]),
+                   asset("receipt", "field"), asset("old", effective_to="2026-06-30", refs=["receipt"])]
+        package, path, _ = self.write_package(assets, sources)
+        cli = subprocess.run([sys.executable, str(ROOT / "scripts/semantic_read.py"), "--package", str(path),
+                              "path", "--from-id", "h1", "--to-id", "vehicle"],
+                             capture_output=True, encoding="utf-8", check=True)
+        result = json.loads(cli.stdout)
+        self.assertEqual(result["evidence_request"]["ids"], ["h1", "company", "maintains", "vehicle"])
+        self.assertEqual([step["kind"] for step in result["steps"]], ["definition_ref", "relation_from", "relation_to"])
+        self.assertFalse(result["answer_verified"])
+        self.assertEqual(result["record_evidence"], "not_evaluated")
+        self.assertEqual(package.path("h1","receipt")["status"], "no_declared_path")
+        self.assertEqual(package.path("vehicle","company")["status"], "no_declared_path")
+        self.assertEqual(package.path("h1","vehicle",max_depth=2)["status"], "depth_limit")
+        self.assertEqual(package.path("old","receipt",as_of="2026-07-01")["status"], "outside_scope")
+        self.assertEqual(package.path("h2","receipt")["status"], "path_found")
+        self.assertEqual(package.path("h1","h1",max_depth=0)["steps"], [])
+        self.assert_code("UNKNOWN_ID", lambda: package.path("h1","unknown"))
+        self.assert_code("INVALID_INPUT", lambda: package.path("h1","h2",max_depth=-1))
+
+    def test_trace_prefers_reviewed_path_over_draft_shortcut(self):
+        assets = [asset("start", refs=["draft", "checked"]), asset("draft", status="draft", refs=["end"]),
+                  asset("checked", refs=["more"]), asset("more", refs=["end"]), asset("end")]
+        package, _, _ = self.write_package(assets, [], draft=True)
+        self.assertEqual(package.path("start","end")["evidence_request"]["ids"], ["start","checked","more","end"])
+
     def test_reader_pagination_fallback_and_coverage(self):
         package, path, _ = self.write_package()
         single = package.sources("rule")

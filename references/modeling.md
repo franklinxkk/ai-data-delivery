@@ -28,6 +28,10 @@ Use business names and source-supported aliases which a recipient is likely to u
 
 ## Make a coherent change once
 
+One wide row may describe a vehicle, a person and an inspection event. Give them separate identities when the sources support that distinction. Review the role of every ambiguous key with the operator. For obligations, preserve the issuer, applicable subjects, dates, conditions and required evidence where stated. When associating a metric, record its grain and compare the join against a duplicate example, such as two work orders for one incident. Keep missing links in `properties.knowledge_gaps`. A measure can help find cases to inspect without proving an individual case was completed.
+
+When the owner or a held-out test gives a metric grain independently, pass that wording as `edit --file ASSETS.json --expect-grain "one incident ID"`. The batch must contain exactly one metric and may contain supporting objects. A differing grain rejects the entire write. The comparison normalizes whitespace and case. If the two phrasings may be synonymous, reconcile their meaning before retrying. A matching label still needs the duplicate example to test the calculation.
+
 The [asset contract](m1-m2-contract.md) defines the fields and evidence identities. Reuse the imported source's returned `source_id`, `revision`, `extraction_id`, `fragment_id` and exact `quote`; do not substitute a manual assertion for imported policy. Prepare a JSON **array of complete assets**, including any existing draft dependencies which are being reviewed. The array may refer to other assets in the same array. Changes are atomic: one invalid item leaves the graph unchanged.
 
 ```bash

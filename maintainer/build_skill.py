@@ -11,15 +11,21 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = {"SKILL.md", "SKILL.zh-CN.md", "README.md", "README.zh-CN.md", "SECURITY.zh-CN.md", "CHANGELOG.md", "LICENSE", "SECURITY.md", "requirements.txt", "requirements-connectors.txt"}
-DIRECTORIES = {"scripts", "references", "examples", "starter_packs", "workbench"}
-# These source-only tools must not re-enter an installed skill, even when a
-# dirty preview's git index still contains their old runtime locations.
-MAINTAINER_ONLY = {"scripts/rebuild.py", "scripts/_process.py"}
+RUNTIME = FILES | {
+    "examples/semantic-workbench/transport.sql", "examples/semantic-workbench/transport-v1.txt",
+    *("scripts/" + f + ".py" for f in (
+        "_contract", "ingest_ddl", "knowledge", "start", "semantic_read", "neo4j_export", "ontology_export")),
+    *("workbench/" + f + ".py" for f in (
+        "__init__", "store", "serve", "knowledge", "knowledge_parsers", "semantic_package", "db_metadata",
+        "metadata_service", "authoring_inspect", "material_task", "graph_image", "query_control", "scenario_contract", "ogs_export", "neo4j_export")),
+    *("references/" + f + ".md" for f in (
+        "architecture", "agent-reader", "modeling", "m1-m2-contract", "readonly-metadata", "semantic-package",
+        "question-workflow", "question-delivery", "query-control", "standards", "neo4j-interop")),
+}
 
 
 def runtime_paths(tracked):
-    return sorted(p for p in tracked if p and p not in MAINTAINER_ONLY
-                  and (p in FILES or p.split("/")[0] in DIRECTORIES))
+    return sorted(p for p in tracked if p in RUNTIME or p.startswith("workbench/static/"))
 
 
 def git(*args):
@@ -37,8 +43,8 @@ def main():
     version = str(metadata["metadata"]["version"])
     tracked = git("ls-files", "-z").decode("utf-8").split("\0")
     paths = runtime_paths(tracked)
-    if not FILES <= set(paths):
-        ap.error("missing tracked runtime entry files")
+    if RUNTIME - set(paths):
+        ap.error("missing runtime files: " + ", ".join(sorted(RUNTIME - set(paths))))
     if any(p.endswith((".db", ".sqlite", ".sqlite3", ".pyc")) or "__pycache__" in p or p.endswith(("actual.jsonl", "report.json", "server.json")) for p in paths):
         ap.error("generated database/report/cache found in tracked runtime assets")
     out = Path(args.out)

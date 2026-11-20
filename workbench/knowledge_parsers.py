@@ -106,7 +106,7 @@ def _text(content, options, fmt):
     return _finish(result)
 
 
-def _ddl(content, options):
+def _ddl(content, options, progress=None):
     from scripts.ingest_ddl import CREATE_RE, COMMENT_RE, extract_table_bodies, identifier, mask_quoted, parse_sql, strip_comments
     text = _decode(content, options)
     clean = strip_comments(text)
@@ -134,6 +134,9 @@ def _ddl(content, options):
     if quoted:
         _warn(result, "文件末尾存在未闭合引号；相关语句未确认完整，请修复后重试。")
     for number, (begin, end) in enumerate(starts, 1):
+        if progress and (number == 1 or number % 100 == 0):
+            progress("parsing_ddl", statements_completed=number-1, statements_total=len(starts),
+                     tables_parsed=len(result["structure"]["tables"]))
         part, masked = text[begin:end], clean[begin:end]
         if not masked.strip(' \t\r\n;'):
             continue
@@ -616,7 +619,7 @@ def _structured(content, options, fmt):
     return _finish(result)
 
 
-def parse_material(filename, content: bytes, options=None):
+def parse_material(filename, content: bytes, options=None, *, progress=None):
     """Return the parser contract; recoverable input errors remain local results.
 
     Options: encoding; CSV delimiter; spreadsheet sheet (name), header (one-based
@@ -653,7 +656,9 @@ def parse_material(filename, content: bytes, options=None):
             return _text(content, options, fmt)
         if fmt in {'json', 'yaml'}:
             return _structured(content, options, fmt)
-        return {'ddl': _ddl, 'csv': _csv, 'xlsx': _xlsx, 'docx': _docx, 'pdf': _pdf}[fmt](content, options)
+        if fmt == 'ddl':
+            return _ddl(content, options, progress)
+        return {'csv': _csv, 'xlsx': _xlsx, 'docx': _docx, 'pdf': _pdf}[fmt](content, options)
     except (ValueError, TypeError, KeyError, IndexError, LookupError, RecursionError, OSError, RuntimeError,
             NotImplementedError, zipfile.BadZipFile, ET.ParseError, csv.Error) as exc:
         result['warnings'].append(f'解析失败：{exc}；请修正资料或解析选项后重试，已有来源和图谱不会被修改。')

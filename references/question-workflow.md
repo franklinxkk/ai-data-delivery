@@ -6,7 +6,7 @@
 
 In **Business questions / 业务问题**, record what the user wants to explain, calculate, retrieve or do. Keep a business-provided expected example or exception when one is available. Do not require an expectation before saving an exploratory question, and do not invent one from the generated graph.
 
-For the supplied fictional equipment exercise:
+The following equipment scenario illustrates the question format. The optional fixture is in the [source repository](https://github.com/franklinxkk/ai-data-delivery/tree/v0.3.6/examples), and the installed quick start uses transport instead.
 
 - Question: “How many items are available to borrow in Lab L?” / “实验室 L 有多少台可借设备？”
 - Intent: `query` — the user wants records or a current count; choosing this intent does not enable execution.

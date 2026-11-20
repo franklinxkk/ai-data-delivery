@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.7
+
+- Material tasks accept a temporary question or explicit roots, explain source recommendations across jurisdictions and retain explicit full-model access.
+- Show the changed relation in the local editor or generate an immutable, revision-specific graph image from the CLI. Trace a directed path across definitions and relationships in an offline package, with evidence pointers and disclosed gaps.
+- Preserve a reviewed same-name distinction when only the locator of the same quoted source changes. Compare an optional independent grain before writing a metric and surface duplicate-counting risks in bound calculations.
+
+- Install the graph editor, selected-catalog reader, offline reader and one transport example. Additional industry exercises, database profiling and online evaluation stay in the source repository.
+- Follow DDL parsing progress and open the changed graph or candidate review from a CLI receipt. Nodes distinguish source type and review status. Invalid focus links return to the overview with a message.
+- Compare selected materials side by side through the local Agent task. Confirmation checks declared inference and conflicts. Resolving a recorded dispute preserves the original claims and the operator's decision. Same-name assets can keep distinct meanings through the CLI.
+- DDL identities repeat across fresh projects. Batch retirement is atomic, retries preserve the original result, TLS failures have actionable diagnostics and rejected imports roll back their attachments.
+
+
 ## 0.3.6 — 2026-11-18
 
 - Follow saved changes in the open local graph without replacing an in-progress form. Share a focused view, create objects or relations directly, and attach exact source passages.
@@ -7,7 +19,7 @@
 - Keep source quotations and summarize large global inventories and warning lists. The CLI options `--full-scope` (reader) and `--full-output` (authoring) retain verbose access.
 - **CLI migration:** updating existing asset IDs now requires `--revision N` from the read used to prepare the edit. New IDs do not. Reconcile changes on conflict.
 - An added paragraph in a text/Markdown source that retains the previous paragraphs triggers review of cited definitions. Existing snapshots stay immutable. Read applicability using `decision`; completeness alone is insufficient.
-- [Verification and limits](references/v0.3.6-release-validation.md).
+- [Verification and limits](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/references/v0.3.6-release-validation.md).
 
 ## 0.3.5 — 2026-11-18
 
@@ -17,7 +29,7 @@
 - Reader: paged multi-asset `sources` with deduplicated evidence and explicit missing targets; paged, scope-filtered term discovery on no match; clear page identity coverage without claiming business completeness.
 - Guidance: one short business-modeling path, source-supported aliases, explicit secondary-table dependencies and reuse of existing confirmation authority. CLI and optional editor retain one canonical graph.
 - Scope: no embedded model, business-query executor, new service, industry policy defaults or migration. Published 0.3.4 remains unchanged.
-- Validation: [actual checks and remaining boundaries](references/v0.3.5-release-validation.md).
+- Validation: [actual checks and remaining boundaries](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/references/v0.3.5-release-validation.md).
 
 
 ## 0.3.4 — 2026-11-17
@@ -30,7 +42,7 @@
 - Reader: `brief` combines saved question/context/control/evidence pointers; ordinary search uses the same Unicode normalization. No implicit execution or evidence-read claims.
 - Packaging/security: reproducible ZIP, actual capability declaration, bounded subprocesses, loopback-only editor and exclusive occupied-port protection on Windows.
 - Scope: no production executor, general JOIN compiler, MCP server or automatic migration. Old 1.0 packages remain readable; new question packages use 1.1. Metadata and Neo4j adapters remain available.
-- Validation: see [actual evidence and limits](references/v0.3.4-release-validation.md); [research and expert-advice decisions](references/v0.3.4-design-review.md).
+- Validation: see [actual evidence and limits](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/references/v0.3.4-release-validation.md); [research and expert-advice decisions](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/references/v0.3.4-design-review.md).
 
 Versioning: keep published tags unchanged; continue from `0.3.0` with patch increments (`0.3.1`, `0.3.2`, …). Unreleased previews use `-dev`. / 版本约定：保留已发布标签，后续默认递增补丁号，开发预览加 `-dev`，不重写历史版本。
 

@@ -69,10 +69,17 @@ def merge_packs(model, pack_paths):
         seen_rel = {r.get("id") for r in relations if r.get("id")} | \
                    {f"{r.get('from')}->{r.get('to')}:{r.get('predicate')}" for r in relations}
         ent_added = rel_added = 0
+        def candidate(item):
+            result = copy.deepcopy(item)
+            # Template provenance is useful; its original authority does not transfer between projects.
+            result["template_evidence"] = result.pop("evidence", {})
+            result["evidence"] = {"source": "user_provided", "origin": "template", "pack": meta.get("id")}
+            result["review_status"] = "candidate"
+            return result
         for e in ont.get("entities") or []:
             if e.get("name") in seen_ent or (e.get("uid") and e["uid"] in seen_ent):
                 continue
-            entities.append(copy.deepcopy(e))
+            entities.append(candidate(e))
             seen_ent.add(e.get("name"))
             if e.get("uid"):
                 seen_ent.add(e["uid"])
@@ -81,7 +88,7 @@ def merge_packs(model, pack_paths):
             rid = r.get("id") or f"{r.get('from')}->{r.get('to')}:{r.get('predicate')}"
             if rid in seen_rel:
                 continue
-            relations.append(copy.deepcopy(r))
+            relations.append(candidate(r))
             seen_rel.add(rid)
             rel_added += 1
         applied.append({"pack": str(path), "id": meta.get("id"), "name": meta.get("name"),

@@ -20,7 +20,7 @@ Take the actual connection ID from `result.result.connection.id`. `--seed-draft`
 
 中文：连接配置只保存路径或凭据环境变量名与明确选表。`connect` 返回实际连接 ID；`scan --seed-draft` 直接生成结构草稿；`export --draft` 即可交给本机 Agent。无需业务问题或常驻服务，字段、外键不自动变成已确认的业务规则。已有模型去掉初始化参数，按候选核对变化。
 
-For a synthetic SQLite file, run `python -X utf8 examples/readonly-metadata/create_example.py --out "../metadata-demo"` in a new directory outside the installation. It prints the file path for the profile above. Alternatively use **Import → Connect database** in the editor: choose exact tables and **Read structure and create draft**. Existing models receive change candidates instead.
+Use **Import → Connect database** in the editor: choose exact tables and **Read structure and create draft**. Existing models receive change candidates instead.
 
 A successful profile registration is not a connection or catalog receipt. Record which database/layer and selected tables were actually observed. When a scan fails, distinguish unknown visibility from absent structure. Supply a trusted CA and matching hostname where available; otherwise use an authorized schema-only DDL export and label it as design or dated evidence. Do not request business rows merely to complete a structural draft.
 
@@ -87,6 +87,6 @@ python -X utf8 scripts/knowledge.py --project "../metadata-project" regress --co
 python -X utf8 scripts/neo4j_export.py --package "../delivery/semantic.zip" --out "../delivery/neo4j.zip"
 ```
 
-Do not run `--refresh-review` automatically after rejection. Follow user review through the existing candidate page/API. Boundaries: at most 200 exact table names, 2,000 columns per table and 8 MB normalized catalog data per capture; capture/query limits fail explicitly rather than returning partial success. Narrow large selections. Tested engine versions and evidence are in the [release validation](v0.3.2-release-validation.md).
+Do not run `--refresh-review` automatically after rejection. Follow user review through the existing candidate page/API. Boundaries: at most 200 exact table names, 2,000 columns per table and 8 MB normalized catalog data per capture; capture/query limits fail explicitly rather than returning partial success. Narrow large selections. Tested engine versions and evidence are in the [release validation](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/references/v0.3.2-release-validation.md).
 
 Neo4j remains optional: the new CSV/Cypher export imports snapshot-scoped assets, directed relationships, dependencies and evidence; complete original JSON is retained. See its generated bilingual README for server import settings. It is separate from [OGS design projection](neo4j-interop.md), does not upload automatically and is not a business-query or authorization service.

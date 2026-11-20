@@ -26,6 +26,10 @@ python -X utf8 scripts/semantic_read.py --package "./delivery/question.zip" brie
 
 [中文完整合同](semantic-package.md)
 
+In the examples below, replace equipment.zip and demo.available with your exported package and an ID returned by search. The installed transport example can produce your first package.
+
+To trace a specific question, use `path --from-id RULE_ID --to-id FIELD_ID` on the package. The reader returns one directed path (definition references and authored relationships), IDs for the next `sources` call, the metric grain when supplied, and known gaps. An optional `--as-of YYYY-MM-DD` excludes definitions outside their declared intervals. A depth limit is reported separately from a missing path. The graph describes the model. To establish an individual outcome, check observations for that same subject, period and rule. / 可从规则追到指标或字段；读到工单关闭字段后，如需断定某项隐患已经复核，还要取得与该隐患匹配的复核记录。
+
 The recipient needs the ZIP (or extracted directory), this skill's reader and Python dependencies. The original project, browser session and running workbench are not needed. Reading does not execute SQL, browse source links, call models or perform business actions.
 
 ```bash

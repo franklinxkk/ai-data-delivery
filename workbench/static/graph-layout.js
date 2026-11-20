@@ -1,4 +1,6 @@
 'use strict';
+const graphWorker=typeof WorkerGlobalScope!=='undefined'&&self instanceof WorkerGlobalScope;
+if(graphWorker)importScripts('/vendor/elk.bundled.js');
 /* Geometry only. ELK is vendored locally; no input is sent to any service. */
 (function(root,factory){
   const api=factory(typeof module==='object'&&module.exports?require('./vendor/elk.bundled.js'):root.ELK);
@@ -228,5 +230,22 @@
     }
     return chosen;
   }
-  return {layout,route,labelSize};
+  // The temporary overview uses straight edges until the worker finishes detailed routing.
+  function overview({nodes,edges,positions}){
+    const sizes=new Map(nodes.map(n=>[n.id,n])),routes=Object.create(null);
+    for(const edge of edges){
+      const from=positions[edge.from],to=positions[edge.to];
+      const source=sizes.get(edge.from),target=sizes.get(edge.to);
+      const start={x:from.x+source.width,y:from.y+source.height/2},end={x:to.x,y:to.y+target.height/2};
+      const label=labelSize(edge.label);
+      if(label){label.x=(start.x+end.x-label.width)/2;label.y=(start.y+end.y-label.height)/2;}
+      routes[edge.id]={points:[start,end],label};
+    }
+    return {positions,routes,bounds:bounds(nodes,positions,routes)};
+  }
+  return {layout,route,overview,labelSize};
 });
+if(graphWorker)self.onmessage=async({data})=>{
+  try{const plan=await self.SemanticGraphLayout[data.routeOnly?'route':'layout'](data.input);self.postMessage({plan});}
+  catch(error){self.postMessage({error:error.message});}
+};

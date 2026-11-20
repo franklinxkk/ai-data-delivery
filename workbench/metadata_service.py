@@ -83,6 +83,8 @@ class MetadataService:
                 raise ValueError("Draft initialization requires an empty graph / 初始草稿仅用于空图；已有模型请按候选核对变化")
             conn = find(know.get("connections", []), req.get("connection_id"), "连接")
             observed = capture({k: v for k, v in conn.items() if k in {"id", "name", "engine", "path", "host", "port", "database", "schema", "user", "password_env", "tls_ca", "tables", "auto_indexes"}})
+            if self.knowledge.progress:
+                self.knowledge.progress("catalog_observed", selected=len(conn["tables"]), business_rows_read=0)
             previous = conn.get("snapshot")
             if type(req.get("refresh_review", False)) is not bool:
                 raise ValueError("refresh_review must be boolean / 重新生成候选须为开关")
@@ -163,7 +165,7 @@ class MetadataService:
             seeded = seed_physical_drafts(sem, know, scan["group_ids"]) if req.get("seed_draft") else None
             return {"status": "draft_ready" if seeded else "review_required" if candidates else "automatically_adjusted", "scan": scan,
                     **({"seeded": seeded} if seeded else {})}
-        return self.knowledge._write(req, "读取数据库结构变化", apply)
+        return self.knowledge._write(req, "读取数据库结构变化", apply, "scan")
 
     def regress(self, req):
         def apply(doc, sem, know, db):

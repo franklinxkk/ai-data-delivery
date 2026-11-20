@@ -29,26 +29,34 @@ function ident(kind,x) { if(kind==='entities')return x.uid||x.name; if(kind==='r
 const attr = (kind,key) => `data-kind="${kind}" data-key="${esc(key||'')}"`;
 const title = (heading, sub, action='') => `<div class="page-head"><div><span class="eyebrow">SEMANTIC WORKSPACE</span><h1>${heading}</h1><div class="sub">${sub}</div></div>${action}</div>`;
 // Poll only the revision number; defer loading external changes while the person edits.
-let polling=false;
+let polling=false, deferredGraph=null;
 function graphIdle(){return state && page==='graph' && !document.hidden && !document.querySelector('dialog[open]') &&
   !document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') && window.KnowledgeWorkbench.idle();}
-async function syncGraph(){if(polling||!graphIdle())return;polling=true;try{
+async function syncGraph(){if(polling||!state||page!=='graph'||document.hidden)return;polling=true;try{
   const stamp=await api('knowledge/revision');
-  if(stamp.revision>window.KnowledgeWorkbench.revision() && graphIdle()){
-    const [next,legacy]=await Promise.all([api('knowledge/state'),api('state')]);
-    if(next.revision>window.KnowledgeWorkbench.revision() && graphIdle()){
-      state=legacy;positions=legacy.layout;window.KnowledgeWorkbench.update(next); $('#revision').textContent=tr('项目版本 ')+next.revision;
-      render();notify(tr('图谱已同步'));
-    }
+  if(stamp.revision<=window.KnowledgeWorkbench.revision()){deferredGraph=null;return;}
+  const editing=document.querySelector('#kw-dialog[open] #kw-asset-fields');
+  if(!editing&&!graphIdle())return;
+  const next=deferredGraph?.revision===stamp.revision?deferredGraph:await api('knowledge/state');
+  if(next.revision<=window.KnowledgeWorkbench.revision())return;
+  deferredGraph=next;
+  if(document.querySelector('#kw-dialog[open] #kw-asset-fields')){
+    window.KnowledgeWorkbench.previewExternal(next);return;
+  }
+  if(graphIdle()){
+    const legacy=await api('state');
+    if(!graphIdle()||next.revision<=window.KnowledgeWorkbench.revision()||legacy.revision!==next.revision)return;
+    state=legacy;positions=legacy.layout;window.KnowledgeWorkbench.update(next); $('#revision').textContent=tr('项目版本 ')+next.revision;
+    deferredGraph=null;render();notify(tr('图谱已同步'));
   }
 }catch(_){/* manual Refresh remains available */}finally{polling=false;}}
 setInterval(syncGraph,3000);window.addEventListener('focus',syncGraph);
-function go(next) { page=next;location.hash=next;selected=null;connection=null;render(); }
+function go(next) { if(page==='graph'&&next!==page)window.KnowledgeWorkbench.cancelLayout();page=next;location.hash=next;selected=null;connection=null;render(); }
 function render() {
   if(!state)return;
-  if(![...menus,...legacyMenus].some(x=>x[0]===page))page='graph';
+  if(!(state.model_only?menus:[...menus,...legacyMenus]).some(x=>x[0]===page))page='graph';
   const navButton=([id,label])=>btn(`<span class="nav-label">${label}</span>`,'navigate',`data-page="${id}" ${id===page?'aria-current="page"':''}`,id===page?'active':'');
-  $('nav').innerHTML=menus.slice(0,3).map(navButton).join('')+`<details class="tool-more" ${menus.slice(3).some(x=>x[0]===page)?'open':''}><summary>${tr('更多工具')}</summary><div>${menus.slice(3).map(navButton).join('')}${navButton(['check',tr('数值与明细核对')])}</div></details>`;
+  $('nav').innerHTML=menus.slice(0,3).map(navButton).join('')+`<details class="tool-more" ${menus.slice(3).some(x=>x[0]===page)?'open':''}><summary>${tr('更多工具')}</summary><div>${menus.slice(3).map(navButton).join('')}${state.model_only?'':navButton(['check',tr('数值与明细核对')])}</div></details>`;
   $('#breadcrumb').textContent=[...menus,...legacyMenus].find(x=>x[0]===page)[1];
   if(page==='connections'){$('#main').innerHTML=window.MetadataWorkbench.render();return;}
   if(page==='questions'){$('#main').innerHTML=window.ScenarioWorkbench.render();return;}

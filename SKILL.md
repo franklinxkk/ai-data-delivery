@@ -1,26 +1,17 @@
 ---
 name: ai-data-delivery
-description: >-
-  CLI-first ontology tool: import SQL or selected database metadata, edit a source-linked semantic graph, export and read it locally with an Agent.
-  用于本体/语义建模、元数据复用、业务口径核对和 Agent 交付；也支持指标与 NL2SQL 诊断。Not a production query gateway or general PRD tool.
+description: Build and edit a source-linked ontology from DDL or selected database metadata. Export a semantic graph for local Agent use. 用于本体建模、业务口径核对及语义包读取。
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.6
-  language: English and 简体中文; respond in the user's language, retaining original knowledge and quotes.
-  runtime_environment: Python 3.10+ with pinned requirements.txt; no LLM or API key bundled.
-  file_read: User-authorized material, project and semantic package paths.
-  file_write: User-authorized project and output paths; proposals through the knowledge service.
-  network: Parsing and offline reading are local; optional live adapters require an explicitly authorized guarded destination.
-  subprocess: Bundled Python entrypoints only; no generic service rebuild or process replacement in the installation.
-  environment: Metadata drivers read only the explicitly named password variable in the host; minimal child environment; no blanket inheritance of token or cloud
-    variables.
-  sql: Optional metadata connectors issue fixed read-only catalog SQL, never business-row queries; no SQL in text/DDL intake or package reading; optional numeric
-    tools compile bounded read-only single-dataset queries.
-  authorization: Read is experimental reading preapproval, not the full capability list. Other operations use host permissions and existing user authorization. No
-    blanket shell preapproval.
-  compatibility: Python 3.10+ and pinned requirements.txt. Authoring needs authorized local writes and Python execution; browser uses loopback. Offline reading needs
-    no model key or network. Optional adapters need separately authorized destinations.
+  version: 0.3.7
+  runtime_environment: Python 3.10+ with pinned local dependencies. No model key.
+  file_read: Authorized materials, local project and semantic packages.
+  file_write: Authorized local project and export paths.
+  network: Loopback editor and optional selected database catalog only.
+  environment: Remote catalog adapters read the explicitly named database password variable.
+  sql: Offline DDL is parsed as text. Catalog connections issue fixed read-only metadata queries.
+  authorization: Python execution and writes use host permissions. Read is the experimental reading preapproval.
 ---
 
 # AI Data Delivery
@@ -29,7 +20,13 @@ Help the user build and reuse a semantic model with a short, local workflow: imp
 
 [中文](SKILL.zh-CN.md) · [Try an example](README.md) · [Architecture](references/architecture.md)
 
-During human-assisted modeling, show the first useful graph and any material change of meaning or relationships in the same turn as the edit. Reuse the same project and editor. Open the actual loopback URL printed by start.py in the host preview with &focus=URL_ENCODED_ASSET_ID or &domain=URL_ENCODED_DOMAIN (before #graph); when embedding is unavailable give a verified local screenshot or working link and name the change. Do not merely print commands or claim a preview opened. Skip UI for explicitly headless/batch work. The open graph follows saved changes when idle; preserve in-progress human edits. For modeling use DDL/catalog, comments and business documents first. Ask for row evidence only when a specific ambiguity matters, within authorization; no mandatory database queries to justify an inferred join.
+Show the first useful graph and meaningful edits during attended modeling. Use the saved receipt’s editor location on the verified loopback origin, or run its image_argv_prefix with --out NEW.svg and display the saved revision’s local diagram. Keep a working editor link for further edits. For a headless handoff return the locator. Start with supplied schema, comments and business documents; ask for row evidence only for a specific authorized ambiguity.
+
+Use the supplied schema, selected catalog or business question first. Use the packaged transport example only for a trial. For an attended import add global `--progress` for stderr stage events and one stdout JSON receipt. Read `result.result.guidance` after a write. Reuse the verified local editor origin with `preview.location`, or run `preview.launch_argv` and open its actual URL in the host. Show the first saved graph and meaningful changes. Export directly when requested.
+
+Ask the one unresolved question that matters to the task. Mark host-inferred assertions with `properties.assertion_basis: model_inferred`. Keep material excerpts, human statements and project confirmation distinct. Record missing facts in `knowledge_gaps`. For competing meanings use `unresolved_conflicts` with both claims, source references and applicability, attaching the actual excerpts to evidence. Allow revision, defer, reject or keep separate. To clear an existing conflict, append an entry to `properties.conflict_resolutions` with `previous` equal to the original conflict and `decision` equal to the operator’s statement. Attach that same statement as manual evidence with an actor. The graph editor records these fields together.
+
+For a material task, select an object using `task --batch B --id ID`; a temporary `--question TEXT` discovers candidates. Check the reasons in `related_sources`, then compare both passages with `--compare-source SOURCE_ID`. Look at who, where, when and which evidence is required. Similar words or overlapping jurisdictions alone cannot settle a conflict. Use revision-guarded `separate --left ID --right ID --reason TEXT` for distinct meanings.
 
 ## Choose the relevant path
 
@@ -39,20 +36,20 @@ During human-assisted modeling, show the first useful graph and any material cha
 | Inspect or edit visually | `start.py --project DIR`; opens the same model in the graph editor; stop with Ctrl+C when finished |
 | Export without a question/server | `knowledge.py --project DIR export --out MODEL.zip --draft`; default is all active assets including physical structure, or repeat `--id` for selected scope |
 | Build/refine business semantics | [Short modeling path](references/modeling.md): smallest useful objects, fields, mappings and relationships; atomic batch edits, no saved question required |
-| Import materials or propose changes | [Candidate contract](references/m1-m2-contract.md) before proposing; [workbench guide](workbench/README.md) for formats and recovery |
+| Import materials or propose changes | [Candidate contract](references/m1-m2-contract.md) before proposing; [workbench guide](README.md) for formats and recovery |
 | Read a received package | `semantic_read.py --package PACKAGE search --query TEXT`, then actual IDs with `context` / `sources`; `brief` for question packages; [reader guide](references/agent-reader.md) for evidence and paging |
 | Maintain graph identities, rules or mappings | `state --summary`, `--revision READ_REVISION edit --file` (asset or array), `inspect --id`; preserve stable IDs and evidence; never edit project SQLite directly |
 | Connect catalogs or track schema changes | [Read-only metadata](references/readonly-metadata.md); explicit connection and selected tables |
 | Review query bindings | [Query control](references/query-control.md); existing metric and readable review, no second model |
 | Check expectations or change impact | [Question delivery](references/question-delivery.md); independent expectations and actual observations |
-| Diagnose numbers, duplicates or joins | [Metric path](references/metric-context.md), then [diagnosis](references/diagnosis-playbook.md); optional numeric tools remain separate |
-| Reuse examples or exchange formats | [Four-domain exercises](examples/cross-domain/README.md), [starters](starter_packs/README.md), [standards](references/standards.md), [Neo4j/OGS](references/neo4j-interop.md); examples are not policy |
 
 Read only task-relevant references. Handle IDs, commands and JSON for the user. Reuse prior answers and authorization; ask about unresolved meaning, scope or authority only when it changes the current result. Existing graph maintenance need not be forced into a new question.
 
 For business modeling, make the recipient's root definition reference every relevant field, join key, mapping, relationship and rule—including secondary tables. Store metrics as metrics and relationships as evidenced relationships, not a paragraph or SQL string on one object. Use source-supported aliases. A coherent asset array can be maintained atomically with `--revision READ_REVISION edit --file`; apply `--confirm` only under existing confirmation authority. Run `inspect --id` to expose omitted links and unresolved dependencies, then check coverage against the actual task; its output is advisory, not a proof of meaning.
 
 ## Keep one meaning and its evidence
+
+For a metric with an independently supplied grain, pass that wording as `edit --expect-grain TEXT` and test a duplicate example. For a case-specific question trace the definitions with the offline reader's `path --from-id A --to-id B`; check the actual record's identity, period and evidence separately.
 
 - `document.model.semantic.assets` is the canonical graph. Questions reference it; packages and controls are derived snapshots. Legacy numeric/ontology formats need explicit intake and review, not silent synchronization.
 - Reuse identity by definition, domain and scope, not name alone. Foreign keys establish physical references, not business responsibility. Preserve units, grain, exclusions, time and zero/false/null; record unknowns without guessed defaults.

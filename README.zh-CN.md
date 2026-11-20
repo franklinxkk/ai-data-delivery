@@ -1,8 +1,8 @@
-# AI Data Delivery
+# AI Data Delivery · 0.3.7
 
 **把已有表结构变成可编辑、可交给 Agent 的语义模型。**
 
-[English](README.md) · [下载 0.3.6 ZIP](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.6) · [安全说明](SECURITY.zh-CN.md)
+[English](README.md) · [上一正式版 0.3.6](https://github.com/franklinxkk/ai-data-delivery/releases/tag/v0.3.6) · [安全说明](SECURITY.zh-CN.md)
 
 导入 SQL，或读取数据库目录，先得到表、字段和外键草稿；再补充“车辆、企业、线路”等业务对象、属性与关系。导出一份带来源的语义包，其他本机 Agent 可以直接用 CLI 读取。
 
@@ -10,11 +10,15 @@
 
 `导入结构 → 按需查看／编辑 → 导出或本地读取`
 
+可以直接对 Agent 说：“把这份 SQL 画出来。我想知道工单上哪家企业负责整改。”如果表里只有企业编号，先看到有据的字段引用，再决定这家企业扮演什么角色。每次确认重要关系都能回看对应修订的局部图。接手人可以从一条要求沿图查到指标和字段，具体工单有没有复核凭证仍需核对记录。
+
 ![0.3.4 图谱编辑器：企业、车辆及数据字段](https://raw.githubusercontent.com/franklinxkk/ai-data-delivery/main/docs/images/graph-v034-zh.png)
 
 *实际界面，使用随包提供的合成交通表结构。虚线节点表示草稿，物理外键不自动解释为业务归属。*
 
 **和 Agent 一起画图：** 初次生成结构、补完一组业务关系或修改主体口径时，让宿主直接显示同一项目的图。打开后可用“新建对象 / 新建关系”，选择业务域、连接类型和端点。空闲页面会同步 Agent 的保存；编辑中的表单不会因同步被替换。可先存草稿，确认时再补定义、范围和来源。已有资料请用“引用已导入原文”。
+
+已有资料时，把下面的 SQL 路径换成自己的文件。只想试用时直接用随包交通样例：先看两张表和一条外键，再导入同目录的 `transport-v1.txt`，让 Agent 区分“车辆引用企业”和“企业负责车辆维护”。导入命令前加全局 `--progress` 可观察解析进度；保存回执给出待核对项和本机图谱定位。
 
 ## 两条命令，得到第一份模型
 
@@ -33,6 +37,10 @@ python -X utf8 scripts/knowledge.py --project "./work/transport" export --out ".
 
 得到 **2 张表、5 个字段、1 条外键**及原文依据，不会执行 SQL，也不会猜测业务规则。将文件路径换成自己的 DDL 即可。`--seed-draft` 仅初始化空模型；已有模型再次导入时去掉该参数，通过候选核对结构变化，保留人工修改。
 
+相同 DDL 在两个新项目中会得到相同的表、字段和外键 ID。多个环境或定期重新导出 DDL 时，从首次导入起用 `--source-key fleet/prod` 之类的固定来源名，不同库各用一个。旧项目保留原有 ID，更新原来源可用 `--source-id`。首次打开图谱显示全部类型，随后沿用你在该项目里选择的视图。
+
+停用保留资产身份和历史。在 `state` 核对修订和目标后运行 `python scripts/knowledge.py --project ./work/transport --revision N retire --id ASSET_ID --reason "口径已替代"`。批量时把 `--id ASSET_ID` 换成 `--file ids.json`，文件内放 ID 字符串数组。任何一个 ID 无效都会取消整批操作。
+
 `--draft` 允许未确认的模型用于继续建模，包内会明确保留草稿与缺口。核对并确认定义后，可去掉 `--draft` 导出确认快照。输出文件必须尚不存在，防止覆盖旧包。
 
 Windows 若 `python` 不可用，用 `py -3 --version` 检查后将命令中的 `python` 换成 `py -3`；已有虚拟环境则使用其中的 Python。
@@ -43,7 +51,7 @@ Windows 若 `python` 不可用，用 `py -3 --version` 检查后将命令中的 
 python -X utf8 scripts/start.py --project "./work/transport" --language zh
 ```
 
-打开终端给出的本机网址，直接进入图谱。仅有表结构时自动显示数据视图。单击看来源，双击改定义，拖动连线补充关系；修改可以保存草稿，也可以在核对后确认。CLI 与界面读写同一个本地模型。
+打开终端给出的本机网址，直接进入图谱。首次打开包括所有类型；点击节点可核对它所引用的依据。单击看来源，双击改定义，拖动连线补充关系；修改可以保存草稿，也可以在核对后确认。CLI 与界面读写同一个本地模型。
 
 完成后可在 **导出模型** 下载语义包，关闭页面并在终端按 **Ctrl+C** 停止编辑服务。重新打开仍用同一路径。只用 CLI 时无须启动服务；不需要先建立业务问题或走验收流程。
 
@@ -71,9 +79,9 @@ python -X utf8 scripts/semantic_read.py --package "./work/transport.zip" search 
 | 补充文档、指标、规则或业务映射 | [建模短链](references/modeling.md)：成组维护、核对依赖，再按范围交付 |
 | 把特定问题连同语义交给 Agent | [可选问题交付](references/question-delivery.md)：`handoff` 导出，`brief` 读取 |
 | 将模型交给 Neo4j 或 ontology-graph-spec | [离线交换](references/neo4j-interop.md)：Neo4j 不是必装依赖 |
-| 试交通、农业、高校、金融场景 | [四域合成练习](examples/cross-domain/README.md)，不代替实际业务制度 |
+| 试交通、农业、高校、金融场景 | [四域合成练习](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/examples/cross-domain/README.md)，不代替实际业务制度 |
 
-它提供本体建模与交付工具，不承担多人协作管理、企业权限、生产查询或业务执行。核心解析和离线读取在本机；可选数据库连接使用明确授权的端点。文件解析有范围限制，语义包可能包含业务定义与引用片段。[架构](references/architecture.md) · [实际验证](references/v0.3.6-release-validation.md)
+它提供本体建模与交付工具，不承担多人协作管理、企业权限、生产查询或业务执行。核心解析和离线读取在本机；可选数据库连接使用明确授权的端点。文件解析有范围限制，语义包可能包含业务定义与引用片段。[架构](references/architecture.md) · [正式版 0.3.6 验证记录](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/references/v0.3.6-release-validation.md)
 
 0.3.6 支持打开图谱后同步查看 Agent 的修改；数千项资产的单次取证默认只返回相关内容。CLI 修改已有对象时须传入实际读取时的修订号，避免旧稿覆盖他人的编辑。已有模型不会自动迁移或覆盖；升级前保留备份。欢迎提交具体操作中卡住的步骤和脱敏材料：[反馈](https://github.com/franklinxkk/ai-data-delivery/issues)。
 

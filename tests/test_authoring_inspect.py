@@ -11,6 +11,19 @@ def asset(aid, kind, refs=(), **extra):
 
 
 class AuthoringInspectTests(unittest.TestCase):
+    def test_count_can_repeat_declared_business_grain(self):
+        grain = ['hazard_id']
+        plan = {'column_ids': grain, 'grain_ids': grain, 'aggregation': {'function': 'count', 'field_id': 'hazard_id'}}
+        assets = [asset('hazard_id', 'field'), asset('closed_cases', 'metric', properties={'query_plan':plan})]
+        def reviews():
+            return [i for i in inspect_model(assets, [], asset_ids=['closed_cases'])['issues']
+                    if i['code'] == 'COUNT_GRAIN_REVIEW']
+        self.assertEqual(reviews()[0]['grain_ids'], grain)
+        plan['aggregation']['function'] = 'count_distinct'
+        self.assertEqual(reviews(), [])
+        grain.append('tenant_id')
+        self.assertEqual(len(reviews()), 1)
+
     def graph(self):
         return [asset('contracts', 'dataset'), asset('balances', 'dataset'),
                 asset('contract_id', 'field', ['contracts'], properties={'column': 'id'}),

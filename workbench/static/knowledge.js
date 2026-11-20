@@ -24,11 +24,34 @@ window.KnowledgeWorkbench = (() => {
   let importDraft = {name:tr('业务说明.txt'),text:'',domain:'',scope:'',source_id:'',distinct:false}, selectedFiles = [], importResults = [];
   let reviewPageIndex=0;const candidatePages=new Map(),refPools=new Map();
   let reviewFilter='pending', reviewBatch='', deliverySelection=new Set(), publishResult=null, publishExecution=false, scopedDelivery=false;
-  let G={view:'business',mode:'graph',domain:'',kind:'',status:'',query:'',selected:null,limit:80,zoom:1,fixed:[],focus:null,expanded:false,inspector:false};
+  let G={view:'all',mode:'graph',domain:'',kind:'',status:'',query:'',selected:null,limit:80,zoom:1,fixed:[],focus:null,expanded:false,inspector:false};
   const NODE_WIDTH=172, NODE_HEIGHT=68;
   const COLUMN_STEP=250, ROW_STEP=135;
   let virtualPositions={}, graphPlan=null, layoutPending=false, autoPendingKey=null, plotOffset={key:null,x:0,y:0};
   const automaticPlans=new Map(), routedPlans=new Map();
+  let runningWorker=null;
+  const denseGraph=input=>typeof Worker==='function'&&(input.nodes.length>=24||input.edges.length>=32);
+  function layoutButton(){
+    const button=$('[data-kw="arrange"]');if(!button)return;
+    button.disabled=layoutPending&&!runningWorker;
+    button.textContent=runningWorker?say('取消布局','Cancel layout'):layoutPending?tr('布局中…'):tr('自动布局');
+    if(button.dataset)button.dataset.layoutAction=runningWorker?'cancel':'arrange';
+  }
+  function runLayout(input,key,routeOnly){
+    if(!denseGraph(input))return window.SemanticGraphLayout.layout(input);
+    return new Promise((resolve,reject)=>{
+      const worker=new Worker('/graph-layout.js');
+      const finish=(plan,error)=>{
+        worker.terminate();runningWorker=null;
+        if(error)reject(error);else resolve(plan);
+      };
+      runningWorker={key,cancel:()=>finish(null)};
+      layoutButton();
+      worker.onmessage=({data})=>finish(data.plan,data.error?new Error(data.error):null);
+      worker.onerror=e=>finish(null,new Error(e.message));
+      worker.postMessage({input,routeOnly});
+    });
+  }
   let layoutUndo=[], drag=null, connection=null, dialog=null;
   const badge = value => `<span class="badge kw-status-${esc(value)}">${esc(statuses[value]||value||tr('未说明'))}</span>`;
   const button = (label, action, attrs='', cls='') => `<button type="button" class="${cls}" data-kw="${action}" ${attrs}>${label}</button>`;
@@ -72,23 +95,68 @@ window.KnowledgeWorkbench = (() => {
   const nameOf = id => asset(id)?.name || id || tr('未指定');
   const byId = (collection,id) => (S[collection]||[]).find(x=>x.id===id);
   const uid = () => crypto.randomUUID();
-  const fmt = value => typeof value==='object' && value!==null ? Object.entries(value).filter(([k,v])=>v!==null&&v!==''&&(!Array.isArray(v)||v.length)).map(([k,v])=>`${({page:tr('页'),line:tr('行'),start_line:tr('起始行'),end_line:tr('结束行'),line_start:tr('起始行'),line_end:tr('结束行'),headings:tr('章节'),type:tr('内容类型'),part:tr('部分'),table:tr('表'),columns:tr('列'),column_start:tr('起始列'),column_end:tr('结束列'),sheet:tr('工作表'),row:tr('行'),column:tr('列'),paragraph:tr('段落'),statement:tr('语句'),cell:tr('单元格')}[k]||k)} ${Array.isArray(v)?v.join(' / '):({text:tr('文本'),ddl:tr('表结构'),paragraph:tr('段落'),cell:tr('单元格'),foreign_key:tr('外键'),column:tr('字段'),table:tr('表')}[v]||v)}`).join(' · ') : String(value||tr('位置未说明'));
+  function fmt(value){
+    if(Array.isArray(value))return value.map(fmt).join(' / ');
+    if(value===null||value===undefined||value==='')return tr('位置未说明');
+    if(typeof value!=='object')return String(value);
+    const labels={page:tr('页'),line:tr('行'),start_line:tr('起始行'),end_line:tr('结束行'),line_start:tr('起始行'),line_end:tr('结束行'),headings:tr('章节'),type:tr('内容类型'),part:tr('部分'),table:tr('表'),columns:tr('列'),column_start:tr('起始列'),column_end:tr('结束列'),sheet:tr('工作表'),row:tr('行'),column:tr('列'),paragraph:tr('段落'),statement:tr('语句'),cell:tr('单元格'),claims:say('双方主张','Claims'),claim:say('口径','Claim'),applicability:say('适用范围','Applicability'),previous:say('原冲突','Original conflict'),decision:say('裁决','Decision'),source_id:say('来源','Source')};
+    const types={text:tr('文本'),ddl:tr('表结构'),paragraph:tr('段落'),cell:tr('单元格'),foreign_key:tr('外键'),column:tr('字段'),table:tr('表')};
+    return Object.entries(value).filter(([,v])=>v!==null&&v!==''&&(!Array.isArray(v)||v.length)).map(([k,v])=>(labels[k]||k)+' '+(k==='type'&&typeof v==='string'&&types[v]||fmt(v))).join(' · ');
+  }
   function configure(context) { C=context; }
-  let latestDelta=null;
+  let latestDelta=null, missingFocus='', requestedRevision=null;
+  function modelDelta(next, previous) {
+    const events=(next.change_events||[]).filter(e=>e.changed_asset_ids?.length && (!previous||e.revision>previous.revision));
+    const relevant=previous?events:events.slice(-1);
+    const revisions=new Map();let items;
+    if(relevant.length){
+      for(const event of relevant)for(const id of event.changed_asset_ids)revisions.set(id,event.revision);
+      items=next.assets.filter(a=>revisions.has(a.id));
+    }else if(previous){
+      const before=new Map(previous.assets.map(a=>[a.id,a]));
+      items=next.assets.filter(a=>JSON.stringify(a)!==JSON.stringify(before.get(a.id)));
+    }else return null;
+    const rank=a=>['relation','mapping'].includes(a.kind)?0:a.kind==='field'?2:1;
+    return items.length?{revision:next.revision,total:items.length,items:items.filter(a=>a.status!=='retired').sort((a,b)=>rank(a)-rank(b)||(revisions.get(b.id)||0)-(revisions.get(a.id)||0)).slice(0,4)}:null;
+  }
+  function changeLinks(delta,newTab=false){
+    if(!delta?.items.length)return '';
+    return `<div class="kw-change" role="status"><strong>r${esc(delta.revision)}</strong> ${delta.items.map(a=>{
+      const edge=['relation','mapping'].includes(a.kind);
+      const label=(edge?say('查看刚改的关系','View changed relation'):say('查看变更','View change'))+' · '+a.name;
+      if(!newTab)return button(esc(label),'locate-change',`data-id="${esc(a.id)}"`,'quiet small');
+      const url=new URL(window.location.href);
+      url.searchParams.set('focus',a.id);url.searchParams.set('revision',delta.revision);url.hash='graph';
+      return `<a href="${esc(url.href)}" target="_blank" rel="noopener">${esc(label)} · ${say('新标签页','New tab')}</a>`;
+    }).join(' ')}</div>`;
+  }
+  function graphLocation(id){
+    if(!window.history||!window.location?.href)return;
+    const url=new URL(window.location.href);url.hash='graph';url.searchParams.delete('domain');
+    if(id){url.searchParams.set('focus',id);url.searchParams.set('revision',S.revision);}
+    else{url.searchParams.delete('focus');url.searchParams.delete('revision');}
+    requestedRevision=null;missingFocus='';window.history.replaceState(null,'',url);
+  }
+  function previewExternal(next){
+    const holder=$('#kw-dialog[open] #kw-external-change');
+    if(holder&&holder.dataset.revision!==String(next.revision)){
+      holder.innerHTML=changeLinks(modelDelta(next,S),true);
+      holder.dataset.revision=String(next.revision);
+    }
+  }
   function update(state) {
     window.ScenarioWorkbench?.update(state);
     window.MetadataWorkbench?.update(state);
-    const previous=S,first=!S.project_id,wasEmpty=!S.assets.length; S={assets:[],sources:[],groups:[],batches:[],problems:[],history:[],snapshots:[],layout:{},...state};
-    if((first||wasEmpty)&&S.assets.length&&!S.assets.some(a=>['entity','term','metric','rule','attribute'].includes(a.kind)))G.view='data';
-    if(!first&&S.revision>previous.revision){
-      const before=new Map(previous.assets.map(a=>[a.id,a])),changed=S.assets.filter(a=>{const b=before.get(a.id);return !b||a.updated!==b.updated||a.status!==b.status||a.name!==b.name;});
-      if(changed.length)latestDelta={revision:S.revision,total:changed.length,items:changed.filter(a=>a.status!=='retired').sort((a,b)=>(a.kind==='field')-(b.kind==='field')).slice(0,4)};
-      if(G.view==='data'&&!G.focus&&!G.query&&!G.domain&&!previous.assets.some(a=>a.kind==='entity')&&changed.some(a=>a.kind==='entity'))G.view='business';
-    }
+    const previous=S,first=!S.project_id; S={assets:[],sources:[],groups:[],batches:[],problems:[],history:[],snapshots:[],layout:{},...state};
+    if(first||S.revision>previous.revision)latestDelta=modelDelta(S,first?null:previous)||latestDelta;
     if(first)try{for(const [key,value] of JSON.parse(sessionStorage.getItem('kw-pending:'+S.project_id)||'[]')){pending.set(key,value);if(value.path==='edit'&&value.request.asset)assetDrafts.set(key.replace(/^edit:/,''),{asset:value.request.asset,declaration:'',baseRevision:value.request.revision});if(value.path==='review'&&value.request.group_id)drafts.set(value.request.group_id,{assets:value.request.assets||[],reason:value.request.reason||''});}}catch(_){}
-    if(first)try{const saved=JSON.parse(localStorage.getItem('kw-view:'+S.project_id)||'null');if(saved)G={...G,...saved};}catch(_){}
-    if(first&&window.location?.search){const q=new URLSearchParams(window.location.search), focus=q.get('focus'), domain=q.get('domain');
+    if(first)try{const saved=JSON.parse(localStorage.getItem('kw-view:'+S.project_id)||'null');if(saved)G={...G,...saved,hasSavedView:true};}catch(_){}
+    if(first&&!G.hasSavedView&&S.assets.length>G.limit&&!G.focus&&!G.selected&&!G.query&&!G.domain&&!G.kind&&!G.status&&G.view==='all'&&latestDelta?.items.length){
+      G.selected=G.focus=latestDelta.items[0].id;G.inspector=true;
+    }
+    if(first&&window.location?.search){const q=new URLSearchParams(window.location.search), focus=q.get('focus'), domain=q.get('domain');requestedRevision=q.get('revision');
       if(focus&&S.assets.some(a=>a.id===focus))Object.assign(G,{view:'all',query:'',domain:'',kind:'',status:'',mode:'graph',selected:focus,focus,inspector:true,limit:80});
+      else if(focus){missingFocus=focus;Object.assign(G,{view:'all',domain:'',query:'',kind:'',status:'',mode:'graph',selected:null,focus:null,inspector:false});}
       else if(domain&&S.assets.some(a=>a.domain===domain))Object.assign(G,{view:'all',domain,query:'',kind:'',status:'',mode:'graph',selected:null,focus:null,inspector:false,limit:80});
     }
     if(first)try{const saved=JSON.parse(sessionStorage.getItem('kw-delivery:'+S.project_id)||'null');if(saved){deliverySelection=new Set(saved.ids);scopedDelivery=!!saved.scoped;}}catch(_){}
@@ -137,7 +205,7 @@ window.KnowledgeWorkbench = (() => {
   function mount(){$$('details.kw-candidate[open]').forEach(hydrateCandidate);if(activePage==='graph'){drawGraph();drawInspector();}if(dialog?.conflict)showConflict();}
 
   function exampleGuide(){
-    if(!S.document?.semantic_example)return '';
+    if(C?.legacyState?.()?.model_only || !S.document?.semantic_example)return '';
     return tr`<section class="card kw-example"><h2>设备借用建模练习</h2><p>这是预先编写的合成样例，不是自动 AI 抽取。先核对 DDL 结构组；接纳后回到这里准备业务候选，再核对业务定义、范围和映射。</p><div class="row">${button(tr('先核对表结构'),'go','data-page="review"')}${button(tr('准备练习业务候选'),'example','','primary')}</div><p>完成核对后打开图谱、编辑一项定义并保存，再到交付页发布语义包。独立 Agent 应解释可借条件，并指出缺少库存记录，不能给出当前台数或办理借用。</p></section>`;
   }
   function materialsPage(){return heading(tr('导入 SQL 或资料'),tr('空模型可直接生成结构草稿。已有模型的新增材料保留为候选，避免覆盖你的修改。'),button(tr('连接数据库'),'go','data-page="connections"'))+exampleGuide()+
@@ -149,7 +217,7 @@ window.KnowledgeWorkbench = (() => {
   function batchRow(b){const names=(b.sources||[]).map(r=>byId('sources',r.source_id)?.name||r.source_id).join('、');return `<div class="gap"><div><h3>${esc(names||tr('知识处理任务'))} ${badge(b.status)}</h3><p class="privacy">${esc(b.id)} · ${esc(b.created||'')}</p>${taskTexts.has(b.id)?tr`<div class="kw-task"><b>等待宿主处理</b><p>把下面指令交给当前 Agent；候选返回后点击刷新，再进入核对。</p><textarea readonly aria-label="宿主处理指令">${esc(taskTexts.get(b.id))}</textarea>${button(tr('复制指令'),'copy-task',`data-id="${esc(b.id)}"`,'small')}</div>`:''}</div><div class="row">${button(tr('准备 Agent 任务'),'prepare',`data-id="${esc(b.id)}"`,'small')}${button(tr('查看候选'),'batch-review',`data-id="${esc(b.id)}"`,'small')}${b.status==='cancelled'?button(tr('恢复任务'),'resume',`data-id="${esc(b.id)}"`,'small'):button(tr('取消任务'),'cancel-task',`data-id="${esc(b.id)}"`,'quiet small')}</div></div>`;}
 
   function reviewPage(){const groups=S.groups.filter(g=>(!reviewBatch||g.batch_id===reviewBatch)&&(reviewFilter==='all'||reviewFilter==='pending'?reviewFilter==='all'||(!g.superseded_by&&['pending','deferred','stale'].includes(g.status)):g.status===reviewFilter)).slice().reverse();reviewPageIndex=Math.min(reviewPageIndex,Math.max(0,Math.ceil(groups.length/10)-1));const visible=groups.slice(reviewPageIndex*10,reviewPageIndex*10+10),pages=Math.max(1,Math.ceil(groups.length/10));
-    return heading(tr('把候选变成共同定义'),tr('按一组相关变化核对当前定义、建议和原文。接纳前可以直接修正。'),button(tr('项目问题'),'legacy','data-page="issues"','small'))+
+    return heading(tr('把候选变成共同定义'),tr('按一组相关变化核对当前定义、建议和原文。接纳前可以直接修正。'),(C?.legacyState?.()?.model_only?'':button(tr('项目问题'),'legacy','data-page="issues"','small')))+
       tr`<div class="toolbar kw-toolbar"><label>处置状态<select id="kw-review-filter">${options([['pending',tr('待处理与暂缓')],['accepted',tr('已接纳')],['rejected',tr('已拒绝')],['all',tr('全部')]],reviewFilter,null)}</select></label><label>处理批次<select id="kw-review-batch">${options(S.batches.map(b=>[b.id,(b.sources||[]).map(r=>byId('sources',r.source_id)?.name||r.source_id).join('、')||b.id]),reviewBatch,tr('所有批次'))}</select></label><span class="spacer"></span><span class="privacy">${groups.length} 组变化</span></div>`+
       tr`<div class="row">${button(tr('上一页组'),'review-page',`data-page-index="${reviewPageIndex-1}" ${reviewPageIndex===0?'disabled':''}`,'small')}<span class="privacy">第 ${reviewPageIndex+1} / ${pages} 页 · 每页最多 10 组</span>${button(tr('下一页组'),'review-page',`data-page-index="${reviewPageIndex+1}" ${reviewPageIndex+1>=pages?'disabled':''}`,'small')}</div>${groups.length?visible.map(groupCard).join(''):empty(tr('当前没有待核对变化'),tr('可以先加入资料并准备宿主任务，或手工创建知识。'),button(tr('加入资料'),'go','data-page="knowledge"','primary'))}`+
       tr`<div class="section-title"><h2>需复核的知识</h2></div><div class="card">${S.assets.filter(a=>a.status==='needs_review').map(a=>`<div class="gap"><div><h3>${esc(a.name)} ${badge(a.status)}</h3><p>${esc(a.definition)}</p></div>${button(tr('对照来源并复核'),'review-source',`data-id="${esc(a.id)}"`,'small')}</div>`).join('')||tr('<p class="muted">没有来源更新引起的待复核知识。</p>')}</div>`;
@@ -169,35 +237,74 @@ window.KnowledgeWorkbench = (() => {
     return `<label>${tr('领域')}${mark(true)}<input data-field="domain" list="${id}" value="${esc(value)}" placeholder="${say('选择已有领域，或输入业务名称','Choose or enter a business domain')}"><datalist id="${id}">${options(domains.map(d=>[d,d]),'',null)}</datalist></label>`;
   }
   function allowedEnds(type,side,item){const rule=S.editor_contract?.ends?.[type];return !rule||rule[side].includes(item.kind);}
+  function endpointLabel(item,duplicate=false){
+    const origin=item.evidence?.[0];
+    const source=origin?.source_id?byId('sources',origin.source_id)?.name:origin?.type==='manual'?say('人工说明','Operator statement'):'';
+    const role=item.properties?.role||item.definition;
+    return [item.name,kinds[item.kind],typeof role==='string'?role.slice(0,72):'',source,duplicate?item.id:''].filter(Boolean).join(' · ');
+  }
+  function endpointCreator(key,side,type){
+    return `<details data-end-create="${key}" ${allowedEnds(type,side,{kind:'entity'})?'':'hidden'}><summary>${say('找不到对象？就地新建','Missing object? Create here')}</summary><label>${say('新对象名称','New object name')}<input data-end-name></label>${button(say('创建草稿并选用','Create draft and select'),'add-end',`data-side="${key}"`,'small')}</details>`;
+  }
   function updateEnds(container){
     const type=container.querySelector('[data-field="relation_type"]')?.value;
     const broad=container.querySelector('[data-all-ends]')?.checked??true; const toggle=container.querySelector('[data-end-toggle]');if(toggle)toggle.hidden=type!=='business';
     ['from','to'].forEach((key,side)=>{const el=container.querySelector('[data-field="'+key+'"]');if(!el)return;
+      const create=container.querySelector('[data-end-create="'+key+'"]');if(create)create.hidden=!allowedEnds(type,side,{kind:'entity'});
       for(const opt of el.options){const k=opt.dataset.kind;if(k)opt.disabled=opt.hidden=!allowedEnds(type,side,{kind:k})||(type==='business'&&!broad&&['dataset','field'].includes(k));}
       if(el.selectedOptions[0]?.disabled)el.value='';
     });
   }
-  function assetFields(a,{candidate=false,extraAssets=[]}={}) {
-    const p=a.properties||{},kind=a.kind||'entity',pool=[...new Map([...S.assets,...extraAssets].filter(x=>x.id).map(x=>[x.id,x])).values()],others=pool.filter(x=>x.id!==a.id&&x.status!=='retired'),ends=pool.filter(x=>!['relation','mapping'].includes(x.kind)).map(x=>[x.id,`${x.name} · ${kinds[x.kind]||x.kind}`,x.kind]);[a.from,a.to].filter(Boolean).forEach(id=>{if(!ends.some(x=>x[0]===id))ends.push([id,nameOf(id)]);});
+  function assetFields(a,{candidate=false,extraAssets=[],allowNewEnds=false}={}) {
+    const p=a.properties||{},kind=a.kind||'entity',pool=[...new Map([...S.assets,...extraAssets].filter(x=>x.id).map(x=>[x.id,x])).values()],others=pool.filter(x=>x.id!==a.id&&x.status!=='retired');
+    const endpoints=['relation','mapping'].includes(kind)?others.filter(x=>!['relation','mapping'].includes(x.kind)||[a.from,a.to].includes(x.id)):[];
+    const names=new Set(),duplicate=new Set();
+    for(const x of endpoints){if(names.has(x.name))duplicate.add(x.name);else names.add(x.name);}
+    const ends=endpoints.map(x=>[x.id,endpointLabel(x,duplicate.has(x.name)),x.kind]);[a.from,a.to].filter(Boolean).forEach(id=>{if(!ends.some(x=>x[0]===id))ends.push([id,nameOf(id)]);});
     const reltype=a.relation_type||(kind==='mapping'?'maps_to':'business');
     const broad=ends.some(([id,,k])=>[a.from,a.to].includes(id)&&['dataset','field'].includes(k));
     const endOptions=(side,value)=>options([],'')+ends.map(([id,name,k])=>`<option value="${esc(id)}" data-kind="${esc(k)}" ${id===value?'selected':''} ${(k&&!allowedEnds(reltype,side,{kind:k})||reltype==='business'&&!broad&&['dataset','field'].includes(k))?'hidden disabled':''}>${esc(name)}</option>`).join('');
-    return `<p class="privacy">${say('对象记录人或事物；关系连接两个对象；规则说明何时、由谁做什么。未标注的项目可选。','Objects name things, relations connect them, and rules describe conditions and responsibilities. Unmarked fields are optional.')}</p>`+tr`<div class="grid cols2"><label>知识类型<select data-field="kind" ${a.id?'disabled':''}>${options(Object.entries(kinds),kind,null)}</select></label>${field(tr('名称'),'name',a.name)}</div>${field(tr('定义'),'definition',a.definition,true)}<div class="grid cols2">${domainField(a.domain)}${scopeFields(a.scope)}</div>${field(tr('别名（用逗号分隔）'),'aliases',(a.aliases||[]).join('，'))}`+
-      (['relation','mapping'].includes(kind)?tr`<label data-end-toggle ${reltype!=='business'?'hidden':''}><span><input type="checkbox" data-all-ends ${broad?'checked':''}> ${say('也显示物理表和字段','Also show physical tables and fields')}</span></label><div class="grid cols2"><label>起点${mark(false)}<select required data-field="from">${endOptions(0,a.from)}</select></label><label>终点${mark(false)}<select required data-field="to">${endOptions(1,a.to)}</select></label></div><div class="grid cols2"><label>连接类型${mark(false)}<select required data-field="relation_type">${options(Object.entries(relationTypes),a.relation_type||(kind==='mapping'?'maps_to':'business'),null)}</select></label>${field(tr('谓词（例如：监管、负责维护）'),'predicate',a.predicate)}</div><div data-physical ${a.relation_type==='physical_fk'?'':'hidden'}><p class="privacy">物理外键字段按顺序一一对应，用逗号分隔。</p><div class="grid cols2">${field(tr('起点字段')+' · '+say('必填','Required'),'properties.from_fields',(p.from_fields||[]).join('，'))}${field(tr('终点字段')+' · '+say('必填','Required'),'properties.to_fields',(p.to_fields||[]).join('，'))}</div></div>`:'')+
-      `<div class="kw-property-fields">${(propertyFields[kind]||[]).map(([key,label])=>field(label,'properties.'+key,Array.isArray(p[key])?p[key].join('，'):p[key]||'',!['unit','value_type','source','column'].includes(key),(S.editor_contract?.confirm_fields?.[kind]||[]).includes(key))).join('')}</div>`+
-      tr`${field(tr('仍待明确的问题（每行一项，已明确可留空）'),'properties.knowledge_gaps',(p.knowledge_gaps||[]).join('\n'),true)}${referenceSelector(a,others)}<details><summary>有效期（未提供可留空）</summary><div class="grid cols2">${field(tr('生效日期'),'effective_from',a.effective_from)}${field(tr('截止日期'),'effective_to',a.effective_to)}</div></details>`;
+    return `<p class="privacy">${say('对象记录人或事物；关系连接两个对象；规则说明何时、由谁做什么。未标注的项目可选。','Objects name things, relations connect them, and rules describe conditions and responsibilities. Unmarked fields are optional.')}</p>`+tr`<div class="grid cols2"><label>知识类型<select data-field="kind" ${a.id?'disabled':''}>${options(Object.entries(kinds),kind,null)}</select></label>${field(tr('名称'),'name',a.name)}</div>`+
+      (['relation','mapping'].includes(kind)?tr`<label data-end-toggle ${reltype!=='business'?'hidden':''}><span><input type="checkbox" data-all-ends ${broad?'checked':''}> ${say('也显示物理表和字段','Also show physical tables and fields')}</span></label><div class="grid cols2"><div><label>起点${mark(false)}<select required data-field="from">${endOptions(0,a.from)}</select></label>${allowNewEnds?endpointCreator('from',0,reltype):''}</div><div><label>终点${mark(false)}<select required data-field="to">${endOptions(1,a.to)}</select></label>${allowNewEnds?endpointCreator('to',1,reltype):''}</div></div><div class="grid cols2"><label>连接类型${mark(false)}<select required data-field="relation_type">${options(Object.entries(relationTypes),a.relation_type||(kind==='mapping'?'maps_to':'business'),null)}</select></label>${field(tr('谓词（例如：监管、负责维护）'),'predicate',a.predicate)}</div><div data-physical ${a.relation_type==='physical_fk'?'':'hidden'}><p class="privacy">物理外键字段按顺序一一对应，用逗号分隔。</p><div class="grid cols2">${field(tr('起点字段')+' · '+say('必填','Required'),'properties.from_fields',(p.from_fields||[]).join('，'))}${field(tr('终点字段')+' · '+say('必填','Required'),'properties.to_fields',(p.to_fields||[]).join('，'))}</div></div>`:'')+
+      tr`${field(tr('定义'),'definition',a.definition,true)}<div class="grid cols2">${domainField(a.domain)}${scopeFields(a.scope)}</div>${field(tr('别名（用逗号分隔）'),'aliases',(a.aliases||[]).join('，'))}`+      `<div class="kw-property-fields">${(propertyFields[kind]||[]).map(([key,label])=>field(label,'properties.'+key,Array.isArray(p[key])?p[key].join('，'):p[key]||'',!['unit','value_type','source','column'].includes(key),(S.editor_contract?.confirm_fields?.[kind]||[]).includes(key))).join('')}</div>`+
+      tr`${reviewFields(p)}${field(tr('仍待明确的问题（每行一项，已明确可留空）'),'properties.knowledge_gaps',(p.knowledge_gaps||[]).join('\n'),true)}${referenceSelector(a,others)}<details><summary>有效期（未提供可留空）</summary><div class="grid cols2">${field(tr('生效日期'),'effective_from',a.effective_from)}${field(tr('截止日期'),'effective_to',a.effective_to)}</div></details>`;
   }
-  function readAsset(container,original,strict=true){const a=copy(original||{});if(!container||!container.querySelector('[data-field]'))return a;a.properties={...(a.properties||{})};container.querySelectorAll('[data-field]').forEach(el=>{const key=el.dataset.field;if(key==='properties.knowledge_gaps'){const gaps=[...new Set(el.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean))];if(gaps.length)a.properties.knowledge_gaps=gaps;else delete a.properties.knowledge_gaps;}else if(['properties.from_fields','properties.to_fields'].includes(key)){if(el.value.trim())a.properties[key.slice(11)]=el.value.split(/[,，]/).map(x=>x.trim()).filter(Boolean);else delete a.properties[key.slice(11)];}else if(key.startsWith('properties.'))a.properties[key.slice(11)]=el.value.trim();else if(key==='aliases')a.aliases=el.value.split(/[,，\n]/).map(x=>x.trim()).filter(Boolean);else a[key]=el.value.trim();});if(original?.scope&&typeof original.scope==='object')a.scope=readScope(container,original.scope,strict);const refPool=container.querySelector('[data-ref-pool]');a.refs=refPool?[...(refPools.get(refPool.dataset.refPool)?.selected||[])]:[...container.querySelectorAll('[data-ref]:checked')].map(el=>el.dataset.ref);return a;}
+  function readAsset(container,original,strict=true){const a=copy(original||{});if(!container||!container.querySelector('[data-field]'))return a;a.properties={...(a.properties||{})};container.querySelectorAll('[data-field]').forEach(el=>{const key=el.dataset.field;if(key==='properties.knowledge_gaps'){const gaps=[...new Set(el.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean))];if(gaps.length)a.properties.knowledge_gaps=gaps;else delete a.properties.knowledge_gaps;}else if(['properties.from_fields','properties.to_fields'].includes(key)){if(el.value.trim())a.properties[key.slice(11)]=el.value.split(/[,，]/).map(x=>x.trim()).filter(Boolean);else delete a.properties[key.slice(11)];}else if(key==='properties.assertion_basis'&&!el.value)delete a.properties.assertion_basis;else if(key.startsWith('properties.'))a.properties[key.slice(11)]=el.value.trim();else if(key==='aliases')a.aliases=el.value.split(/[,，\n]/).map(x=>x.trim()).filter(Boolean);else a[key]=el.value.trim();});if(original?.scope&&typeof original.scope==='object')a.scope=readScope(container,original.scope,strict);const decision=container.querySelector('[data-conflict-decision]')?.value.trim();if(decision&&a.properties.unresolved_conflicts){a.properties.conflict_resolutions=[...(a.properties.conflict_resolutions||[]),{previous:a.properties.unresolved_conflicts,decision}];delete a.properties.unresolved_conflicts;a.evidence=[...(a.evidence||[]),{type:'manual',actor:'local',quote:decision}];}const refPool=container.querySelector('[data-ref-pool]');a.refs=refPool?[...(refPools.get(refPool.dataset.refPool)?.selected||[])]:[...container.querySelectorAll('[data-ref]:checked')].map(el=>el.dataset.ref);return a;}
 
-  function graphPage(){if(!S.assets.length)return heading(tr('从一份表结构开始'),tr('导入 SQL 或读取数据库目录，生成可编辑草稿；完成后导出即可。'))+`<section class="card tool-empty"><h2>${tr('把结构变成可复用的模型')}</h2><p>${tr('表、字段和外键保留来源。业务对象、含义和关系可以随后补充。')}</p><div class="row">${button(tr('导入 SQL / 资料'),'go','data-page="knowledge"','primary')}${button(tr('连接数据库'),'go','data-page="connections"')}${button(tr('手工开始'),'create')}</div><p class="privacy">${tr('也可在 CLI 完成导入和导出，无需启动此页面。')}</p></section>`;return heading(tr('编辑语义图谱'),tr('单击查看 · 双击编辑 · 保存到本地模型'),button(say('新建对象','New object'),'create','data-kind="entity"','primary')+button(say('新建关系','New relation'),'create','data-kind="relation"')+button(tr('新建知识'),'create')+button(tr('导出模型'),'go','data-page="publish"','small'))+
-    (latestDelta?`<div class="notice kw-change" role="status"><b>${say('本次模型变更','Model changes')} · r${latestDelta.revision}</b>　${latestDelta.total} ${say('项','items')}　${latestDelta.items.map(a=>button(esc(a.name),'locate-change',`data-id="${esc(a.id)}"`,'quiet small')).join('')}</div>`:'')+`<div class="privacy kw-graph-guide">${say('先建对象，再用「连接对象」点击起点和终点。要写条件、时限或动作，选「新建知识 → 规则与职责」。','Create objects, then connect a start and an end. Use New knowledge → Rule for conditions, deadlines or actions.')}</div>`+
+  function reviewPrompt(){
+    const event=S.change_events?.at(-1),step=event?.guidance;
+    if(!step)return '';
+    const issue=step.attention;
+    if(!issue && step.next_action!=='choose_business_question_or_export')return '';
+    if(!issue)return '<p class="notice">'+say('结构草稿已保存。现在可以导出，或告诉 Agent 你希望这张图解释哪个业务问题。','Structure saved. Export this draft or tell your Agent which business question it should explain.')+'</p>';
+    const labels={conflicting_sources:['两份依据的口径是否适用于同一范围？','Do the competing definitions apply to the same scope?'],confirm_inference:['哪份业务材料或人工观察支持这条推断？','Which source or operator observation supports this inference?'],source_changed:['依据已变，原定义仍然适用吗？','Does the definition still apply after the source change?'],missing_evidence:['还缺哪项业务依据？','Which business evidence is missing?'],review_relationship:['两侧记录如何配对，会重复累计吗？','How are the records joined, and can that duplicate counts?']};
+    const target=asset(issue.asset_id);
+    return '<div class="notice" role="status"><b>'+esc(say(...(labels[issue.kind]||labels.missing_evidence)))+'</b> '+esc(issue.detail||'')+' '+(target?button(esc(target.name),'locate-change',`data-id="${esc(target.id)}"`,'small'):'')+'</div>';
+  }
+  function graphPage(){if(!S.assets.length)return heading(tr('从一份表结构开始'),tr('导入 SQL 或读取数据库目录，生成可编辑草稿；完成后导出即可。'))+`<section class="card tool-empty"><h2>${tr('把结构变成可复用的模型')}</h2><p>${tr('表、字段和外键保留来源。业务对象、含义和关系可以随后补充。')}</p><div class="row">${button(tr('导入 SQL / 资料'),'go','data-page="knowledge"','primary')}${button(tr('连接数据库'),'go','data-page="connections"')}${button(tr('手工开始'),'create')}</div><p>${say('也可以先告诉 Agent 你想解释的问题，例如“哪些投诉已经完成回传？”','Or tell your Agent the question you want to explain, such as “Which cases have a confirmed delivery receipt?”')}</p><p class="privacy">${tr('也可在 CLI 完成导入和导出，无需启动此页面。')}</p></section>`;return heading(tr('编辑语义图谱'),tr('单击查看 · 双击编辑 · 保存到本地模型'),button(say('新建对象','New object'),'create','data-kind="entity"','primary')+button(say('新建关系','New relation'),'create','data-kind="relation"')+button(tr('新建知识'),'create')+button(tr('导出模型'),'go','data-page="publish"','small'))+
+    (requestedRevision&&String(S.revision)!==requestedRevision?'<p class="notice">'+esc(say('链接修订','Linked revision')+' r'+requestedRevision+' · '+say('当前图谱','Current graph')+' r'+S.revision)+'</p>':'')+(missingFocus?'<p class="notice" role="status">'+esc(say('此图谱中找不到指定对象，已显示全图。','Requested item was not found in this graph. Showing the overview.'))+' '+esc(missingFocus)+'</p>':'')+reviewPrompt()+(!G.expanded?changeLinks(latestDelta):'')+`<div class="privacy kw-graph-guide">${say('先建对象，再用「连接对象」点击起点和终点。要写条件、时限或动作，选「新建知识 → 规则与职责」。','Create objects, then connect a start and an end. Use New knowledge → Rule for conditions, deadlines or actions.')}</div>`+
     tr`<div class="toolbar kw-toolbar"><input id="kw-graph-search" value="${esc(G.query)}" placeholder="查找名称、别名、规则或范围" aria-label="搜索图谱"><select id="kw-domain" aria-label="按领域筛选">${options([...new Set(S.assets.map(a=>a.domain).filter(Boolean))].map(v=>[v,v]),G.domain,tr('全部领域'))}</select><select id="kw-kind" aria-label="按类型筛选">${options(Object.entries(kinds),G.kind,tr('全部类型'))}</select><select id="kw-status" aria-label="按状态筛选">${options(['draft','confirmed','needs_review','retired'].map(v=>[v,statuses[v]]),G.status,tr('有效知识'))}</select><span class="spacer"></span>${button(G.mode==='graph'?tr('表格视图'):tr('图谱视图'),'toggle-view','','small')}</div>`+
-    tr`<div class="kw-graph-layout ${G.expanded&&G.mode==='graph'?'kw-canvas-expanded':''} ${G.inspector?'kw-inspector-visible':''}"><section class="kw-graph-main">${G.mode==='graph'?tr`<div class="toolbar"><strong class="kw-graph-title">${esc(G.domain||[...new Set(S.assets.map(a=>a.domain).filter(Boolean))].join(' / ')||tr('语义图谱'))}</strong><select id="kw-canvas-view" aria-label="画布视图">${options([['business',tr('业务')],['rules',tr('指标与规则')],['data',tr('数据映射')],['all',tr('全部知识')]],G.view,null)}</select><span id="kw-graph-count" class="privacy"></span><span class="spacer"></span>${button('−','zoom','data-delta="-0.15"','small')}${button('＋','zoom','data-delta="0.15"','small')}${button(tr('适应画布'),'fit-canvas','','small')}${button(G.expanded?tr('退出专注'):tr('展开画布'),'expand-canvas',`aria-expanded="${G.expanded}" aria-controls="kw-canvas"`,'small')}${button(tr('自动布局'),'arrange','','small')}${G.expanded?button(G.inspector?tr('收起详情'):tr('显示详情'),'toggle-inspector','','small'):''}${button(tr('撤销布局'),'undo-layout','','small')}${button(connection?tr('取消连线'):tr('连接对象'),'connect','','small')}</div><div class="kw-canvas" id="kw-canvas"><svg id="kw-graph" aria-label="语义图谱，可拖动节点和连接端口"></svg></div><div class="graph-hint"><span class="kw-graph-legend"><span><i class="kw-legend-line"></i>${G.view==='data'?tr('物理外键'):say('关系或映射','Relation or mapping')}</span><span><i class="kw-legend-line reference"></i>定义引用</span></span> 拖动调整 · 双击编辑 · 空白处平移 / 取消高亮</div>`:`<div id="kw-asset-table"></div>`}<div class="kw-more">${button(tr('显示更多'),'more','','quiet small')}${G.focus?button(tr('退出邻域'),'clear-focus','','quiet small'):''}</div></section><aside class="kw-inspector" id="kw-inspector"></aside></div><details><summary>模型检查与待明确项</summary><div class="card" id="kw-problems">${problemsHtml()}</div></details>`;}
+    tr`<div class="kw-graph-layout ${G.expanded&&G.mode==='graph'?'kw-canvas-expanded':''} ${G.inspector?'kw-inspector-visible':''}"><section class="kw-graph-main">${G.mode==='graph'?tr`<div class="toolbar"><strong class="kw-graph-title">${esc(G.domain||[...new Set(S.assets.map(a=>a.domain).filter(Boolean))].join(' / ')||tr('语义图谱'))}</strong><select id="kw-canvas-view" aria-label="画布视图">${options([['business',tr('业务')],['rules',tr('指标与规则')],['data',tr('数据映射')],['all',tr('全部知识')]],G.view,null)}</select>${G.expanded?`<input type="search" id="kw-canvas-search" aria-label="${say('搜索图谱','Search graph')}" placeholder="${say('搜索图谱','Search graph')}" value="${esc(G.query)}">`:''}<span id="kw-graph-count" class="privacy"></span><span class="spacer"></span>${button('−','zoom','data-delta="-0.15"','small')}${button('＋','zoom','data-delta="0.15"','small')}${button(tr('适应画布'),'fit-canvas','','small')}${button(G.expanded?tr('退出专注'):tr('展开画布'),'expand-canvas',`aria-expanded="${G.expanded}" aria-controls="kw-canvas"`,'small')}${button(tr('自动布局'),'arrange','','small')}${G.expanded?button(G.inspector?tr('收起详情'):tr('显示详情'),'toggle-inspector','','small'):''}${button(tr('撤销布局'),'undo-layout','','small')}${button(connection?tr('取消连线'):tr('连接对象'),'connect','','small')}</div><div class="kw-canvas" id="kw-canvas"><svg id="kw-graph" aria-label="语义图谱，可拖动节点和连接端口"></svg></div><div class="graph-hint"><span class="kw-graph-legend"><span><i class="kw-legend-line"></i>${G.view==='data'?tr('物理外键'):say('关系或映射','Relation or mapping')}</span><span><i class="kw-legend-line reference"></i>定义引用</span></span> 拖动调整 · 双击编辑 · 空白处平移 / 取消高亮</div>`:`<div id="kw-asset-table"></div>`}<div class="kw-more">${G.expanded?changeLinks(latestDelta):''}${button(tr('显示更多'),'more','','quiet small')}${G.focus?button(tr('退出邻域'),'clear-focus','','quiet small'):''}</div></section><aside class="kw-inspector" id="kw-inspector"></aside></div><details><summary>模型检查与待明确项</summary><div class="card" id="kw-problems">${problemsHtml()}</div></details>`;}
   function filteredAssets(){let list=S.assets.filter(a=>(!G.domain||a.domain===G.domain)&&(!G.kind||a.kind===G.kind)&&(G.status?a.status===G.status:a.status!=='retired'));const allowed={business:['entity','term','attribute','relation'],rules:['entity','term','metric','rule','relation','attribute'],data:['entity','attribute','dataset','field','mapping','relation'],all:Object.keys(kinds)}[G.view];list=list.filter(a=>allowed.includes(a.kind)&&(!['business','rules'].includes(G.view)||a.relation_type!=='physical_fk'));if(G.query){const q=G.query.toLowerCase();list=list.filter(a=>semanticSearchText(a).includes(q));}if(G.focus){const ids=new Set([G.focus]);S.assets.forEach(a=>{if(a.from===G.focus||a.to===G.focus){ids.add(a.id);ids.add(a.from);ids.add(a.to);}if(a.id===G.focus){[a.from,a.to,...(a.refs||[])].filter(Boolean).forEach(x=>ids.add(x));}if((a.refs||[]).includes(G.focus))ids.add(a.id);});list=list.filter(a=>ids.has(a.id));}return list;}
   function currentLayout(){const positions=copy(S.layout);graphData().nodes.forEach((a,i)=>{positions['semantic:'+G.view+':'+a.id]={...point(a,i)};});return positions;}
   function defaultPoint(index){return {x:40+(index%3)*COLUMN_STEP,y:40+Math.floor(index/3)*ROW_STEP};}
   function point(a,index){return S.layout['semantic:'+G.view+':'+a.id]||virtualPositions[a.id]||defaultPoint(index);}
-  function graphData(){const matched=filteredAssets();if(G.focus)matched.sort((a,b)=>Number(b.id===G.focus)-Number(a.id===G.focus));const visible=matched.slice(0,G.limit),ids=new Set(visible.map(a=>a.id));const edges=matched.filter(a=>['relation','mapping'].includes(a.kind)&&(ids.has(a.id)||(ids.has(a.from)&&ids.has(a.to))));edges.forEach(e=>{[e.from,e.to].forEach(id=>{if(id)ids.add(id);});});return {matched,nodes:S.assets.filter(a=>ids.has(a.id)&&!['relation','mapping'].includes(a.kind)),edges};}
+  function graphData(){
+    const matched=filteredAssets();
+    if(G.view==='all'&&matched.length>G.limit){
+      // Reserve one place per kind so paging through fields cannot conceal tables or metrics.
+      const firstByKind=new Map();
+      for(const a of matched)if(!firstByKind.has(a.kind))firstByKind.set(a.kind,a.id);
+      const representatives=new Set(firstByKind.values());
+      matched.sort((a,b)=>Number(representatives.has(b.id))-Number(representatives.has(a.id)) || Number(a.kind==='field')-Number(b.kind==='field'));
+    }
+    if(G.focus)matched.sort((a,b)=>Number(b.id===G.focus)-Number(a.id===G.focus));
+    const visible=matched.slice(0,G.limit),ids=new Set(visible.map(a=>a.id));
+    const edges=matched.filter(a=>['relation','mapping'].includes(a.kind)&&(ids.has(a.id)||(ids.has(a.from)&&ids.has(a.to))))
+      .sort((a,b)=>Number(ids.has(b.id))-Number(ids.has(a.id))).slice(0,G.limit);
+    edges.forEach(e=>{[e.from,e.to].forEach(id=>{if(id)ids.add(id);});});
+    return {matched,nodes:S.assets.filter(a=>ids.has(a.id)&&!['relation','mapping'].includes(a.kind)),edges};
+  }
   function graphInput(data){
     const nodes=data.nodes.map(a=>({id:a.id,width:NODE_WIDTH,height:NODE_HEIGHT}));
     const ids=new Set(nodes.map(n=>n.id)),pairs=new Set(),edges=[];
@@ -223,21 +330,23 @@ window.KnowledgeWorkbench = (() => {
   function routesFor(input,positions){
     const signature=positionSignature(input,positions);if(routedPlans.has(signature))return routedPlans.get(signature);
     try{const saved=JSON.parse(localStorage.getItem('kw-routes:'+S.project_id+':'+G.view)||'null');if(saved?.signature===signature&&checkedPlan(saved.plan,input)){routedPlans.set(signature,saved.plan);return saved.plan;}}catch(_){}
+    if(denseGraph(input))return window.SemanticGraphLayout.overview({...input,positions});
     const result=window.SemanticGraphLayout.route({...input,positions});routedPlans.set(signature,result);return result;
   }
-  async function arrangeGraph(save=true){
+  async function arrangeGraph(save=true,routeOnly=false){
     if(layoutPending)return;const data=graphData(),input=graphInput(data),key=diagramKey(input),canvas=$('#kw-canvas');
     if(!input.nodes.length)return;
     if(!window.SemanticGraphLayout)throw Error(tr('布局组件未加载，请刷新工作台后重试。'));
     const before=currentLayout(),positions=Object.fromEntries(data.nodes.map((a,i)=>[a.id,point(a,i)]));
-    layoutPending=true;const control=$('[data-kw="arrange"]');if(control){control.disabled=true;control.textContent=tr('布局中…');}
+    layoutPending=true;layoutButton();
     try{
-      const plan=await window.SemanticGraphLayout.layout({...input,width:canvas?.clientWidth||1000,height:canvas?.clientHeight||600,positions,fixed:G.fixed});
+      const plan=await runLayout({...input,width:canvas?.clientWidth||1000,height:canvas?.clientHeight||600,positions,fixed:G.fixed},key,routeOnly);
+      if(!plan)return;
       if(activePage!=='graph'||diagramKey(graphInput(graphData()))!==key){C.notify(tr('图谱范围已变化，本次布局未应用。'));return;}
       if(save){const next=copy(S.layout);for(const [id,pos] of Object.entries(plan.positions))next['semantic:'+G.view+':'+id]=pos;await C.api('layout',{positions:next});S.layout=next;layoutUndo.push(before);}
       automaticPlans.set(key,plan);virtualPositions=plan.positions;cachePlan(input,plan);graphPlan=plan;drawGraph(true);
       if(save)C.notify(tr('自动布局已保存；知识定义与关系保持不变。'));
-    }finally{layoutPending=false;const button=$('[data-kw="arrange"]');if(button){button.disabled=false;button.textContent=tr('自动布局');}if(activePage==='graph'&&diagramKey(graphInput(graphData()))!==key)drawGraph();}
+    }finally{layoutPending=false;layoutButton();if(activePage==='graph'&&diagramKey(graphInput(graphData()))!==key)drawGraph();}
   }
   function edgePath(points){return points.map((p,i)=>(i?'L':'M')+Number(p.x)+','+Number(p.y)).join(' ');}
   function graphEdges(edges,plan,labels=false){
@@ -268,13 +377,29 @@ window.KnowledgeWorkbench = (() => {
     }
     return nodeNameLines(a.name);
   }
+  const origins={
+    ddl:['DDL','DDL'],metadata:['库目录','Catalog'],document:['业务材料','Document'],
+    operator_statement:['人工说明','Operator'],model_inferred:['模型推断','Inference'],
+    mixed:['多种依据','Mixed'],unattributed:['待补依据','Unattributed']
+  };
+  function originLabel(a){const key=S.evidence_origins?.[a.id] || (a.properties?.assertion_basis==='model_inferred'?'model_inferred':'unattributed');return say(...(origins[key]||origins.unattributed));}
+  function reviewFields(p){
+    const conflicts=p.unresolved_conflicts;
+    const hasConflicts=Array.isArray(conflicts)?conflicts.length>0:!!conflicts;
+    const inferred='<label>'+say('断言依据','Assertion basis')+'<select data-field="properties.assertion_basis">'+options([['',say('按所附依据显示','Show attached evidence')],['model_inferred',say('模型推断，需核对','Model inference, review required')]],p.assertion_basis||'',null)+'</select></label>';
+    if(!hasConflicts)return inferred;
+    return inferred+'<fieldset><legend>'+say('待裁决冲突','Unresolved conflict')+'</legend><pre>'+esc(JSON.stringify(conflicts,null,2))+'</pre><label>'+say('已核对时填写采用的定义、范围及理由','After review, record the definition, scope and rationale')+'<textarea data-conflict-decision></textarea></label></fieldset>';
+  }
   function nodeMarkup(a,i){const p=point(a,i),lines=nodeDisplayLines(a),nodeKind=({rule:tr('规则'),field:tr('字段')})[a.kind]||kinds[a.kind];
-    return `<g data-kw-node="${esc(a.id)}" class="kw-node ${G.selected===a.id?'selected':''} kind-${esc(a.kind)} status-${esc(a.status)}" transform="translate(${p.x},${p.y})" tabindex="0" role="button" aria-label="${esc(a.name)}"><rect width="${NODE_WIDTH}" height="${NODE_HEIGHT}" rx="9"/><title>${esc(a.name+' · '+a.definition)}</title>${lines.map((line,j)=>`<text x="12" y="${lines.length>1?21+j*17:27}" class="kw-node-name">${esc(line)}</text>`).join('')}<text x="12" y="56">${esc(nodeKind)} · ${esc(statuses[a.status]||a.status)}${G.fixed.includes(a.id)?tr(' · 固定'):''}</text><circle class="kw-port" cx="${NODE_WIDTH}" cy="${NODE_HEIGHT/2}" r="5"/></g>`;
+    return `<g data-kw-node="${esc(a.id)}" class="kw-node ${G.selected===a.id?'selected':''} kind-${esc(a.kind)} status-${esc(a.status)}" transform="translate(${p.x},${p.y})" tabindex="0" role="button" aria-label="${esc(a.name)}"><rect width="${NODE_WIDTH}" height="${NODE_HEIGHT}" rx="9"/><title>${esc(a.name+' · '+a.definition)}</title>${lines.map((line,j)=>`<text x="12" y="${lines.length>1?21+j*17:27}" class="kw-node-name">${esc(line)}</text>`).join('')}<text x="12" y="56">${esc(nodeKind)} · ${esc(statuses[a.status]||a.status)} · ${esc(originLabel(a))}${G.fixed.includes(a.id)?tr(' · 固定'):''}</text><circle class="kw-port" cx="${NODE_WIDTH}" cy="${NODE_HEIGHT/2}" r="5"/></g>`;
   }
   function drawGraph(fit=false){if(activePage!=='graph')return;const found=filteredAssets(),more=$('[data-kw="more"]');if(more)more.disabled=found.length<=G.limit;if(G.mode==='table'){$('#kw-asset-table').innerHTML=tr`<p class="privacy">共 ${found.length} 项，当前显示 ${Math.min(found.length,G.limit)} 项${found.length>G.limit?tr('；可继续加载更多。'):'。'}</p><table><thead><tr><th>知识</th><th>领域 / 范围</th><th>定义</th><th>状态</th></tr></thead><tbody>${found.slice(0,G.limit).map(a=>`<tr data-kw="select" data-id="${esc(a.id)}" tabindex="0" class="${G.selected===a.id?'selected':''}"><td><b>${esc(a.name)}</b><small>${esc(kinds[a.kind])}</small></td><td>${esc(a.domain)}<small>${esc(scopeText(a.scope))}</small></td><td>${esc(a.definition)}</td><td>${badge(a.status)}</td></tr>`).join('')}</tbody></table>${!found.length?empty(tr('没有匹配的知识'),tr('调整筛选或加入新的材料。')):''}`;return;}
     const svg=$('#kw-graph');if(!svg)return;const data=graphData(),{nodes,edges}=data,input=graphInput(data),key=diagramKey(input),canvas=$('#kw-canvas');
     virtualPositions=automaticPlans.get(key)?.positions||{};
-    if(nodes.length&&!nodes.some(n=>S.layout['semantic:'+G.view+':'+n.id])&&!automaticPlans.has(key)&&autoPendingKey!==key&&!layoutPending&&window.SemanticGraphLayout){autoPendingKey=key;arrangeGraph(false).catch(e=>C.notify(tr('自动布局未完成：')+e.message));}
+    if(runningWorker&&runningWorker.key!==key)runningWorker.cancel();
+    layoutButton();
+    const savedPositions=nodes.some(n=>S.layout['semantic:'+G.view+':'+n.id]);
+    if(nodes.length&&(!savedPositions||denseGraph(input))&&!automaticPlans.has(key)&&autoPendingKey!==key&&!layoutPending&&window.SemanticGraphLayout){autoPendingKey=key;arrangeGraph(false,savedPositions).catch(e=>C.notify(tr('自动布局未完成：')+e.message));}
     const positions=Object.fromEntries(nodes.map((a,i)=>[a.id,point(a,i)]));
     if(!window.SemanticGraphLayout){svg.innerHTML=tr('<text x="30" y="50">布局组件未加载，请刷新重试。</text>');return;}
     graphPlan=routesFor(input,positions);const bounds=graphPlan.bounds,padding=16,bw=Math.max(1,bounds.right-bounds.left),bh=Math.max(1,bounds.bottom-bounds.top);
@@ -285,7 +410,9 @@ window.KnowledgeWorkbench = (() => {
     svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.style.width=Math.floor(width*G.zoom)+'px';svg.style.height=Math.floor(height*G.zoom)+'px';
     svg.dataset.offsetX=offsetX;svg.dataset.offsetY=offsetY;
     if(fit){canvas.scrollLeft=0;canvas.scrollTop=0;}
-    const refs=input.edges.filter(e=>e.reference).length;$('#kw-graph-count').textContent=tr`${nodes.length} 个节点 · ${edges.length} 条关系${refs?' · '+refs+tr(' 项引用'):''}`+say(' / 全模型 ',' / Active model: ')+S.assets.filter(a=>a.status!=='retired').length;
+    const refs=input.edges.filter(e=>e.reference).length,active=S.assets.filter(a=>a.status!=='retired').length;
+    const matches=found.length!==active||found.length>G.limit?say(' · 当前筛选匹配 ',' · Matching assets: ')+found.length:'';
+    $('#kw-graph-count').textContent=tr`${nodes.length} 个节点 · ${edges.length} 条关系${refs?' · '+refs+tr(' 项引用'):''}`+matches+say(' / 全模型有效 ',' / Active model: ')+active;
     const markers=[['normal','#668f7b'],['focus','#176c56'],['review','#b9842e'],['reference','#a4b4aa']].map(([tone,color])=>`<marker id="kw-arrow-${tone}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="${color}"/></marker>`).join('');
     svg.innerHTML=`<defs>${markers}</defs><g class="kw-graph-content" transform="translate(${offsetX},${offsetY})">`+graphEdges(input.edges,graphPlan)+nodes.map(nodeMarkup).join('')+graphEdges(input.edges,graphPlan,true)+(!nodes.length?tr('<text x="45" y="100" class="kw-empty-graph">加入知识或调整筛选后，在这里查看关系。</text>'):'')+'</g>';
   }
@@ -293,22 +420,27 @@ window.KnowledgeWorkbench = (() => {
   function activateGraphAsset(id){const now=Date.now(),double=lastGraphClick?.id===id&&now-lastGraphClick.time<450;lastGraphClick={id,time:now};if(double){lastGraphClick=null;openAsset(id);}else selectGraphAsset(id);}
   function selectGraphAsset(id){const wasInspector=G.inspector;G.selected=id;G.inspector=!!id;saveView();if(G.expanded){rerender();if(wasInspector!==G.inspector)drawGraph(true);}else{drawGraph();drawInspector();}const problems=$('#kw-problems');if(problems)problems.innerHTML=problemsHtml();}
   function drawInspector(){const el=$('#kw-inspector');if(!el)return;const a=asset(G.selected);if(!a){el.innerHTML=tr`<span class="eyebrow">知识详情</span><h2>${connection?tr('选择关系两端'):tr('从一个对象开始')}</h2><p class="sub">${connection?tr('点击起点，再点击终点；也可以拖动节点右侧圆点。'):tr('点击节点或关系查看定义和原文。双击可编辑，选择“展开邻域”只看与它相关的知识。')}</p>${button(tr('手工创建知识'),'create','','primary small')}`;return;}
-    const refs=S.assets.filter(x=>x.from===a.id||x.to===a.id||(x.refs||[]).includes(a.id));el.innerHTML=tr`<span class="eyebrow">${esc(kinds[a.kind])}</span><div class="row between"><h2>${esc(a.name)}</h2>${badge(a.status)}</div><p class="kw-definition">${esc(a.definition||tr('定义待补充'))}</p><p class="privacy">${esc(a.domain||tr('领域待说明'))} · ${esc(scopeText(a.scope||tr('范围待说明')))}</p><p class="privacy">${esc(a.id)}</p>${a.aliases?.length?tr`<p>别名：${esc(a.aliases.join('、'))}</p>`:''}<div class="row">${button(tr('编辑定义'),'edit',`data-id="${esc(a.id)}"`,'primary small')}${button(tr('展开邻域'),'focus',`data-id="${esc(a.id)}"`,'small')}${button(G.fixed.includes(a.id)?tr('取消固定'):tr('固定位置'),'fix',`data-id="${esc(a.id)}"`,'small')}</div>${a.from?`<div class="notice">${esc(nameOf(a.from))} → ${esc(a.predicate)} → ${esc(nameOf(a.to))}</div>`:''}<dl class="kw-properties">${Object.entries(a.properties||{}).map(([k,v])=>`<dt>${esc((propertyFields[a.kind]||[]).find(x=>x[0]===k)?.[1]||(k==='knowledge_gaps'?tr('仍待明确的问题'):k))}</dt><dd>${esc(Array.isArray(v)?v.join('、'):typeof v==='object'?fmt(v):v)}</dd>`).join('')}</dl><h3>原文与依据</h3>${evidenceHtml(a.evidence)}${a.status==='needs_review'?button(tr('处理来源复核'),'review-source',`data-id="${esc(a.id)}"`,'primary small'):''}<details><summary>引用影响（${refs.length}）</summary>${refs.map(r=>button(esc(r.name||r.predicate),'select',`data-id="${esc(r.id)}"`,'quiet small')).join('')||tr('<p class="muted">没有其他知识引用此项。</p>')}</details>${(S.separations||[]).some(x=>x.left_id===a.id||x.right_id===a.id)?tr`<details><summary>已记录的身份分离判断</summary>${(S.separations||[]).filter(x=>x.left_id===a.id||x.right_id===a.id).map(x=>tr`<p><b>与 ${esc(nameOf(x.left_id===a.id?x.right_id:x.left_id))} 保持分离</b></p><p>${esc(x.reason)}</p>`).join('')}<p class="privacy">定义或范围变化后应重新核对此判断。</p></details>`:''}<div class="row kw-maintenance">${button(tr('合并 / 保持分离'),'resolve-identity',`data-id="${esc(a.id)}"`,'small')}${button(a.status==='draft'?tr('删除草稿'):tr('停用'),'retire',`data-id="${esc(a.id)}"`,'danger small')}</div>`;
+    const refs=S.assets.filter(x=>x.from===a.id||x.to===a.id||(x.refs||[]).includes(a.id));el.innerHTML=tr`<span class="eyebrow">${esc(kinds[a.kind])}</span><div class="row between"><h2>${esc(a.name)}</h2>${badge(a.status)}</div><p class="kw-definition">${esc(a.definition||tr('定义待补充'))}</p><p class="privacy">${esc(a.domain||tr('领域待说明'))} · ${esc(scopeText(a.scope||tr('范围待说明')))}</p><p class="privacy">${esc(a.id)}</p>${a.aliases?.length?tr`<p>别名：${esc(a.aliases.join('、'))}</p>`:''}<div class="row">${button(tr('编辑定义'),'edit',`data-id="${esc(a.id)}"`,'primary small')}${button(tr('展开邻域'),'focus',`data-id="${esc(a.id)}"`,'small')}${button(G.fixed.includes(a.id)?tr('取消固定'):tr('固定位置'),'fix',`data-id="${esc(a.id)}"`,'small')}</div>${a.from?`<div class="notice">${esc(nameOf(a.from))} → ${esc(a.predicate)} → ${esc(nameOf(a.to))}</div>`:''}<dl class="kw-properties">${Object.entries(a.properties||{}).map(([k,v])=>`<dt>${esc((propertyFields[a.kind]||[]).find(x=>x[0]===k)?.[1]||(k==='knowledge_gaps'?tr('仍待明确的问题'):k==='unresolved_conflicts'?say('待裁决的冲突','Unresolved conflict'):k==='conflict_resolutions'?say('裁决记录','Recorded decisions'):k))}</dt><dd>${esc(typeof v==='object'?fmt(v):v)}</dd>`).join('')}</dl><h3>原文与依据 · ${esc(originLabel(a))}</h3>${evidenceHtml(a.evidence)}${a.status==='needs_review'?button(tr('处理来源复核'),'review-source',`data-id="${esc(a.id)}"`,'primary small'):''}<details><summary>引用影响（${refs.length}）</summary>${refs.map(r=>button(esc(r.name||r.predicate),'select',`data-id="${esc(r.id)}"`,'quiet small')).join('')||tr('<p class="muted">没有其他知识引用此项。</p>')}</details>${(S.separations||[]).some(x=>x.left_id===a.id||x.right_id===a.id)?tr`<details><summary>已记录的身份分离判断</summary>${(S.separations||[]).filter(x=>x.left_id===a.id||x.right_id===a.id).map(x=>tr`<p><b>与 ${esc(nameOf(x.left_id===a.id?x.right_id:x.left_id))} 保持分离</b></p><p>${esc(x.reason)}</p>`).join('')}<p class="privacy">定义或范围变化后应重新核对此判断。</p></details>`:''}<div class="row kw-maintenance">${button(tr('合并 / 保持分离'),'resolve-identity',`data-id="${esc(a.id)}"`,'small')}${button(a.status==='draft'?tr('删除草稿'):tr('停用'),'retire',`data-id="${esc(a.id)}"`,'danger small')}</div>`;
   }
   function problemsHtml(){let p=S.problems||[];if(G.selected)p=p.filter(x=>[x.asset_id,x.id,...(x.asset_ids||[])].includes(G.selected));return p.length?p.map(x=>{const id=x.asset_id||x.asset_ids?.[0]||x.target_id;return `<div class="gap"><div><h3>${esc(x.message||x.detail||x.title||x.code||tr('需核对'))}</h3><p>${esc(x.next||x.reason||tr('请查看相关定义与原文。'))}</p></div>${id?button(tr('定位知识'),'select',`data-id="${esc(id)}"`,'small'):''}</div>`;}).join(''):tr('<p class="muted">当前范围没有已报告问题。未发现问题不等于业务含义已被证明正确。</p>');}
 
-  function publishPage(){const chosen=S.assets.filter(a=>deliverySelection.has(a.id));return (scopedDelivery?tr`<div class="notice">交付范围来自当前问题，刷新后保留。取消所有选择不会扩大为全库。${button(tr('明确切换为全部模型'),'reset-delivery','','small')}</div>`:'')+heading(tr('导出模型'),tr('生成可离线读取的语义包。草稿保留未确认状态；保存的快照不会随编辑变化。'),button(tr('私人项目备份'),'legacy','data-page="delivery"','small'))+
+  function backupButton(){
+    return C?.legacyState?.()?.model_only
+      ? '<button type="button" class="small" data-action="download" data-type="backup">'+say('下载私人项目备份（含原始资料）','Back up private project including sources')+'</button>'
+      :button(tr('私人项目备份'),'legacy','data-page="delivery"','small');
+  }
+  function publishPage(){const chosen=S.assets.filter(a=>deliverySelection.has(a.id));return (scopedDelivery?tr`<div class="notice">交付范围来自当前问题，刷新后保留。取消所有选择不会扩大为全库。${button(tr('明确切换为全部模型'),'reset-delivery','','small')}</div>`:'')+heading(tr('导出模型'),tr('生成可离线读取的语义包。草稿保留未确认状态；保存的快照不会随编辑变化。'),backupButton())+
     tr`<div class="grid cols2"><section class="card"><h2>选择交付范围</h2><p class="sub">不勾选时导出全部有效模型，包含表、字段与外键；勾选后只导出所选内容及必需依赖。</p><details class="kw-multiselect" open><summary id="kw-selected-count">已选 ${chosen.length} 项${!chosen.length?tr(scopedDelivery?' · 尚未选择定义':' · 全部模型')+(scopedDelivery?'':' ('+S.assets.filter(a=>a.status!=='retired').length+')'):''}</summary><input id="kw-publish-search" class="kw-option-search" placeholder="搜索知识名称" aria-label="搜索交付知识"><div class="kw-options kw-delivery-options">${S.assets.map(a=>`<label data-option-label="${esc((a.name+' '+a.domain).toLowerCase())}"><input type="checkbox" data-publish-id="${esc(a.id)}" ${deliverySelection.has(a.id)?'checked':''}> ${esc(a.name)} <span class="privacy">${esc(kinds[a.kind])} · ${esc(a.domain)} · ${esc(statuses[a.status])}</span></label>`).join('')}</div></details><label class="kw-inline-check"><input id="kw-include-execution" type="checkbox" ${publishExecution?'checked':''}> 附带数据映射与执行声明</label><div class="notice">需复核、未确认的必需定义、已停用依赖或缺失依据会阻止确认发布。草稿会明确标识缺口。</div><div class="row">${button(tr('发布确认快照'),'publish','','primary')}${button(tr('导出草稿供讨论'),'publish','data-draft="true"')}</div><div id="kw-publish-error" class="error" role="alert"></div></section><section class="card"><h2>交付与调用</h2>${publishResult?tr`<div class="notice"><b>快照已保存</b><p>${esc(publishResult.snapshot_id||publishResult.manifest?.snapshot_id)}</p></div>${button(tr('下载语义包'),'download',`data-url="${esc(publishResult.download_url||'/api/knowledge/download/'+publishResult.snapshot_id)}" data-filename="${esc(publishResult.filename||'semantic-package.zip')}"`,'primary')}${button('Neo4j (CSV + Cypher)','download',`data-url="/api/knowledge/download/${esc(publishResult.snapshot_id)}?format=neo4j" data-filename="neo4j-import.zip"`)}${scopeHtml(publishResult.manifest)}<p>包内附独立读取命令和人工核验页。解压或通过只读工具打开即可使用。</p>`:tr('<p class="sub">确认快照包含模型、必要证据片段、清单、人工核验页和调用说明。</p><p>交给另一个 Agent 后，请它报告所用快照，先搜索、消歧，再用 context 读取必需定义、业务范围、依据及缺口。</p>')}<div class="notice">旧快照保持不变。当前知识修改后，请发布新快照；离线文件不能自动知道有更新。</div><h3>本次选择</h3><p id="kw-selection-summary">${esc(chosen.length?chosen.map(a=>a.name).join('、'):tr(scopedDelivery?'尚未选择定义':'全部有效模型（自动补齐必需依赖）'))}</p></section></div><div class="section-title"><h2>已保存快照</h2></div><div class="card">${(S.snapshots||[]).length?S.snapshots.slice().reverse().map(s=>tr`<div class="gap"><div><h3>${esc(s.snapshot_id||s.id)} ${badge(s.draft?'draft':'confirmed')}</h3><p class="privacy">来源修订 ${esc(s.source_revision??s.revision)}</p><details><summary>实际范围与缺口</summary>${scopeHtml(s)}</details></div>${button(tr('下载'),'download',`data-url="/api/knowledge/download/${esc(s.snapshot_id||s.id)}" data-filename="${esc(s.filename||'semantic-package.zip')}"`,'small')}${button('Neo4j','download',`data-url="/api/knowledge/download/${esc(s.snapshot_id||s.id)}?format=neo4j" data-filename="neo4j-import.zip"`,'small')}</div>`).join(''):empty(tr('尚未发布'),tr('先核对知识，再生成可独立读取的语义包。'))}</div>`;}
-  function historyPage(){return heading(tr('项目历史'),tr('知识修改保留修订；布局移动独立保存。撤回会新增修订，不抹掉历史。'),button(tr('数值验证历史'),'legacy','data-page="check"','small')+button(tr('完整项目备份'),'legacy','data-page="delivery"','small'))+tr`${pending.size?tr`<section class="card"><h2>待确认提交</h2>${pendingRows()}</section>`:''}<section class="card"><table><thead><tr><th>修订</th><th>变化</th><th>时间 / 操作者</th><th></th></tr></thead><tbody>${(S.history||[]).map(h=>`<tr><td>${esc(h.revision)}</td><td>${esc(tr(h.summary))}</td><td>${esc(h.created||'')}<small>${esc(h.actor||'')}</small></td><td>${button(tr('检查并撤回'),'undo',`data-revision="${h.revision}"`,'small')}</td></tr>`).join('')}</tbody></table></section>`;}
+  function historyPage(){return heading(tr('项目历史'),tr('知识修改保留修订；布局移动独立保存。撤回会新增修订，不抹掉历史。'),(C?.legacyState?.()?.model_only?'':button(tr('数值验证历史'),'legacy','data-page="check"','small'))+backupButton())+tr`${pending.size?tr`<section class="card"><h2>待确认提交</h2>${pendingRows()}</section>`:''}<section class="card"><table><thead><tr><th>修订</th><th>变化</th><th>时间 / 操作者</th><th></th></tr></thead><tbody>${(S.history||[]).map(h=>`<tr><td>${esc(h.revision)}</td><td>${esc(tr(h.summary))}</td><td>${esc(h.created||'')}<small>${esc(h.actor||'')}</small></td><td>${button(tr('检查并撤回'),'undo',`data-revision="${h.revision}"`,'small')}</td></tr>`).join('')}</tbody></table></section>`;}
 
   function openDialog(title,body,onSave,{confirmLabel=tr('保存'),draft=false,assetOriginal=null}={}) {
     let el=$('#kw-dialog');if(!el){el=document.createElement('dialog');el.id='kw-dialog';document.body.append(el);}
     dialog={id:uid(),onSave,baseRevision:S.revision,assetOriginal,conflict:false};
-    el.innerHTML=tr`<form id="kw-form"><div class="dialog-head"><div><small>语义知识</small><h2>${esc(title)}</h2></div>${button('×','close-dialog',`aria-label="${tr('关闭')}"`,'quiet')}</div><div class="kw-dialog-body">${body}</div><div class="kw-dialog-error"><p id="kw-dialog-error" class="error" role="alert"></p><div id="kw-conflict"></div></div><footer><span class="spacer"></span>${button(tr('取消'),'close-dialog')}${draft?tr('<button type="submit" value="draft">保存草稿</button>'):''}${onSave?`<button type="submit" value="confirm" class="primary">${esc(confirmLabel)}</button>`:''}</footer></form>`;
+    el.innerHTML=tr`<form id="kw-form"><div class="dialog-head"><div><small>语义知识</small><h2>${esc(title)}</h2></div>${button('×','close-dialog',`aria-label="${tr('关闭')}"`,'quiet')}</div><div class="kw-dialog-body">${body}</div><div class="kw-dialog-error"><div id="kw-external-change"></div><p id="kw-dialog-error" class="error" role="alert"></p><div id="kw-conflict"></div></div><footer><span class="spacer"></span>${button(tr('取消'),'close-dialog')}${draft?tr('<button type="submit" value="draft">保存草稿</button>'):''}${onSave?`<button type="submit" value="confirm" class="primary">${esc(confirmLabel)}</button>`:''}</footer></form>`;
     el.showModal();$('#kw-form').addEventListener('submit',async event=>{event.preventDefault();const buttons=[...el.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);try{await dialog.onSave(event.submitter?.value!=='draft',dialog);el.close();dialog=null;}catch(e){$('#kw-dialog-error').textContent=e.message;if(e.status===409){dialog.conflict=true;showConflict();}}finally{buttons.forEach(b=>b.disabled=false);}});
   }
   function showConflict(){const el=$('#kw-conflict');if(el)el.innerHTML=tr('<p class="privacy">输入已保留。先刷新并查看最新定义，再决定如何继续。</p>')+button(tr('读取最新状态并核对'),'dialog-refresh','','small');}
-  function openAsset(id,prefill={}) {const draftKey=id||'new:'+JSON.stringify(prefill),savedDraft=assetDrafts.get(draftKey);const original=copy(savedDraft?.asset||asset(id)||{kind:'entity',name:'',definition:'',domain:importDraft.domain||'',scope:importDraft.scope||'',aliases:[],properties:{},refs:[],evidence:[],...prefill});openDialog(id?tr('编辑 ')+original.name:tr('创建知识'),tr`<div id="kw-asset-fields">${assetFields(original)}</div><h3>已有依据 ${original.evidence?.length?'':mark(true)}</h3>${evidenceHtml(original.evidence)}
+  function openAsset(id,prefill={}) {const draftKey=id||'new:'+JSON.stringify(prefill),savedDraft=assetDrafts.get(draftKey);const original=copy(savedDraft?.asset||asset(id)||{kind:'entity',name:'',definition:'',domain:importDraft.domain||'',scope:importDraft.scope||'',aliases:[],properties:{},refs:[],evidence:[],...prefill});openDialog(id?tr('编辑 ')+original.name:original.kind==='entity'?say('新建业务对象','New business object'):original.kind==='relation'?say('新建关系','New relation'):tr('创建知识'),tr`<div id="kw-asset-fields">${assetFields(original,{allowNewEnds:true})}</div><h3>已有依据 ${original.evidence?.length?'':mark(true)}</h3>${evidenceHtml(original.evidence)}
       <details><summary>${say('引用已导入原文','Cite imported material')}</summary><label>${say('选材料','Choose material')}<select id="kw-cite-source">${options(S.sources.map(s=>[s.id,s.name]),'')}</select></label><label>${say('选原文片段','Choose passage')}<select id="kw-cite-fragment" disabled></select></label><label>${say('引用文字（可缩短为原文中的一句）','Quotation (may shorten to an exact excerpt)')}<textarea id="kw-cite-quote"></textarea></label></details><label>本次声明或修正依据<textarea id="kw-manual-evidence" placeholder="用具体业务说明记录本次手工输入的依据；不会伪装成原材料中的文字。">${esc(savedDraft?.declaration||'')}</textarea></label>`,async(confirmed,d)=>{const form=$('#kw-asset-fields'),changed=readAsset(form,original);
       if(confirmed){for(const key of ['definition','domain','scope',...(S.editor_contract?.confirm_fields?.[changed.kind]||[]).map(k=>'properties.'+k)]){const el=form.querySelector('[data-field="'+key+'"]');if(el&&!el.value.trim()){el.focus();throw Error(say('确认前请填写：','Required to confirm: ')+el.closest('label').textContent.trim());}}}
       const selected=$('#kw-cite-source'),frag=$('#kw-cite-fragment'),quote=$('#kw-cite-quote').value.trim();
@@ -318,7 +450,7 @@ window.KnowledgeWorkbench = (() => {
       const declaration=$('#kw-manual-evidence').value.trim();
       if(confirmed&&!changed.evidence?.length&&!declaration){$('#kw-manual-evidence').focus();throw Error(say('确认需引用已导入原文或填写本次声明依据；也可先保存草稿。','Cite material or add an operator statement to confirm, or save a draft.'));}
       if(declaration)changed.evidence=[...(changed.evidence||[]),{type:'manual',quote:declaration,actor:'local'}];const saved=await transact('edit:'+draftKey,'edit',{asset:changed,confirm:confirmed},d.baseRevision);G.selected=saved.asset_id||changed.id||null;
-      if(G.selected&&activePage==='graph'){Object.assign(G,{view:'all',mode:'graph',focus:G.selected,inspector:true,domain:'',kind:'',status:'',query:'',limit:80});saveView();rerender();}
+      if(G.selected&&activePage==='graph')locate(G.selected);
       assetDrafts.delete(draftKey);if(activePage==='graph'){drawGraph();drawInspector();}C.notify(confirmed?tr('知识已保存并确认'):tr('草稿已保存'));},{confirmLabel:tr('保存并确认'),draft:true,assetOriginal:original});dialog.assetDraftKey=draftKey;if(savedDraft?.baseRevision!==undefined)dialog.baseRevision=savedDraft.baseRevision;}
   function openSource(id,revision,fragmentId,extractionId){const resolved=resolveSource(id,revision||undefined,fragmentId||undefined,extractionId||undefined),s=resolved.source,r=resolved.revision;let viewer=$('#kw-source-dialog');if(!viewer){viewer=document.createElement('dialog');viewer.id='kw-source-dialog';document.body.append(viewer);}viewer.innerHTML=tr`<div class="dialog-head"><h2>${esc(s.name)}</h2>${button('×','close-source','','quiet')}</div><div class="kw-dialog-body"><div class="row"><b>来源修订 ${esc(r?.revision)}</b>${badge(r?.parsed?.status)}<span class="privacy">${esc(s.id)}</span></div><div class="row">${(s.revisions||[]).map(x=>button(tr('修订 ')+x.revision,'source-version',`data-id="${esc(id)}" data-revision="${x.revision}"`,'small')).join('')}${(r.extractions||[]).length>1?r.extractions.map((x,i)=>button(tr('提取 ')+(i+1),'source-version',`data-id="${esc(id)}" data-revision="${r.revision}" data-extraction="${esc(x.id)}"`,'small')).join(''):''}${r?.attachment_id?button(tr('下载原件'),'download',`data-url="/api/knowledge/source/${esc(r.attachment_id)}" data-filename="${esc(s.name)}"`,'small'):''}</div>${(r?.parsed?.warnings||[]).map(w=>`<div class="notice warning">${esc(typeof w==='object'?w.message||fmt(w):w)}</div>`).join('')}<div class="kw-fragments">${(r?.parsed?.fragments||[]).map(f=>`<section class="kw-fragment ${f.id===fragmentId?'target':''}" id="fragment-${esc(f.id)}"><h3>${esc(fmt(f.location))}</h3><pre>${esc(f.text)}</pre></section>`).join('')||tr('<p>这份修订没有可读取的文本片段，请查看解析结果或补充可读资料。</p>')}</div></div><footer>${button(tr('关闭原文'),'close-source')}</footer>`;if(!viewer.open)viewer.showModal();if(fragmentId)viewer.querySelector('.kw-fragment.target')?.scrollIntoView({block:'center'});}
 
@@ -326,13 +458,32 @@ window.KnowledgeWorkbench = (() => {
   async function importFiles(){if(!selectedFiles.length)throw Error(tr('请先选择文件'));if(importDraft.source_id&&selectedFiles.length>1)throw Error(tr('更新一份来源时请只选择一个文件；多份新材料请改为新来源'));const seedDraft=!!$('#kw-seed-draft')?.checked;let seeded=false;const config={sheet:$('#kw-sheet')?.value||undefined,header:Number($('#kw-header')?.value||1),range:$('#kw-range')?.value||undefined};importResults=[];const succeeded=[];for(const file of selectedFiles){if(file.size>32*1024*1024){importResults.push({name:file.name,ok:false,message:tr('超过 32 MB，请缩小文件后重试')});continue;}try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));const result=await transact('file:'+file.name,'import',{filename:file.name,content_base64:btoa(binary),domain:importDraft.domain,scope:importDraft.scope,source_id:importDraft.source_id||undefined,distinct_source:importDraft.distinct,options:config,seed_draft:seedDraft&&!S.assets.length&&/\.sql$/i.test(file.name)});seeded=seeded||!!result.seeded;succeeded.push(file);importResults.push({name:file.name,ok:true,message:(result.parsed?.warnings||[]).length?JSON.stringify(result.parsed.warnings):tr('已保存，请查看解析范围与候选')});}catch(e){importResults.push({name:file.name,ok:false,message:e.message});}}selectedFiles=selectedFiles.filter(f=>!succeeded.includes(f));if(seeded&&importResults.every(r=>r.ok)&&importResults.every(r=>r.message===tr('已保存，请查看解析范围与候选'))){C.go('graph');C.notify(tr('结构草稿已生成，可直接编辑或导出。'));}else rerender();}
   async function download(url,filename){if(url.startsWith('/api/knowledge/download/')){const link=document.createElement('a');link.href=url;link.download=filename||'semantic-package.zip';document.body.append(link);link.click();link.remove();C.notify(tr('下载请求已发出，请查看浏览器保存结果'));return;}const result=await fetch(url,{headers:{'X-Workbench-Token':$('meta[name="session-token"]').content}});if(!result.ok){let body;try{body=await result.json();}catch(_){}throw Error(body?.error||tr('下载失败，请重试'));}const object=URL.createObjectURL(await result.blob()),a=document.createElement('a');a.href=object;a.download=filename||'semantic-package.zip';a.hidden=true;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(object),60000);C.notify(tr('下载请求已发出，请查看浏览器保存结果'));}
   async function act(b){const a=b.dataset.kw,id=b.dataset.id;
+    if(a==='add-end'){
+      const side=b.dataset.side,form=$('#kw-asset-fields'),editor=dialog,group=b.closest('[data-end-create]');
+      const input=group.querySelector('[data-end-name]'),name=input.value.trim();
+      if(!name){input.focus();throw Error(say('请输入可识别的对象名称','Enter an identifiable object name'));}
+      const base=editor.baseRevision;
+      const result=await transact('endpoint:'+editor.id+':'+side+':'+base,'edit',{asset:{kind:'entity',name,domain:form.querySelector('[data-field="domain"]').value.trim()},confirm:false},base);
+      if(dialog!==editor)return;
+      const item=asset(result.asset_id);
+      if(!item)throw Error(say('对象已保存，请刷新后选用','Object saved. Refresh to select it.'));
+      editor.baseRevision=base+1;
+      for(const key of ['from','to']){
+        const select=form.querySelector('[data-field="'+key+'"]');
+        const option=new Option(endpointLabel(item,true),item.id);option.dataset.kind=item.kind;select.add(option);
+        if(key===side)select.value=item.id;
+      }
+      updateEnds(form);group.open=false;input.value='';
+      form.querySelector('[data-field="'+side+'"]').dispatchEvent(new Event('change',{bubbles:true}));
+      $('#kw-dialog-error').textContent='';C.notify(say('已创建并选用对象草稿','Created and selected the draft object'));return;
+    }
     if(a==='show-group'){const g=byId('groups',id);if(!g)throw Error(tr('接替候选尚未读回，请刷新项目'));reviewBatch=g.batch_id;reviewFilter='all';const groups=S.groups.filter(x=>x.batch_id===reviewBatch).slice().reverse();reviewPageIndex=Math.floor(groups.findIndex(x=>x.id===id)/10);C.go('review');$('[data-group="'+id+'"]')?.scrollIntoView({block:'start'});return;}
     if(a==='review-page'){captureGroups();reviewPageIndex=Number(b.dataset.pageIndex);rerender();return;}
     if(a==='candidate-page'){captureGroups();candidatePages.set(id,Number(b.dataset.offset)/20);rerender();return;}
     if(a==='refs-more'){const pool=refPools.get(b.dataset.pool);if(pool){pool.limit+=100;renderReferences($('[data-ref-pool="'+b.dataset.pool+'"]'));}return;}
     if(a==='pending-query'){const result=await receiptFor(b.dataset.key);rerender();C.notify(result?tr('已读取上次完成结果，没有重复执行'):tr('尚无完成回执；可重试原提交，系统仍会防重复'));return;}
     if(a==='pending-retry'){const op=pending.get(b.dataset.key);if(!op||op.needsMaterial)throw Error(tr('请从材料入口重新选择同一原件'));const {revision,operation_id,...payload}=op.request;await transact(b.dataset.key,op.path,payload,revision);rerender();C.notify(tr('已确认原提交的结果'));return;}
-    if(a==='locate'){G.selected=id;G.view='all';G.query='';G.kind='';G.status='';G.domain='';G.focus=null;saveView();return C.go('graph');}
+    if(a==='locate')return locate(id);
     if(a==='go'||a==='legacy')return C.go(b.dataset.page);
     if(a==='refresh')return C.reload();
     if(a==='close-source'){$('#kw-source-dialog').close();return;}
@@ -353,15 +504,15 @@ window.KnowledgeWorkbench = (() => {
     if(a==='select'){selectGraphAsset(id);return;}
     if(a==='view'){drag=null;G.view=b.dataset.view;G.limit=80;G.focus=null;connection=null;saveView();rerender();return;}
     if(a==='toggle-view'){G.mode=G.mode==='graph'?'table':'graph';saveView();rerender();return;}
-    if(a==='focus'){G.focus=id;G.limit=80;G.query='';saveView();rerender();return;}
-    if(a==='clear-focus'){G.focus=null;rerender();return;}
+    if(a==='focus'){G.focus=id;G.limit=80;G.query='';graphLocation(id);saveView();rerender();return;}
+    if(a==='clear-focus'){G.focus=null;G.limit=80;graphLocation(null);saveView();rerender();return;}
     if(a==='more'){G.limit+=80;drawGraph();return;}
     if(a==='fix'){if(G.fixed.includes(id))G.fixed=G.fixed.filter(x=>x!==id);else{const positions=currentLayout();await C.api('layout',{positions});S.layout=positions;G.fixed=[...G.fixed,id];}saveView();drawGraph();drawInspector();return;}
     if(a==='zoom'){G.zoom=Math.max(Math.min(.05,G.zoom),Math.min(2,G.zoom*(1+Number(b.dataset.delta))));saveView();drawGraph();return;}
     if(a==='fit-canvas'){drawGraph(true);return;}
     if(a==='expand-canvas'){G.expanded=!G.expanded;G.inspector=false;saveView();rerender();drawGraph(true);$('[data-kw="expand-canvas"]')?.focus();return;}
     if(a==='toggle-inspector'){G.inspector=!G.inspector;saveView();rerender();drawGraph(true);return;}
-    if(a==='arrange'){await arrangeGraph(true);return;}
+    if(a==='arrange'){if(b.dataset.layoutAction==='cancel'){autoPendingKey=diagramKey(graphInput(graphData()));runningWorker?.cancel();layoutButton();return;}await arrangeGraph(true);return;}
     if(a==='undo-layout'){if(!layoutUndo.length)throw Error(tr('当前会话没有可撤销的布局操作'));const old=layoutUndo.at(-1);await C.api('layout',{positions:old});S.layout=old;layoutUndo.pop();drawGraph();return;}
     if(a==='connect'){connection=connection?null:{start:null};rerender();return;}
     if(a==='download')return download(b.dataset.url,b.dataset.filename);
@@ -382,22 +533,22 @@ window.KnowledgeWorkbench = (() => {
   document.addEventListener('click',async e=>{const b=e.target.closest('[data-kw]');if(!b)return;try{b.disabled=true;await act(b);}catch(err){const target=b.closest('[data-group]')?.querySelector('.kw-group-error')||(['import-text','import-files'].includes(b.dataset.kw)?$('#kw-import-error'):b.dataset.kw==='publish'?$('#kw-publish-error'):$('#kw-dialog[open] #kw-dialog-error'));if(target){target.textContent=err.message;const issues=err.details?.details?.issues||err.details?.issues;if(issues?.length)target.insertAdjacentHTML('beforeend',issuesHtml(issues));}else C.notify(err.message);}finally{b.disabled=false;}});
   document.addEventListener('input',e=>{const el=e.target;captureReference(el);if(dialog?.assetDraftKey!==undefined&&el.closest('#kw-form'))assetDrafts.set(dialog.assetDraftKey,{asset:readAsset($('#kw-asset-fields'),dialog.assetOriginal,false),declaration:$('#kw-manual-evidence').value,baseRevision:dialog.baseRevision});if(el.dataset.import){importDraft[el.dataset.import]=el.type==='checkbox'?el.checked:el.value;}
     if(el.matches('.kw-option-search')){const q=el.value.toLowerCase(),details=el.closest('.kw-multiselect');if(details.dataset.refPool){const pool=refPools.get(details.dataset.refPool);pool.query=q;pool.limit=100;renderReferences(details);}else details.querySelectorAll('[data-option-label]').forEach(x=>x.hidden=!x.dataset.optionLabel.includes(q));}
-    if(el.id==='kw-graph-search'){G.query=el.value;G.limit=80;saveView();drawGraph();}
+    if(el.id==='kw-graph-search'||el.id==='kw-canvas-search'){G.query=el.value;if(G.query&&G.focus){G.focus=null;graphLocation(null);}G.limit=80;saveView();drawGraph();}
     const group=el.closest('[data-group]');if(group){const g=byId('groups',group.dataset.group),d=groupDraft(g),f=el.closest('[data-candidate]');if(f)d.assets[Number(f.dataset.candidate)]=readAsset(f,d.assets[Number(f.dataset.candidate)],false);if(el.hasAttribute('data-group-reason'))d.reason=el.value;}
   });
   document.addEventListener('change',e=>{const el=e.target;if(el.dataset.import)importDraft[el.dataset.import]=el.type==='checkbox'?el.checked:el.value;if(el.id==='kw-files'){selectedFiles=[...el.files];return;}if(el.dataset.publishId){el.checked?deliverySelection.add(el.dataset.publishId):deliverySelection.delete(el.dataset.publishId);saveDelivery();const chosen=S.assets.filter(a=>deliverySelection.has(a.id));$('#kw-selected-count').textContent=tr('已选 ')+chosen.length+tr(' 项')+(!chosen.length?tr(scopedDelivery?' · 尚未选择定义':' · 全部模型')+(scopedDelivery?'':' ('+S.assets.filter(a=>a.status!=='retired').length+')'):'');$('#kw-selection-summary').textContent=chosen.length?chosen.map(a=>a.name).join('、'):tr(scopedDelivery?'尚未选择定义':'全部有效模型（自动补齐必需依赖）');return;}if(el.id==='kw-include-execution')publishExecution=el.checked;
     if(el.id==='kw-cite-source'){const f=$('#kw-cite-fragment');f.innerHTML='';f.disabled=!el.value;$('#kw-cite-quote').value='';if(el.value){const r=resolveSource(el.value);f.dataset.revision=r.revision.revision;f.dataset.extraction=r.extraction_id||'';f.innerHTML=options((r.revision.parsed?.fragments||[]).map((p,i)=>[p.id,(i+1)+'. '+p.text.slice(0,90)]),'');}return;}
     if(el.id==='kw-cite-fragment'){const s=$('#kw-cite-source').value;$('#kw-cite-quote').value=el.value?resolveSource(s,el.dataset.revision,el.value,el.dataset.extraction).fragment.text:'';return;}
-    if(el.id==='kw-canvas-view'){drag=null;G.view=el.value;G.focus=null;G.selected=null;G.inspector=false;G.limit=80;saveView();rerender();drawGraph(true);return;}
+    if(el.id==='kw-canvas-view'){graphLocation(null);drag=null;G.view=el.value;G.focus=null;G.selected=null;G.inspector=false;G.limit=80;saveView();rerender();drawGraph(true);return;}
     if(el.hasAttribute('data-all-ends')){const holder=el.closest('[data-candidate],#kw-asset-fields,#kw-source-asset,#kw-merged-fields');if(holder)updateEnds(holder);}
     if(el.dataset.field==='relation_type'){const holder=el.closest('[data-candidate],#kw-asset-fields,#kw-source-asset,#kw-merged-fields');if(holder)updateEnds(holder);if(holder?.querySelector('[data-physical]'))holder.querySelector('[data-physical]').hidden=el.value!=='physical_fk';}
     if(el.id==='kw-source-action')$('#kw-source-asset').hidden=el.value!=='adopt';
     if(el.id==='kw-review-filter'){reviewPageIndex=0;reviewFilter=el.value;rerender();}if(el.id==='kw-review-batch'){reviewPageIndex=0;reviewBatch=el.value;rerender();}
     const graphField={'kw-domain':'domain','kw-kind':'kind','kw-status':'status'}[el.id];if(graphField){G[graphField]=el.value;G.limit=80;saveView();drawGraph();}
     if(dialog?.assetDraftKey!==undefined&&el.closest('#kw-form'))assetDrafts.set(dialog.assetDraftKey,{asset:readAsset($('#kw-asset-fields'),dialog.assetOriginal,false),declaration:$('#kw-manual-evidence').value,baseRevision:dialog.baseRevision});
-    if(el.matches('#kw-asset-fields [data-field="kind"]')){const a=readAsset($('#kw-asset-fields'),dialog.assetOriginal);$('#kw-asset-fields').innerHTML=assetFields(a);}
+    if(el.matches('#kw-asset-fields [data-field="kind"]')){const a=readAsset($('#kw-asset-fields'),dialog.assetOriginal);$('#kw-asset-fields').innerHTML=assetFields(a,{allowNewEnds:true});}
     if(el.id==='kw-identity-mode')$('#kw-merged-fields').hidden=el.value!=='merge';
-    if(el.id==='kw-identity-target'){const a=asset(el.value);$('#kw-identity-comparison').innerHTML=a?tr`<div class="notice"><b>${esc(a.name)} · ${esc(a.domain)}</b><p>${esc(a.definition)}</p><p>范围：${esc(scopeText(a.scope))}</p><dl>${Object.entries(a.properties||{}).map(([k,v])=>`<dt>${esc((propertyFields[a.kind]||[]).find(x=>x[0]===k)?.[1]||(k==='knowledge_gaps'?tr('仍待明确的问题'):k))}</dt><dd>${esc(typeof v==='object'?fmt(v):v)}</dd>`).join('')}</dl><p>引用此项的定义：${S.assets.filter(x=>x.from===a.id||x.to===a.id||(x.refs||[]).includes(a.id)).length} 项</p></div>`:'';}
+    if(el.id==='kw-identity-target'){const a=asset(el.value);$('#kw-identity-comparison').innerHTML=a?tr`<div class="notice"><b>${esc(a.name)} · ${esc(a.domain)}</b><p>${esc(a.definition)}</p><p>范围：${esc(scopeText(a.scope))}</p><dl>${Object.entries(a.properties||{}).map(([k,v])=>`<dt>${esc((propertyFields[a.kind]||[]).find(x=>x[0]===k)?.[1]||(k==='knowledge_gaps'?tr('仍待明确的问题'):k==='unresolved_conflicts'?say('待裁决的冲突','Unresolved conflict'):k==='conflict_resolutions'?say('裁决记录','Recorded decisions'):k))}</dt><dd>${esc(typeof v==='object'?fmt(v):v)}</dd>`).join('')}</dl><p>引用此项的定义：${S.assets.filter(x=>x.from===a.id||x.to===a.id||(x.refs||[]).includes(a.id)).length} 项</p></div>`:'';}
   });
   function svgPoint(e){const s=$('#kw-graph'),p=s.createSVGPoint();p.x=e.clientX;p.y=e.clientY;const result=p.matrixTransform(s.getScreenCTM().inverse());result.x-=Number(s.dataset.offsetX||0);result.y-=Number(s.dataset.offsetY||0);return result;}
   function connect(start,end){connection=null;const a=asset(start),b=asset(end);if(!a||!b)return;openAsset(null,{kind:'relation',from:start,to:end,domain:a.domain||b.domain||'',scope:a.scope||'',relation_type:'business'});}
@@ -408,7 +559,7 @@ window.KnowledgeWorkbench = (() => {
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&G.expanded&&!document.querySelector('dialog[open]')){G.expanded=false;G.inspector=false;saveView();rerender();drawGraph(true);return;}if(e.key!=='Enter')return;const node=e.target.closest('[data-kw-node]'),edge=e.target.closest('[data-kw-edge]');if(node||edge){e.preventDefault();openAsset(node?.dataset.kwNode||edge.dataset.kwEdge);}});
   function saveDelivery(){try{sessionStorage.setItem('kw-delivery:'+S.project_id,JSON.stringify({ids:[...deliverySelection],scoped:scopedDelivery}));}catch(_){C.notify(tr('当前交付选择无法在刷新后恢复，请保持此页完成交付。'));}}
   function deliver(ids){deliverySelection=new Set(ids);scopedDelivery=true;saveDelivery();publishResult=null;C.go('publish');}
-  function locate(id){Object.assign(G,{selected:id,focus:id,inspector:true,view:'all',mode:'graph',domain:'',kind:'',status:'',query:'',limit:80});saveView();C.go('graph');}
+  function locate(id){graphLocation(id);Object.assign(G,{selected:id,focus:id,inspector:true,view:'all',mode:'graph',domain:'',kind:'',status:'',query:'',limit:80});saveView();C.go('graph');}
   function bindings(id){
     const current=asset(id);
     if(!current||current.kind!=='metric')throw Error('Choose a metric / 请选择指标');
@@ -424,5 +575,5 @@ window.KnowledgeWorkbench = (() => {
       }:null,{confirmLabel:t('确认口径并保存','Confirm meaning and save'),assetOriginal:original});
     if(view.editable)window.QueryBindings.wire($('#kw-form'),view.fields);
   }
-  return {idle:()=>!drag&&!connection&&!$('#kw-dialog[open]')&&!pending.size,revision:()=>S.revision,configure,update,render,mount,transact,pendingHtml,scopeFields,readScope,scopeText,deliver,locate,bindings};
+  return {cancelLayout:()=>runningWorker?.cancel(),previewExternal,idle:()=>!drag&&!connection&&!$('#kw-dialog[open]')&&!pending.size,revision:()=>S.revision,configure,update,render,mount,transact,pendingHtml,scopeFields,readScope,scopeText,deliver,locate,bindings};
 })();
