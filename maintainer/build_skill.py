@@ -17,7 +17,7 @@ RUNTIME = FILES | {
         "_contract", "ingest_ddl", "knowledge", "start", "semantic_read", "neo4j_export", "ontology_export")),
     *("workbench/" + f + ".py" for f in (
         "__init__", "store", "serve", "knowledge", "knowledge_parsers", "semantic_package", "db_metadata",
-        "metadata_service", "authoring_inspect", "ddl_integrity", "relation_hints", "material_task", "graph_image", "query_control", "scenario_contract", "ogs_export", "neo4j_export")),
+        "metadata_service", "authoring_inspect", "ddl_integrity", "relation_hints", "material_task", "graph_image", "graph_view", "query_control", "scenario_contract", "ogs_export", "neo4j_export")),
     *("references/" + f + ".md" for f in (
         "architecture", "agent-reader", "modeling", "m1-m2-contract", "readonly-metadata", "semantic-package",
         "question-workflow", "question-delivery", "query-control", "standards", "neo4j-interop")),

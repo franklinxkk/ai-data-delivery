@@ -83,6 +83,13 @@ def make_parser():
     export.add_argument("--out", required=True)
     export.add_argument("--draft", action="store_true", default=None)
     export.add_argument("--include-execution", action="store_true", default=None)
+    viewer = commands.add_parser("graph-view", help="Save an offline 3D view of a verified package")
+    viewer.add_argument("--out", required=True)
+    viewer.add_argument("--language", choices=["en", "zh"], default="en")
+    scope = viewer.add_mutually_exclusive_group()
+    scope.add_argument("--id", help="Object or relationship ID")
+    scope.add_argument("--all", action="store_true", help="All active objects in this package")
+    viewer.add_argument("--all-neighbors", action="store_true", help="Include every direct neighbor of --id")
     return p
 
 
@@ -92,7 +99,12 @@ def main(argv=None):
         args = make_parser().parse_args(argv)
         package = read_package(args.package)
         package.compact_cli = not args.full_scope
-        if args.command == "verify":
+        if args.command == "graph-view":
+            from workbench.graph_view import projection, save_html
+            data = projection(package.model["assets"], package.manifest["source_revision"], args.id, args.all,
+                              all_neighbors=args.all_neighbors)
+            result = {"snapshot_id": package.manifest["snapshot_id"], **save_html(data, args.out, args.language)}
+        elif args.command == "verify":
             result = package.verify()
         elif args.command == "describe":
             result = package.describe()

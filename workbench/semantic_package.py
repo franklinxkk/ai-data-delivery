@@ -355,6 +355,40 @@ def _blocking(issues):
     return [issue for issue in issues if issue.get("severity") != "advisory"]
 
 
+_NO_EXCLUSIONS = re.compile(
+    r"(?:无|没有|不设)(?:任何)?(?:排除(?:项|条件|范围|对象|规则)?)?|none|no exclusions?",
+    re.IGNORECASE)
+_EXCLUSION_CLAUSE = re.compile(
+    r"(?:^|[，,。.;；：:\n])\s*(?:"
+    r"(?:应当|应|明确)?排除(?!条件|项[目为是：:]|范围|规则|对象为|与否|[项为是：:无])\s*[^，,。.;；：:\s]"
+    r"|不计入\s*[^，,。.;；：:\s]"
+    r"|(?:(?:this|the) (?:metric|measure) )?exclud(?:e|es|ing)\s+(?!nothing\b|none\b)\w)",
+    re.IGNORECASE)
+
+
+def _metric_evidence_issues(assets):
+    """Flag an explicit no-exclusions claim when its own cited clause excludes items."""
+    issues = []
+    for asset in assets:
+        if asset["kind"] != "metric" or asset["status"] == "retired":
+            continue
+        value = asset.get("properties", {}).get("exclusions")
+        if not isinstance(value, str) or not _NO_EXCLUSIONS.fullmatch(value.strip().rstrip("。.!！").strip()):
+            continue
+        for item in asset.get("evidence", []):
+            quote = item.get("quote") if isinstance(item, dict) else None
+            if not isinstance(quote, str) or not _EXCLUSION_CLAUSE.search(quote):
+                continue
+            issue = {"code": "EVIDENCE_EXCLUSIONS_CONFLICT", "field": "properties.exclusions",
+                     "asset_id": asset["id"], "asset_name": asset["name"], "quote": quote,
+                     "message": "排除范围填了“无”，引用原文却写明要排除某些记录。请核对范围或更换适用的原文。"}
+            if asset["status"] != "confirmed":
+                issue["severity"] = "advisory"
+            issues.append(issue)
+            break
+    return issues
+
+
 def _semantic_issues(index, redirects):
     issues, hierarchy = [], set()
     allowed = ENDPOINT_KINDS
@@ -422,16 +456,18 @@ def validate_semantic_assets(assets, redirects=None, *, include_execution=False,
     issues += _semantic_issues(index, redirect_map)
     def confirmed_issues(graph, redirects, source_records):
         confirmed = {aid for aid, asset in graph.items() if asset["status"] == "confirmed"}
-        return _blocking(physical_fk_issues(graph, redirects, _source_index(source_records), selected=confirmed))
+        return _blocking(physical_fk_issues(graph, redirects, _source_index(source_records), selected=confirmed)
+                         + _metric_evidence_issues(graph.values()))
 
-    physical = confirmed_issues(index, redirect_map, sources or [])
-    if physical and previous is not None:
+    confirmed_problems = confirmed_issues(index, redirect_map, sources or [])
+    if confirmed_problems and previous is not None:
         old_assets, old_sources = previous
         old_index = _asset_index(old_assets)
         existing = {_json(issue) for issue in confirmed_issues(old_index, redirect_map, old_sources)}
         # A legacy conflict should only obstruct reasserting it or handing off its own scope.
-        physical = [issue for issue in physical if issue["asset_id"] in reasserted or _json(issue) not in existing]
-    issues += physical
+        confirmed_problems = [issue for issue in confirmed_problems
+                              if issue["asset_id"] in reasserted or _json(issue) not in existing]
+    issues += confirmed_problems
     if issues:
         first = issues[0]
         affected = index.get(first.get("asset_id"))
@@ -656,6 +692,7 @@ def _prepare(assets, sources, *, project_id, revision, asset_ids=None, draft=Fal
     needed, evidence_issues = _evidence(chosen, source_index, normalize=True)
     issues = [{"code": "MISSING_DEPENDENCY", **entry, "message": "必须依赖未定义"} for entry in missing] + evidence_issues
     issues += _semantic_issues({a["id"]: a for a in chosen}, retained_redirects)
+    issues += _metric_evidence_issues(chosen)
     issues += physical_fk_issues(index, redirect_map, source_index, selected=selected)
     issues += _readiness_issues(chosen)
     if _blocking(issues) and not draft:
@@ -1002,6 +1039,7 @@ class SemanticPackage:
         self.actual_issues = ([{"code": "MISSING_DEPENDENCY", **x, "message": "必须依赖未定义",
                                "next_step": "补入所指依赖或核对引用身份后重新交付"} for x in missing] + issues
                               + _semantic_issues(self.index, self.redirects)
+                              + _metric_evidence_issues(self.index.values())
                               + physical_fk_issues(self.index, self.redirects, self.source_index)
                               + _readiness_issues(self.index.values()))
         if _blocking(self.actual_issues) and (not self.manifest["draft"] or self.manifest["complete"]):

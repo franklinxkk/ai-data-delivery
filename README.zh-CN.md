@@ -1,4 +1,4 @@
-# AI Data Delivery · 0.3.8
+# AI Data Delivery · 0.3.9
 
 **把已有表结构变成可编辑、可交给 Agent 的语义模型。**
 
@@ -17,6 +17,8 @@
 Agent 每次补完一组关系，都可以在同一张图上展示改动。打开的表单会保留你正在输入的内容。准备确认一条业务关系时，再补上它的适用范围和依据。
 
 已有资料时，把下面的 SQL 路径换成自己的文件。只想试用时直接用随包交通样例：先看两张表和一条外键，再导入同目录的 `transport-v1.txt`，让 Agent 区分“车辆引用企业”和“企业负责车辆维护”。导入命令前加全局 `--progress` 可观察解析进度；保存回执给出待核对项和本机图谱定位。
+
+在 2D 编辑器点 **3D 关系图** 可旋转查看对象，点 **浏览全量图** 可看整个模型。Agent 保存后可展示本次变更。离线保存用 `python scripts/knowledge.py --project DIR --language zh graph-view --out 变更.html`。收到语义包可用 `python scripts/semantic_read.py --package MODEL.zip graph-view --language zh --all --out 全图.html`。只想看某个对象的全部直接关系，可用 `--id 对象ID --all-neighbors`。离线图带有所选定义与依据原文，分享前请核对内容。
 
 ## 两条命令，得到第一份模型
 

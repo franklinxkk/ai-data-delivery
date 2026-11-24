@@ -46,6 +46,33 @@ def fixture():
 
 
 class PackageTests(unittest.TestCase):
+    def test_metric_explicit_exclusion_contradiction(self):
+        bad = asset("refunds", "metric", properties={"exclusions":"无排除条件"})
+        bad["evidence"][0]["quote"] = "按申请号去重，排除仅申请未结算，按结算月份归属。"
+        for action in (lambda: validate_semantic_assets([bad]), lambda: self.write_package([bad])):
+            with self.assertRaises(PackageError) as err:
+                action()
+            self.assertIn("EVIDENCE_EXCLUSIONS_CONFLICT",str(err.exception.details))
+        draft = copy.deepcopy(bad)
+        draft["status"] = "draft"
+        validate_semantic_assets([draft])
+        reader, _, manifest = self.write_package([draft],draft=True)
+        self.assertTrue(any(i["code"]=="EVIDENCE_EXCLUSIONS_CONFLICT" and i["severity"]=="advisory"
+                            for i in reader.actual_issues))
+        validate_semantic_assets([bad, asset("other")], previous=([bad],[]))
+        with self.assertRaises(PackageError):
+            validate_semantic_assets([bad], previous=([bad],[]), reasserted=["refunds"])
+        fixed = copy.deepcopy(bad)
+        fixed["properties"]["exclusions"] = "仅申请未结算"
+        self.write_package([fixed])
+        for text in ("本月所有记录均计入，不排除仅申请未结算。", "无排除条件", "Does not exclude pending refunds."):
+            bad["evidence"][0]["quote"] = text
+            validate_semantic_assets([bad])
+        bad["properties"]["exclusions"] = "No exclusions"
+        bad["evidence"][0]["quote"] = "Count monthly refunds. Exclude pending refunds."
+        with self.assertRaises(PackageError):
+            validate_semantic_assets([bad])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="semantic package 中文 ")
         self.addCleanup(self.temp.cleanup)

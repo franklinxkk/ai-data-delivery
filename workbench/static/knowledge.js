@@ -119,8 +119,14 @@ window.KnowledgeWorkbench = (() => {
     const rank=a=>['relation','mapping'].includes(a.kind)?0:a.kind==='field'?2:1;
     return items.length?{revision:next.revision,total:items.length,items:items.filter(a=>a.status!=='retired').sort((a,b)=>rank(a)-rank(b)||(revisions.get(b.id)||0)-(revisions.get(a.id)||0)).slice(0,4)}:null;
   }
+  function explorerLink(label, focus, revision){
+    const q=new URLSearchParams({view:'3d',lang:window.UIText?.language||'zh'});
+    if(focus)q.set('focus',focus);
+    if(revision!=null)q.set('revision',revision);
+    return '<a class="kw-explorer-link" href="/?'+esc(q.toString())+'" target="_blank" rel="noopener">'+esc(label)+'</a>';
+  }
   function changeLinks(delta,newTab=false){
-    if(!delta?.items.length)return '';
+    if(!delta?.total)return '';
     return `<div class="kw-change" role="status"><strong>r${esc(delta.revision)}</strong> ${delta.items.map(a=>{
       const edge=['relation','mapping'].includes(a.kind);
       const label=(edge?say('查看刚改的关系','View changed relation'):say('查看变更','View change'))+' · '+a.name;
@@ -128,7 +134,7 @@ window.KnowledgeWorkbench = (() => {
       const url=new URL(window.location.href);
       url.searchParams.set('focus',a.id);url.searchParams.set('revision',delta.revision);url.hash='graph';
       return `<a href="${esc(url.href)}" target="_blank" rel="noopener">${esc(label)} · ${say('新标签页','New tab')}</a>`;
-    }).join(' ')}</div>`;
+    }).join(' ')} ${explorerLink(say('看本次变更的 3D 图','View this change in 3D'),null,delta.revision)}</div>`;
   }
   function graphLocation(id){
     if(!window.history||!window.location?.href)return;
@@ -349,6 +355,7 @@ window.KnowledgeWorkbench = (() => {
     return `<div class="toolbar kw-canvas-tools"><select id="kw-canvas-view" aria-label="${say('图上显示','Show on canvas')}">${options([['all',say('全部内容','Everything')],['business',say('业务对象和关系','Objects and relationships')],['rules',say('指标和规则','Metrics and rules')],['data',say('表和字段','Tables and fields')]],G.view,null)}</select>
       ${fieldIndex().foldable.size?button(say('展开字段','Show columns'),'toggle-fields',`aria-pressed="${G.fieldsExpanded}"`,'small'):''}<span class="spacer"></span><div class="kw-tool-group kw-zoom-tools">
       ${button('−','zoom',`data-delta="-0.15" aria-label="${say('缩小','Zoom out')}"`,'small')}<span class="kw-zoom-value" id="kw-zoom-value">100%</span>${button('＋','zoom',`data-delta="0.15" aria-label="${say('放大','Zoom in')}"`,'small')}</div>
+      ${explorerLink(say('3D 关系图','3D connections'),G.focus||G.selected,null)}
       ${button(say('适应画布','Fit to view'),'fit-canvas','','small')}
       <div class="kw-tool-group kw-layout-tools">${button(tr('自动布局'),'arrange','','small')}
       <details class="kw-tool-menu"><summary aria-label="${say('布局选项','Layout options')}">▾</summary><div class="kw-tool-menu-panel">${button(say('撤销上次布局','Undo last layout'),'undo-layout',layoutUndo.length?'':'disabled','quiet small')}</div></details></div>
@@ -670,7 +677,7 @@ window.KnowledgeWorkbench = (() => {
   }
   function showConflict(){const el=$('#kw-conflict');if(el)el.innerHTML=tr('<p class="privacy">输入已保留。先刷新并查看最新定义，再决定如何继续。</p>')+button(tr('读取最新状态并核对'),'dialog-refresh','','small');}
   function newAssetTitle(kind){return say('新建','New ')+kinds[kind];}
-  function openAsset(id,prefill={}) {const draftKey=id||'new:'+JSON.stringify(prefill),savedDraft=assetDrafts.get(draftKey);const original=copy(savedDraft?.asset||asset(id)||{kind:'entity',name:'',definition:'',domain:importDraft.domain||'',scope:importDraft.scope||'',aliases:[],properties:{},refs:[],evidence:[],...prefill});openDialog(id?tr('编辑 ')+original.name:newAssetTitle(original.kind),tr`<div id="kw-asset-fields">${assetFields(original,{allowNewEnds:true})}</div><div class="kw-evidence-entry">${original.evidence?.length?`<h3>${say('已附依据','Attached evidence')}</h3>${evidenceHtml(original.evidence)}`:''}
+  function openAsset(id,prefill={}) {const draftKey=id||'new:'+JSON.stringify(prefill),savedDraft=assetDrafts.get(draftKey);const original=copy(savedDraft?.asset||asset(id)||{kind:'entity',name:'',definition:'',domain:importDraft.domain||'',scope:importDraft.scope||'',aliases:[],properties:{},refs:[],evidence:[],...prefill});openDialog(id?tr('编辑 ')+original.name:newAssetTitle(original.kind),tr`<div id="kw-asset-fields">${assetFields(original,{allowNewEnds:true})}</div><div class="kw-evidence-entry"><section id="kw-metric-check" hidden><h3>${say('对照原文，哪些记录算进去？','Compare the metric with its source')}</h3><dl class="kw-properties"><dt>${say('计入','Include')}</dt><dd data-compare="inclusions"></dd><dt>${say('排除','Exclude')}</dt><dd data-compare="exclusions"></dd></dl></section>${original.evidence?.length?`<h3>${say('已附依据','Attached evidence')}</h3>${evidenceHtml(original.evidence)}`:''}
       <details class="kw-form-section" data-citation><summary>${say('引用文件中的原文','Quote a source document')}</summary>
       ${S.sources.length?'':`<p class="muted">${say('还没有导入材料。可以先存草稿，稍后导入文件再回来引用。','No documents yet. Save a draft, import a file, then return to cite it.')}</p>`}
       <label>${say('文件','Document')}<select id="kw-cite-source">${options(S.sources.map(s=>[s.id,s.name]),'')}</select></label><label>${say('原文段落','Passage')}<select id="kw-cite-fragment" disabled></select></label><label>${say('要引用的原句','Exact quotation')}<textarea id="kw-cite-quote"></textarea></label></details>
@@ -686,6 +693,17 @@ window.KnowledgeWorkbench = (() => {
       if(G.selected&&activePage==='graph')locate(G.selected);
       assetDrafts.delete(draftKey);if(activePage==='graph'){drawGraph();drawInspector();}C.notify(confirmed?tr('知识已保存并确认'):tr('草稿已保存'));},{confirmLabel:tr('保存并确认'),draft:true,assetOriginal:original});dialog.assetDraftKey=draftKey;
     const fields=$('#kw-asset-fields');previewRelation(fields);
+    const compareMetric=()=>{
+      const card=$('#kw-metric-check');
+      card.hidden=fields.querySelector('[data-field="kind"]').value!=='metric';
+      if(card.hidden)return;
+      for(const item of card.querySelectorAll('[data-compare]')){
+        item.textContent=fields.querySelector('[data-field="properties.'+item.dataset.compare+'"]')?.value.trim()||say('待填写','To be specified');
+      }
+    };
+    compareMetric();
+    fields.oninput=compareMetric;
+    fields.onchange=()=>queueMicrotask(compareMetric);
     const first=['relation','mapping'].includes(original.kind)?(original.from&&original.to?'predicate':'from'):'name';
     fields.querySelector('[data-field="'+first+'"]')?.focus();
     if(savedDraft?.baseRevision!==undefined)dialog.baseRevision=savedDraft.baseRevision;}

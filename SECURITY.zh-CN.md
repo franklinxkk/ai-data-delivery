@@ -1,4 +1,4 @@
-# 安全边界 · 0.3.7-preview.1
+# 安全边界
 
 默认 ZIP 包含本地结构解析、语义编辑 CLI、回环编辑器、选定库表的元数据适配器、离线读包与图谱导出，以及一个合成交通练习。全库行值画像、在线评测、发布工具、旧数值工作流和行业模板保留在源码仓库。
 
@@ -11,4 +11,4 @@
 
 宿主提供模型能力和实际权限。allowed-tools 的 Read 仅预声明读取。材料、候选及行业模板不能授权确认。附件与模型修订同事务提交；历史数据和已交付包不会自动迁移或清理。操作者核对后才能确认业务含义，保留推断及口径冲突的依据。可使用脱敏资料向[项目反馈](https://github.com/franklinxkk/ai-data-delivery/issues)。
 
-[ClawHub 审计](https://clawhub.ai/franklinxkk/skills/ai-data-delivery/security-audit)按版本出具。此本地预览尚未提交外部复扫。[English](SECURITY.md)
+[ClawHub 审计](https://clawhub.ai/franklinxkk/skills/ai-data-delivery/security-audit)按版本出具。引用平台结论时请核对受检版本和各引擎详情。离线 3D HTML 内含所选对象的定义和引文，分享前请核对范围。文件的浏览器策略禁止对外连接。[English](SECURITY.md)

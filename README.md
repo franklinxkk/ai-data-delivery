@@ -1,4 +1,4 @@
-# AI Data Delivery · 0.3.8
+# AI Data Delivery · 0.3.9
 
 **Turn an existing database schema into an editable semantic model your Agent can read.**
 
@@ -17,6 +17,8 @@ Try asking your Agent, “Show me which company is responsible for resolving thi
 Ask your Agent to show each saved change in the same graph. Open forms preserve your typing. When you are ready to confirm a relationship, add its scope and supporting evidence.
 
 Start with your own SQL if available. For a trial use the included transport schema, then import `transport-v1.txt` from the same folder to distinguish a vehicle’s company reference from the company’s maintenance responsibility. Add global `--progress` before the command for stage feedback. The write receipt includes the next review question and a local graph location.
+
+Open **3D connections** in the 2D editor, or follow the change link after an Agent edit. Choose **Browse full model** for an overview. Save the changed neighborhood offline with `python scripts/knowledge.py --project DIR graph-view --out change.html`. For a received package use `python scripts/semantic_read.py --package MODEL.zip graph-view --all --out overview.html`. To export every direct neighbor of one object, use `--id ASSET_ID --all-neighbors`. The file contains the selected definitions and evidence quotations.
 
 ## Two commands to your first model
 

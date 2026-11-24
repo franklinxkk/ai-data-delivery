@@ -122,8 +122,14 @@ def main(argv=None):
     picture = commands.add_parser("graph-image", help="Save a focused, read-only SVG of a project revision; no browser required")
     picture.add_argument("--id", help="Active asset to focus, including a relationship")
     picture.add_argument("--out", required=True, help="New local .svg file")
+    viewer = commands.add_parser("graph-view", help="Save an offline 3D view of the changed objects and neighbors")
+    viewer.add_argument("--out", required=True, help="New .html file")
+    scope = viewer.add_mutually_exclusive_group()
+    scope.add_argument("--id", help="Focus on this object or relationship")
+    scope.add_argument("--all", action="store_true", help="Include the full active graph")
+    viewer.add_argument("--all-neighbors", action="store_true", help="Include every direct neighbor of --id")
     args = parser.parse_args(argv)
-    if args.command in {"state", "inspect", "relation-hints", "check", "impact", "receipt", "export", "handoff", "retire", "separate", "graph-image"} and not (Path(args.project) / "project.sqlite").is_file():
+    if args.command in {"state", "inspect", "relation-hints", "check", "impact", "receipt", "export", "handoff", "retire", "separate", "graph-image", "graph-view"} and not (Path(args.project) / "project.sqlite").is_file():
         print(json.dumps({"ok": False, "status": "project_not_found", "error": "No project.sqlite here; check --project or import a schema first / 未找到项目，请核对路径或先导入结构"}, ensure_ascii=False))
         return 2
     store = Store(args.project)
@@ -163,6 +169,10 @@ def main(argv=None):
         elif args.command in {"scan", "regress"}:
             result = getattr(service, "metadata_" + args.command)({**req, "connection_id": args.connection,
                 **({"refresh_review": args.refresh_review, "seed_draft": args.seed_draft} if args.command == "scan" else {})})
+        elif args.command == "graph-view":
+            from workbench.graph_view import project_view, save_html
+            data = project_view(store.read(args.revision), args.id, args.all, all_neighbors=args.all_neighbors)
+            result = save_html(data, args.out, args.language)
         elif args.command == "graph-image":
             from workbench.graph_image import render_graph
             path = Path(args.out)
@@ -299,6 +309,13 @@ def main(argv=None):
                 args_open += ["--page", page]
             guidance["preview"] = {"revision": result["revision"], "launch_argv": args_open,
                                    "location": "/?" + urlencode({"lang": args.language, **({"focus": focus} if focus else {})}) + "#" + page}
+            if guidance["changed_count"]:
+                guidance["preview"]["graph_view_location"] = "/?" + urlencode({
+                    "view": "3d", "lang": args.language, "revision": result["revision"]})
+                guidance["preview"]["graph_view_argv_prefix"] = [
+                    sys.executable, str(Path(__file__).resolve()), "--project", str(Path(args.project).resolve()),
+                    "--revision", str(result["revision"]), "--language", args.language, "graph-view"]
+                guidance["preview"]["graph_view_output_argument"] = "--out"
             if page == "graph" and guidance["changed_count"] and guidance["next_action"] != "none":
                 guidance["preview"]["image_argv_prefix"] = [
                     sys.executable, str(Path(__file__).resolve()), "--project", str(Path(args.project).resolve()),

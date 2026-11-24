@@ -4,7 +4,7 @@ description: 导入 SQL 或指定库表目录，建立带依据的语义图谱�
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.8
+  version: 0.3.9
   runtime_environment: Python 3.10+ with pinned local dependencies. No model key.
   file_read: Authorized materials, local project and semantic packages.
   file_write: Authorized local project and export paths.
@@ -18,7 +18,7 @@ metadata:
 
 围绕“导入结构 → 按需可视化编辑 → 导出／读取”完成短链路。浏览器是临时打开的编辑辅助，不要求用户建立业务问题、任务或验收记录，也不要求常驻服务。宿主理解业务，本地工具保存、编辑和交付同一模型；不内置大模型。
 
-有人参与建模时，首张图和重要关系变更都在当轮显示。用保存回执定位到实际打开的本机编辑器；宿主不能嵌入时，用回执的 image_argv_prefix 加 --out 新文件.svg，展示该修订的局部图，并给出继续编辑的入口。纯 CLI 交付可直接给定位信息。优先使用已有 SQL、字段注释和业务材料，遇到确实影响判断的歧义时，再按授权索取必要的行级证据。
+有人参与建模时，首张图和重要关系变更都在当轮显示。用回执的 graph_view_location 在已核实的本机编辑器中展示刚改的对象和直接关系，或执行 graph_view_argv_prefix 加 --out 新文件.html 并给出离线图。对话中需要静态图时，用 image_argv_prefix 加 --out 新文件.svg。保留继续编辑的入口，全量 3D 图按需打开。纯 CLI 交付可直接给定位信息。优先使用已有 SQL、字段注释和业务材料，遇到确实影响判断的歧义时，再按授权索取必要的行级证据。
 
 [English](SKILL.md) · [直接体验](README.zh-CN.md) · [架构分工](references/architecture.md)
 

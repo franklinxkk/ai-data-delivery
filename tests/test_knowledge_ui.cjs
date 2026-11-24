@@ -56,7 +56,7 @@ function boot({state={},helper=createHelper(),api,session=new Map(),local=new Ma
     '[data-kw="arrange"]':controls.arrange,'[data-kw="expand-canvas"]':controls.expand,'[data-kw="more"]':{disabled:false}};
   const context={window:{SemanticGraphLayout:helper.helper},document:{querySelector:s=>selectors[s]??null,querySelectorAll:()=>[],addEventListener:(type,fn)=>(listeners[type]??=[]).push(fn)},
     sessionStorage:{getItem:k=>session.get(k)||null,setItem:(k,v)=>session.set(k,v)},localStorage:{getItem:k=>local.get(k)||null,setItem:(k,v)=>local.set(k,v)},
-    crypto:require('node:crypto').webcrypto,TextEncoder,console};
+    crypto:require('node:crypto').webcrypto,TextEncoder,URLSearchParams,console};
   vm.createContext(context);vm.runInContext(source,context);
   const wb=context.window.KnowledgeWorkbench;
   wb.configure({api:async(path,request)=>{requests.push({path,request:request===undefined?undefined:clone(request)});if(api)return api(path,request);if(path==='layout')return {};throw Error('Unexpected API '+path);},reload:async()=>{},notify:message=>notices.push(message),go:page=>{main.innerHTML=wb.render(page);wb.mount();}});

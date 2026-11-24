@@ -4,7 +4,7 @@ description: Build and edit a source-linked ontology from DDL or selected databa
 license: MIT
 allowed-tools: Read
 metadata:
-  version: 0.3.8
+  version: 0.3.9
   runtime_environment: Python 3.10+ with pinned local dependencies. No model key.
   file_read: Authorized materials, local project and semantic packages.
   file_write: Authorized local project and export paths.
@@ -20,7 +20,7 @@ Help the user build and reuse a semantic model with a short, local workflow: imp
 
 [中文](SKILL.zh-CN.md) · [Try an example](README.md) · [Architecture](references/architecture.md)
 
-Show the first useful graph and meaningful edits during attended modeling. Use the saved receipt’s editor location on the verified loopback origin, or run its image_argv_prefix with --out NEW.svg and display the saved revision’s local diagram. Keep a working editor link for further edits. For a headless handoff return the locator. Start with supplied schema, comments and business documents; ask for row evidence only for a specific authorized ambiguity.
+Show the first useful graph and meaningful edits during attended modeling. Show the changed objects and their direct neighbors using the receipt’s graph_view_location on the verified editor origin, or run graph_view_argv_prefix with --out NEW.html and link the offline view. Use image_argv_prefix with --out NEW.svg for an inline image. Open the full 3D graph on request. Keep a working editor link for further edits. For a headless handoff return the locator. Start with supplied schema, comments and business documents; ask for row evidence only for a specific authorized ambiguity.
 
 Use the supplied schema, selected catalog or business question first. Use the packaged transport example only for a trial. For an attended import add global `--progress` for stderr stage events and one stdout JSON receipt. Read `result.result.guidance` after a write. Reuse the verified local editor origin with `preview.location`, or run `preview.launch_argv` and open its actual URL in the host. Show the first saved graph and meaningful changes. Export directly when requested.
 

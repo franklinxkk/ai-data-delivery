@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.9
+
+- 同名对象可按领域、范围与身份区分。关系支持搜索和翻页，高连接对象可展开全部直接邻居。缩放和窄屏时会重新排布标签。
+- 指标的包含与排除范围可和依据原文对照。填写“无排除条件”而引文明确排除记录时，系统拦截确认和正式交付，并允许保留草稿。
+
+- 从编辑器或 Agent 保存回执打开变更对象及其直接关系的 3D 图。支持按修订离线保存 HTML，也可主动浏览全量图。
+- Explore a verified semantic package in an offline HTML file. 2D editing and SVG handoffs keep their existing entry points.
+
 ## 0.3.8
 
 - 导入时定位缺逗号、错误主键和重名列，保留扩展字段类型，区分带点的表名和库表限定名。GBK 文件可显式选择编码重试。

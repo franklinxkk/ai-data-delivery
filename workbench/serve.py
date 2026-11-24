@@ -11,7 +11,7 @@ from pathlib import Path
 import secrets
 import socket
 import sys
-from urllib.parse import urlsplit, urlencode
+from urllib.parse import parse_qs, urlsplit, urlencode
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -112,6 +112,13 @@ def make_server(service, port=0):
                     return self.response(200, {**model, "evidence_origins": {a["id"]: evidence_origin(a, formats) for a in model["assets"]}, "editor_contract": {
                         "ends": {k: [sorted(a), sorted(b)] for k, (a,b) in ENDPOINT_KINDS.items()},
                         "confirm_fields": REQUIRED_PROPERTIES}})
+                if path == "/api/knowledge/graph-view":
+                    from workbench.graph_view import project_view
+                    query = parse_qs(urlsplit(self.path).query)
+                    rev = query.get("revision", [None])[0]
+                    return self.response(200, project_view(service.store.read(rev), query.get("focus", [None])[0],
+                                                           query.get("scope") == ["all"],
+                                                           all_neighbors=query.get("scope") == ["neighbors"]))
                 if path == "/api/knowledge/revision":
                     with service.store.connect() as db:
                         revision = db.execute("SELECT MAX(revision) FROM revisions").fetchone()[0]
@@ -139,11 +146,13 @@ def make_server(service, port=0):
                 if not model_only and path in {"/api/export", "/api/backup"}:
                     return self.response(200, service.export(path.endswith("backup")), "application/zip", "project-backup.zip" if path.endswith("backup") else "semantic-delivery.zip")
                 if path == "/":
-                    body = (STATIC / "index.html").read_bytes().replace(b"__SESSION_TOKEN__", token.encode())
+                    view = parse_qs(urlsplit(self.path).query).get("view")
+                    page = "graph-view.html" if view == ["3d"] else "index.html"
+                    body = (STATIC / page).read_bytes().replace(b"__SESSION_TOKEN__", token.encode())
                     return self.response(200, body, "text/html; charset=utf-8", download_session=True)
                 if path == "/ui-en.js":
                     return self.response(200, b"window.UI_EN=" + (STATIC / "ui-en.json").read_bytes() + b";", "text/javascript; charset=utf-8")
-                if path in {"/app.js", "/i18n.js", "/style.css", "/knowledge.js", "/knowledge.css", "/scenarios.js", "/metadata.js", "/query-bindings.js", "/graph-layout.js", "/vendor/elk.bundled.js"}:
+                if path in {"/app.js", "/i18n.js", "/style.css", "/knowledge.js", "/knowledge.css", "/scenarios.js", "/metadata.js", "/query-bindings.js", "/graph-layout.js", "/vendor/elk.bundled.js", "/graph-view.css", "/graph-view.js", "/vendor/force-graph-3d.js"}:
                     return self.response(200, (STATIC / path[1:]).read_bytes(), "text/javascript; charset=utf-8" if path.endswith("js") else "text/css; charset=utf-8")
                 self.response(404, {"error": "页面不存在"})
             except PermissionError as exc:
