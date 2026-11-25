@@ -1,5 +1,6 @@
 import codecs
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -30,7 +31,10 @@ class ReleasePrivacyTests(unittest.TestCase):
         self.commit()
 
     def git(self, *args):
-        return subprocess.check_output(["git", "-C", str(self.repo), *args], stderr=subprocess.PIPE)
+        # Windows may drop empty environment entries after another test restores os.environ.
+        # An explicit environment preserves Git configuration that contains empty values.
+        return subprocess.check_output(["git", "-C", str(self.repo), *args],
+                                       stderr=subprocess.PIPE, env=dict(os.environ))
 
     def commit(self):
         self.git("add", "-A")
@@ -46,7 +50,7 @@ class ReleasePrivacyTests(unittest.TestCase):
         proc = subprocess.run(
             [sys.executable, str(CHECKER), "--terms-file", str(self.terms), "--repo", str(self.repo),
              "--zip", str(self.package), "--release-notes", str(self.notes), *extra],
-            capture_output=True, encoding="utf-8",
+            capture_output=True, encoding="utf-8", env=dict(os.environ),
         )
         self.assertEqual(rc, proc.returncode)
         self.assertEqual("", proc.stderr)
