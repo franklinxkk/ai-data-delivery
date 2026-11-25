@@ -8,8 +8,8 @@
   const names = {relation:t('关系','Relationship'), mapping:t('映射','Mapping'), entity:t('业务对象','Object'), term:t('术语','Term'), attribute:t('属性','Attribute'),
     field:t('字段','Column'), dataset:t('表','Dataset'), rule:t('规则','Rule'), metric:t('指标','Metric')};
   const statuses = {draft:t('草稿','Draft'), confirmed:t('已确认','Confirmed'), needs_review:t('待核对','Needs review')};
-  const colors = {entity:'#56d8c2', term:'#cba5ea', attribute:'#8bbac6', field:'#8298ae',
-    dataset:'#68b9de', metric:'#92aeff', rule:'#eeb778'};
+  const colors = {entity:'#45967a', term:'#9b78bd', attribute:'#64a09a', field:'#7898ad',
+    dataset:'#527fae', metric:'#bc8b33', rule:'#9870ad'};
   let data, graph, selected, nodes, adjacent, labels = [], busy = false;
   let sameNames, sameDomainNames, pageIndex = 0, frameDistance = 0;
   const pageSize = 20;
@@ -149,7 +149,7 @@
     }else dd.textContent=value;
     dl.append(dt,dd);
   }
-  function showMeaning(dl,a){
+  function showMeaning(dl,a,foldSource=false){
     entry(dl,t('业务域','Domain'),a.domain);
     entry(dl,t('业务定义','Definition'),a.definition);
     entry(dl,t('适用范围','Scope'),a.scopeText);
@@ -160,9 +160,19 @@
       const source=[e.source_id,e.revision!=null?'r'+e.revision:null,e.fragment_id].filter(Boolean).join(' · ');
       return [e.quote,source||e.type].filter(Boolean).join(' — ');
     }).filter(Boolean);
-    entry(dl,t('依据','Evidence'),evidence);
     entry(dl,t('待核实','Open questions'),a.gaps);
-    entry(dl,t('标识','ID'),a.id);
+    let sources=dl;
+    if(foldSource){
+      const dt=document.createElement('dt'),dd=document.createElement('dd');
+      const details=document.createElement('details'),summary=document.createElement('summary');
+      dt.className='visually-hidden';
+      dt.textContent=t('来源详情','Source details');
+      summary.textContent=evidence.length?t('查看依据与标识','Show evidence and ID')+' · '+evidence.length:t('查看标识','Show ID');
+      sources=document.createElement('dl');
+      details.append(summary,sources);dd.append(details);dl.append(dt,dd);
+    }
+    entry(sources,t('依据','Evidence'),evidence);
+    entry(sources,t('标识','ID'),a.id);
   }
   function showConnections(){
     const list=$('relations'),neighbors=adjacent.get(selected)||[],query=$('find').value.trim().toLocaleLowerCase();
@@ -200,7 +210,7 @@
     if(!n){$('name').textContent='';$('status').textContent='';return;}
     $('objects').value=id;$('name').textContent=n.label;
     $('status').textContent=[names[n.kind]||n.kind,n.domain,statuses[n.status]||n.status,n.changed?t('本次有改动','Changed'):null].filter(Boolean).join(' · ');
-    showMeaning($('meaning'),n);
+    showMeaning($('meaning'),n,true);
     const neighbors=adjacent.get(id)||[];
     if(!snapshot){
       const back=new URL('/',location.origin);back.searchParams.set('lang',lang);back.searchParams.set('focus',id);
@@ -238,10 +248,10 @@
     for(const n of list){const o=document.createElement('option');o.value=n.id;o.textContent=displayName(n);menu.append(o);}
     $('objects').replaceChildren(menu);$('objects').disabled=!list.length;
     $('scope').textContent=(data.full?t('全量','Full model'):data.focus?t('对象及直接关系','Object and neighbors'):
-      data.changeRevision?t('最近一次变更','Latest change'):t('局部图','Local view'))+' · r'+data.revision;
+      data.changeRevision?t('变更视图','Changes'):t('局部图','Local view'))+t(' · 模型 r',' · Model r')+data.revision;
     const summary=[list.length+t(' 个对象',' objects')+' · '+edges.length+t(' 条连线',' links')];
     if(!data.full&&data.eligible>list.length)summary.push(t('局部共 ','Local scope: ')+data.eligible+t(' 个对象，已限量显示',' objects; display capped'));
-    if(data.changeRevision)summary.push('r'+data.changeRevision+' · '+data.changedCount+t(' 项变更',' changed assets'));
+    if(data.changeRevision)summary.push(t('上次变更 r','Last change r')+data.changeRevision+' · '+data.changedCount+t(' 项',' assets'));
     if(data.inactiveCount)summary.push(t('已停用或移除 ','Retired or removed: ')+data.inactiveCount+' · '+data.inactiveNames.join(', '));
     $('summary').textContent=summary.join(' / ');
     $('near').hidden=!data.full||!list.length;
@@ -271,15 +281,18 @@
       };
       $('editor').hidden=false;$('editor').href='/?lang='+encodeURIComponent(lang)+'#graph';
     }
-    $('hint').textContent=list.length?t('拖动旋转 · 滚轮缩放 · 点击对象看关系','Drag to rotate · Scroll to zoom · Click to inspect'):
+    const gesture=window.matchMedia('(pointer: coarse)').matches
+      ? t('单指旋转 · 双指缩放 · 轻点查看关系','Drag to rotate · Pinch to zoom · Tap to inspect')
+      : t('拖动旋转 · 滚轮缩放 · 点击对象看关系','Drag to rotate · Scroll to zoom · Click to inspect');
+    $('hint').textContent=list.length?gesture:
       t('这次没有可显示的有效对象。','No active objects to show here.');
     if(list.length){
       try{
         if(!graph){
           graph=new ForceGraph3D($('graph'),{controlType:'orbit',rendererConfig:{antialias:true}});
-          graph.showNavInfo(false).backgroundColor('#101c2a').nodeLabel(()=>null).linkLabel(()=>null)
-            .nodeOpacity(1).nodeRelSize(1).linkWidth(0).linkOpacity(.58).cooldownTicks(0)
-            .nodeColor(n=>colors[n.kind]||'#aabbca').onNodeClick(n=>select(n.id));
+          graph.showNavInfo(false).backgroundColor('#f4f8f6').nodeLabel(()=>null).linkLabel(()=>null)
+            .nodeOpacity(1).nodeRelSize(1).linkWidth(0).linkOpacity(.78).cooldownTicks(0)
+            .nodeColor(n=>colors[n.kind]||'#758b84').onNodeClick(n=>select(n.id));
           trackCamera();
           new ResizeObserver(()=>{
             const distance=fitDistance();
@@ -296,7 +309,7 @@
         const dense=list.length>80;
         const radius=n=>dense?(n.kind==='field'?1.6:3):(n.id===data.center?14:7);
         graph.width(width()).height(height()).nodeVal(n=>radius(n)**3).nodeResolution(dense?5:14)
-          .linkColor(e=>e.changed&&!dense?'#f6c676':'#80a5ba').linkCurvature(e=>e.self ? 0.55 : 0)
+          .linkColor(e=>e.changed&&!dense?'#9e6c31':'#597b72').linkCurvature(e=>e.self ? 0.55 : 0)
           .linkDirectionalArrowLength(dense?0:3)
           .graphData({nodes:list,links:edges.map(e=>({...e,self:e.source===e.target}))});
         frameDistance=fitDistance();

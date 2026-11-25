@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.10
+
+- 3D 关系图与 2D 编辑器共用浅色背景和青绿色选中态。原文和标识按需展开，先看业务含义和直接关系。触屏提供双指缩放提示。
+- 首次安装可运行 `python scripts/smoke.py` 实测导入、草稿导出和离线读取。中英文入口集中说明常见错误、离线依赖安装及真实输出。分发包包含 `LICENSE.md`。
+- Updated the historical guides for public sharing. Maintainers can scan a Git tree, ZIP and release notes with an external private term list using `maintainer/privacy_check.py`.
+
 ## 0.3.9
 
 - 同名对象可按领域、范围与身份区分。关系支持搜索和翻页，高连接对象可展开全部直接邻居。缩放和窄屏时会重新排布标签。

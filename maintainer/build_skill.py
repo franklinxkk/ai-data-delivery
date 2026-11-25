@@ -14,7 +14,7 @@ FILES = {"SKILL.md", "SKILL.zh-CN.md", "README.md", "README.zh-CN.md", "SECURITY
 RUNTIME = FILES | {
     "examples/semantic-workbench/transport.sql", "examples/semantic-workbench/transport-v1.txt",
     *("scripts/" + f + ".py" for f in (
-        "_contract", "ingest_ddl", "knowledge", "start", "semantic_read", "neo4j_export", "ontology_export")),
+        "_contract", "ingest_ddl", "knowledge", "start", "semantic_read", "smoke", "neo4j_export", "ontology_export")),
     *("workbench/" + f + ".py" for f in (
         "__init__", "store", "serve", "knowledge", "knowledge_parsers", "semantic_package", "db_metadata",
         "metadata_service", "authoring_inspect", "ddl_integrity", "relation_hints", "material_task", "graph_image", "graph_view", "query_control", "scenario_contract", "ogs_export", "neo4j_export")),
@@ -55,8 +55,10 @@ def main():
                 "development_preview": args.allow_dirty,
                 "files": []}
     entries = {}
-    for name in paths:
-        data = (ROOT / name).read_bytes()
+    for source_name in paths:
+        # Some registries omit extensionless files. Keep one source and one distributable license.
+        name = "LICENSE.md" if source_name == "LICENSE" else source_name
+        data = (ROOT / source_name).read_bytes()
         if Path(name).suffix.lower() in {".md", ".py", ".js", ".json", ".yaml", ".yml", ".txt", ".html", ".css", ".sql", ".csv"}:
             data = data.replace(b"\r\n", b"\n")
         entries[name] = data

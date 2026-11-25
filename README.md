@@ -1,90 +1,71 @@
-# AI Data Delivery · 0.3.9
+# AI Data Delivery · 0.3.10
 
-**Turn an existing database schema into an editable semantic model your Agent can read.**
+**Turn a database schema into a source-linked semantic model that another Agent can read offline.**
 
-[简体中文](README.zh-CN.md) · [GitHub releases](https://github.com/franklinxkk/ai-data-delivery/releases) · [Security](SECURITY.md)
+[简体中文](README.zh-CN.md) · [Releases](https://github.com/franklinxkk/ai-data-delivery/releases) · [Security](SECURITY.md)
 
-Import SQL or read a database catalog to get a draft of tables, fields and foreign keys. Enrich it with business objects, attributes and relationships. Export a source-linked semantic package that another local Agent can read through the CLI.
+## Import a schema and read the result
 
-**CLI first; open the graph editor only when it helps.** No account, persistent service, Neo4j installation or model key is required. For data teams and Agent developers who want to reuse existing structure and add business meaning incrementally. Your host Agent reasons about documents; this tool stores, edits and delivers the model.
-
-`Import structure → optionally inspect / edit → export or read locally`
-
-Try asking your Agent, “Show me which company is responsible for resolving this work order.” A company key gives you a structural reference. Add a policy passage to establish the role, see the revised relationship, then let a second Agent trace that definition to a field in the exported package. Checking an individual work order still requires its own evidence.
-
-**Try drawing “Transport company resolves work order”.** Click **New object**, enter “Transport company” and save the draft. Repeat for “Work order”. Click **Connect**, then pick the company and the work order in that order. Enter “resolves” under **How are they related?** and check the arrow before saving. You can swap the two ends.
-
-Ask your Agent to show each saved change in the same graph. Open forms preserve your typing. When you are ready to confirm a relationship, add its scope and supporting evidence.
-
-Start with your own SQL if available. For a trial use the included transport schema, then import `transport-v1.txt` from the same folder to distinguish a vehicle’s company reference from the company’s maintenance responsibility. Add global `--progress` before the command for stage feedback. The write receipt includes the next review question and a local graph location.
-
-Open **3D connections** in the 2D editor, or follow the change link after an Agent edit. Choose **Browse full model** for an overview. Save the changed neighborhood offline with `python scripts/knowledge.py --project DIR graph-view --out change.html`. For a received package use `python scripts/semantic_read.py --package MODEL.zip graph-view --all --out overview.html`. To export every direct neighbor of one object, use `--id ASSET_ID --all-neighbors`. The file contains the selected definitions and evidence quotations.
-
-## Two commands to your first model
-
-Download the ZIP, extract it and enter the `ai-data-delivery` directory. Requires **Python 3.10+**. Install dependencies once:
+Extract the ZIP and enter the directory containing `requirements.txt` and `scripts/`. Use Python 3.10 or later. On Windows you can substitute `py -3` or your virtual environment's Python. Install the pinned dependencies once.
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-Import the bundled schema and export its draft:
+To check the installation, run `python scripts/smoke.py`. It imports synthetic tables and reads the exported package in a temporary directory. Use the commands below to keep a model you can edit.
+
+Run the example in a fresh project directory. The import reads the supplied synthetic SQL as text and saves physical drafts. The export writes a new ZIP. The third command reads that ZIP in a separate process. These commands run locally without a server or model key.
 
 ```bash
 python -X utf8 scripts/knowledge.py --project "./work/transport" import --file "examples/semantic-workbench/transport.sql" --seed-draft
 python -X utf8 scripts/knowledge.py --project "./work/transport" export --out "./work/transport.zip" --draft
+python -X utf8 scripts/semantic_read.py --package "./work/transport.zip" verify
 ```
 
-The result contains **2 tables, 5 fields and 1 foreign key**, with source excerpts. SQL is parsed, never executed; business rules are not guessed. Substitute your own DDL path. `--seed-draft` requires an empty model. For an existing model, omit that flag and review change candidates so manual edits remain intact.
+In the first receipt, `result.result.seeded.counts` contains `{"dataset": 2, "field": 5, "relation": 1}`. The reader returns the following excerpt.
 
-For a schema with few declared foreign keys, run `python scripts/knowledge.py --project "./work/transport" relation-hints` to see which columns are worth comparing and why. For a GBK export add `--encoding gb18030` to the import. If a statement is incomplete, the receipt identifies what to correct before importing again.
+```json
+{"status": "verified", "draft": true, "asset_count": 8, "complete": false}
+```
 
-Identical DDL bytes produce the same table, field and foreign-key IDs in fresh projects. For evolving exports, set a stable logical source on first import, e.g. `--source-key fleet/prod`, and use separate keys for distinct databases. Existing projects retain their IDs when updating their source with `--source-id`. The editor initially includes every asset kind and restores your chosen project view on return.
-
-To retire assets with history, read the IDs and revision with `state`, then run `python scripts/knowledge.py --project ./work/transport --revision N retire --id ASSET_ID --reason "superseded"`. Substitute `--file ids.json` for `--id ASSET_ID` to retire a JSON array of IDs atomically.
-
-`--draft` exports unconfirmed work with its status and gaps preserved. After reviewing and confirming definitions, omit it to export a confirmed snapshot. The output file must not already exist.
-
-On Windows, if `python` is unavailable, check `py -3 --version` and substitute `py -3`, or use your virtual environment's Python.
-
-## Open the graph only when needed
+The package passed integrity checks. All eight definitions are drafts. To inspect the vehicle table, search the package:
 
 ```bash
-python -X utf8 scripts/start.py --project "./work/transport"
+python -X utf8 scripts/semantic_read.py --package "./work/transport.zip" search --query vehicle --kind dataset
 ```
 
-Open the printed local URL to see the tables and foreign keys. Click a table to see its columns, choose **Show columns** to draw them individually, or search for a column by name. Columns used in business relationships or mappings stay visible. Double-click to edit an object. Click **Connect** and choose both ends, or drag a connection. Press Esc to cancel. The CLI and editor use the same local model.
+The example returns one match. Use `matches[0].asset.id` with `sources --id ID` to read the original `CREATE TABLE vehicle` passage. It establishes a reference from `vehicle.company_id` to `company.id`. Ownership and maintenance obligations need separate evidence. For a different schema, substitute your DDL path and use terms from its tables. [Reader commands and paging](references/agent-reader.md)
 
-Use **Export** to download a package, then close the page and press **Ctrl+C** in the terminal to stop the editor. Reopen with the same project path. CLI use requires no server, saved business question or acceptance workflow.
+## Add a business definition
 
-## Let another local Agent read it
+Try asking your Agent, “Which company is responsible for vehicle maintenance, and where does the source say so?” Register the bundled synthetic business notes in the **same project**:
 
 ```bash
-python -X utf8 scripts/semantic_read.py --package "./work/transport.zip" search --query vehicle
+python -X utf8 scripts/knowledge.py --project "./work/transport" import --file "examples/semantic-workbench/transport-v1.txt"
 ```
 
-The reader returns structured JSON. Take actual IDs from search results, then use `get`, `neighbors`, `context` and `sources` for definitions, relationships, dependencies and original excerpts. Only the package is needed; the authoring project and server can be closed. [Reader guide](references/agent-reader.md)
+The receipt gives `result.result.batch_id`. The Agent can use `task --batch BATCH_ID` to read the passage “企业负责本企业车辆维护。” (“A company maintains its own vehicles.”). Attach the exact excerpt and its source revision to the business relationship, then inspect its dependencies. Keep that role in draft until authorized review. The previously exported ZIP still contains the earlier revision. Export to a new file to hand off the revised model. [Modeling and scoped export](references/modeling.md)
 
-Or tell your host Agent:
+To review visually, run `python -X utf8 scripts/start.py --project "./work/transport"` and open the printed local URL. Click a table to inspect columns, or choose **New object** to create a business object. **Connect** takes the two endpoints in order and shows the direction before saving. **3D connections** opens the graph around a change. Stop the editor with **Ctrl+C**. To share that view offline, run `python scripts/knowledge.py --project "./work/transport" graph-view --out change.html` and review its included quotations before sharing.
 
-> Use ai-data-delivery to import this SQL into the specified directory as a structure draft. Use my business notes to clarify vehicles, companies and routes, retaining sources. Ask only about decisions that need my judgment. Open the graph when reviewing relationships would help, then export it for another Agent.
+## Common questions
 
-The host handles commands, IDs and JSON. You review business meaning. A foreign key is not automatically confirmed as company ownership.
-
-For business semantics, the Agent can save related objects, attributes, mappings and relationships in one atomic batch. `inspect` points out unconfirmed dependencies, omitted mappings and join keys. You decide unresolved business meaning; existing authorization is reused. [Short modeling path and commands](references/modeling.md)
-
-## Continue only as needed
-
-| Need | Entry point |
+| What happened? | What to do |
 | --- | --- |
-| Connect SQLite, PostgreSQL or MySQL | [Read-only catalogs](references/readonly-metadata.md): explicit tables, structure only, no business rows |
-| Add documents, metrics, rules or mappings | [Short modeling path](references/modeling.md): batch maintenance, dependency review and scoped delivery |
-| Hand off a specific question with its context | [Optional question handoff](references/question-delivery.md): export with `handoff`, read with `brief` |
-| Exchange with Neo4j or ontology-graph-spec | [Offline interchange](references/neo4j-interop.md); Neo4j is optional |
-| Try transport, agriculture, university or finance examples | [Synthetic exercises](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/examples/cross-domain/README.md), not business policy |
+| Installation must work offline | On a connected machine with matching OS, architecture and Python version, run `python -m pip download --only-binary=:all: -r requirements.txt -d wheels`. Transfer the wheels, then run `python -m pip install --no-index --find-links ./wheels -r requirements.txt` at the destination. |
+| The authoring CLI returned `argument_error` | Put global options such as `--project`, `--language zh`, `--revision` and `--progress` before the command. Put `--file`, `--seed-draft` or `--out` after their respective command. `--progress` writes stage events to stderr and keeps one JSON receipt on stdout. |
+| The model already exists, or the SQL changed | Reopen the same project. Omit `--seed-draft` on subsequent imports and review the changes. For recurring DDL exports use a stable `--source-key` from first import, or use `--source-id` for a registered source. For GBK text use `import --encoding gb18030 --file FILE`. |
+| The write result is uncertain, or another edit changed the project | For a retryable write, supply a unique global `--operation-id` up front. After interruption, run `receipt OPERATION_ID` on the same project. For `status: conflict`, use `state --summary` for the revision, read the affected assets in `state`, compare your input and reapply the reconciled edit with its reviewed revision. |
+| Export failed | Use an existing destination directory and a new filename. For `details.code: NOT_PUBLISHABLE`, inspect the listed issues and review the relevant definitions and dependencies. Use `--draft` when the recipient requested a draft. |
+| A reader search has no matches, or an ID is unknown | Inspect `fallback.candidates` for available terms on a no-match search. For `error.code: UNKNOWN_ID`, search the supplied snapshot and copy an ID from its matches. |
 
-This is a modeling and delivery tool. It does not provide multi-user administration, enterprise authorization, production queries or business execution. Core parsing and offline reading are local; optional connections use explicitly authorized endpoints. Parsing has documented limits, and packages can contain business definitions and source excerpts. [Architecture](references/architecture.md) · [Stable 0.3.6 validation](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/references/v0.3.6-release-validation.md)
+## Other tasks
 
-0.3.6 shows model changes in the open graph, protects existing assets against stale CLI edits, and keeps large-package receipts short. To update an existing asset, pass the revision you actually read before the edit command. Existing models are not automatically migrated or overwritten; back up before upgrading. Report a specific blocked step with sanitized inputs: [feedback](https://github.com/franklinxkk/ai-data-delivery/issues).
+| Goal | Entry point |
+| --- | --- |
+| Find possible joins in a schema with few foreign keys | `knowledge.py --project DIR relation-hints` lists field pairs with their metadata. Check business evidence before saving a relationship. |
+| Connect selected SQLite, PostgreSQL or MySQL tables | [Read-only catalog setup](references/readonly-metadata.md) |
+| Hand off a particular question or check the impact of a change | [Question handoff and impact](references/question-delivery.md) |
+| Exchange definitions with Neo4j or ontology-graph-spec | [Offline interchange](references/neo4j-interop.md) |
 
-[MIT](LICENSE) · [Skill instructions](SKILL.md) · [Changelog](CHANGELOG.md)
+The host Agent interprets the materials. This tool stores the model and its sources locally. Production queries, enterprise access control and multi-user administration are outside its scope. Keep a backup when upgrading an existing project. The distribution includes the MIT license in `LICENSE.md`. [Architecture](references/architecture.md) · [License in source](https://github.com/franklinxkk/ai-data-delivery/blob/main/LICENSE) · [Skill instructions](SKILL.md) · [Changelog](CHANGELOG.md)

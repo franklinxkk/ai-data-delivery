@@ -1,90 +1,71 @@
-# AI Data Delivery · 0.3.9
+# AI Data Delivery · 0.3.10
 
-**把已有表结构变成可编辑、可交给 Agent 的语义模型。**
+**把表结构变成可追溯的语义模型，让接手的 Agent 离线读取定义和原文依据。**
 
-[English](README.md) · [GitHub 发布记录](https://github.com/franklinxkk/ai-data-delivery/releases) · [安全说明](SECURITY.zh-CN.md)
+[English](README.md) · [发布记录](https://github.com/franklinxkk/ai-data-delivery/releases) · [安全说明](SECURITY.zh-CN.md)
 
-导入 SQL，或读取数据库目录，先得到表、字段和外键草稿；再补充“车辆、企业、线路”等业务对象、属性与关系。导出一份带来源的语义包，其他本机 Agent 可以直接用 CLI 读取。
+## 导入结构，读取第一份模型
 
-**CLI 是主入口，浏览器只是按需打开的图谱编辑器。** 无需账号、常驻服务、Neo4j 或模型密钥。适合想复用已有数据结构、逐步补充业务含义的数据团队与 Agent 开发者。宿主 Agent 负责理解业务资料，本工具负责保存、编辑和交付模型。
-
-`导入结构 → 按需查看／编辑 → 导出或本地读取`
-
-可以直接对 Agent 说：“把这份 SQL 画出来。我想知道工单上哪家企业负责整改。”如果表里只有企业编号，先看到有据的字段引用，再决定这家企业扮演什么角色。每次确认重要关系都能回看对应修订的局部图。接手人可以从一条要求沿图查到指标和字段，具体工单有没有复核凭证仍需核对记录。
-
-**试着画出“运输企业负责整改工单”。** 点“新建对象”，分别输入“运输企业”和“整改工单”，各自保存草稿。点“连线”，先选运输企业，再选整改工单。在“它们是什么关系？”填“负责整改”，看一眼箭头方向再保存。选反了可以直接交换两端。
-
-Agent 每次补完一组关系，都可以在同一张图上展示改动。打开的表单会保留你正在输入的内容。准备确认一条业务关系时，再补上它的适用范围和依据。
-
-已有资料时，把下面的 SQL 路径换成自己的文件。只想试用时直接用随包交通样例：先看两张表和一条外键，再导入同目录的 `transport-v1.txt`，让 Agent 区分“车辆引用企业”和“企业负责车辆维护”。导入命令前加全局 `--progress` 可观察解析进度；保存回执给出待核对项和本机图谱定位。
-
-在 2D 编辑器点 **3D 关系图** 可旋转查看对象，点 **浏览全量图** 可看整个模型。Agent 保存后可展示本次变更。离线保存用 `python scripts/knowledge.py --project DIR --language zh graph-view --out 变更.html`。收到语义包可用 `python scripts/semantic_read.py --package MODEL.zip graph-view --language zh --all --out 全图.html`。只想看某个对象的全部直接关系，可用 `--id 对象ID --all-neighbors`。离线图带有所选定义与依据原文，分享前请核对内容。
-
-## 两条命令，得到第一份模型
-
-下载 ZIP，解压后进入 `ai-data-delivery` 目录。需要 **Python 3.10+**，首次安装依赖：
+解压 ZIP，进入含有 `requirements.txt` 和 `scripts/` 的目录，使用 Python 3.10 或更高版本。Windows 可将 `python` 换成 `py -3` 或虚拟环境内的 Python。首次使用先安装指定版本的依赖。
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-导入随包示例，再导出草稿：
+要检查安装，可运行 `python scripts/smoke.py`。它在临时目录内导入合成表，并读取导出的包。要保留一份可编辑的模型，请运行下面的命令。
+
+以下示例使用新的项目目录。第一条命令将随包合成 SQL 作为文本解析并保存结构草稿。第二条导出 ZIP，第三条用独立进程读取该包。全程可在本机运行，无需服务或模型密钥。
 
 ```bash
 python -X utf8 scripts/knowledge.py --project "./work/transport" --language zh import --file "examples/semantic-workbench/transport.sql" --seed-draft
 python -X utf8 scripts/knowledge.py --project "./work/transport" export --out "./work/transport.zip" --draft
+python -X utf8 scripts/semantic_read.py --package "./work/transport.zip" verify
 ```
 
-得到 **2 张表、5 个字段、1 条外键**及原文依据，不会执行 SQL，也不会猜测业务规则。将文件路径换成自己的 DDL 即可。`--seed-draft` 仅初始化空模型；已有模型再次导入时去掉该参数，通过候选核对结构变化，保留人工修改。
+导入回执的 `result.result.seeded.counts` 为 `{"dataset": 2, "field": 5, "relation": 1}`，对应两张表、五个字段和一条外键。读取器返回的部分字段如下。
 
-来源没写外键时，可以运行 `python scripts/knowledge.py --project "./work/transport" relation-hints`。每条线索都列出两端字段及匹配依据，供你核对。老系统导出的 GBK 文件可在 `import` 后加 `--encoding gb18030`。遇到残缺语句，先按回执中的表名和语句位置修正，再重新导入。
+```json
+{"status": "verified", "draft": true, "asset_count": 8, "complete": false}
+```
 
-相同 DDL 在两个新项目中会得到相同的表、字段和外键 ID。多个环境或定期重新导出 DDL 时，从首次导入起用 `--source-key fleet/prod` 之类的固定来源名，不同库各用一个。旧项目保留原有 ID，更新原来源可用 `--source-id`。
-
-停用保留资产身份和历史。在 `state` 核对修订和目标后运行 `python scripts/knowledge.py --project ./work/transport --revision N retire --id ASSET_ID --reason "口径已替代"`。批量时把 `--id ASSET_ID` 换成 `--file ids.json`，文件内放 ID 字符串数组。任何一个 ID 无效都会取消整批操作。
-
-`--draft` 允许未确认的模型用于继续建模，包内会明确保留草稿与缺口。核对并确认定义后，可去掉 `--draft` 导出确认快照。输出文件必须尚不存在，防止覆盖旧包。
-
-Windows 若 `python` 不可用，用 `py -3 --version` 检查后将命令中的 `python` 换成 `py -3`；已有虚拟环境则使用其中的 Python。
-
-## 需要看图时，再打开
+包通过了完整性校验，八项定义均为草稿。要查看车辆表，可在包中搜索。
 
 ```bash
-python -X utf8 scripts/start.py --project "./work/transport" --language zh
+python -X utf8 scripts/semantic_read.py --package "./work/transport.zip" search --query vehicle --kind dataset
 ```
 
-打开终端给出的本机网址，先看表和外键。点一张表看它的字段，需要逐列对照时点“展开字段”，也可以直接搜索列名。参与业务关系或映射的字段会单独画出。双击对象可修改，点“连线”后可以依次点击两个对象，也可以拖动连线。按 Esc 取消本次连线。CLI 与编辑器读写同一个本地模型。
+样例返回一个匹配项。取 `matches[0].asset.id`，用 `sources --id ID` 读取原始 `CREATE TABLE vehicle` 片段，可以核实 `vehicle.company_id` 引用 `company.id`。车辆归属和维护责任还需要各自的业务依据。换用自己的 DDL 时，请替换文件路径，并搜索实际表名。[离线读取与分页](references/agent-reader.md)
 
-完成后可在 **导出模型** 下载语义包，关闭页面并在终端按 **Ctrl+C** 停止编辑服务。重新打开仍用同一路径。只用 CLI 时无须启动服务；不需要先建立业务问题或走验收流程。
+## 从字段引用追到业务责任
 
-## 给本机 Agent 使用
+可以问 Agent：“哪家企业负责车辆维护？请给出依据原文。”在**同一项目**中导入随包合成业务说明。
 
 ```bash
-python -X utf8 scripts/semantic_read.py --package "./work/transport.zip" search --query vehicle
+python -X utf8 scripts/knowledge.py --project "./work/transport" import --file "examples/semantic-workbench/transport-v1.txt"
 ```
 
-读取器返回结构化 JSON；从搜索结果取实际 ID，再调用 `get`、`neighbors`、`context`、`sources` 读取定义、关系、依赖和原文。只需包文件，不依赖原项目或编辑器服务。[读取命令与边界](references/agent-reader.md)
+取回执中的 `result.result.batch_id`，让 Agent 用 `task --batch 批次ID` 读取“企业负责本企业车辆维护。”这段原文。将该引文及来源修订附在业务关系上，再核对依赖。获得确认授权前保留草稿。原先导出的 ZIP 仍对应旧修订，交付新模型时应使用新文件名。[建模与按范围导出](references/modeling.md)
 
-也可以直接对宿主说：
+需要看图时，运行 `python -X utf8 scripts/start.py --project "./work/transport" --language zh`，打开终端打印的本机网址。点表查看字段，点**新建对象**补充业务对象。选择**连线**后依次点两端，保存前核对箭头方向。选择 **3D 关系图**可查看改动涉及的对象。用 **Ctrl+C** 停止服务。需要离线图时，运行 `python scripts/knowledge.py --project "./work/transport" --language zh graph-view --out 变更.html`，分享前核对所含引文。
 
-> 使用 ai-data-delivery，把这份 SQL 导入指定目录，先生成结构草稿。结合我提供的业务说明补充车辆、企业和线路的含义，保留来源；只有需要我判断的地方再问。需要看关系时打开图谱，最后导出给其他 Agent 使用。
+## 常见问题
 
-宿主处理命令、ID 与 JSON，你只核对业务含义。它不会把“外键引用”自动确认为“企业拥有车辆”。
-
-补业务语义时，Agent 可把对象、属性、映射和关系一次成组保存；`inspect` 会提示未确认依赖、遗漏映射及跨表连接字段。你只需要判断资料中没有确定的业务含义，已有授权不重复确认。[建模短链与实际命令](references/modeling.md)
-
-## 按需继续
-
-| 需要做什么 | 使用入口 |
+| 遇到的情况 | 处理办法 |
 | --- | --- |
-| 直接连接 SQLite、PostgreSQL、MySQL | [目录接入](references/readonly-metadata.md)：明确选表，只读结构，不读取业务行 |
-| 补充文档、指标、规则或业务映射 | [建模短链](references/modeling.md)：成组维护、核对依赖，再按范围交付 |
-| 把特定问题连同语义交给 Agent | [可选问题交付](references/question-delivery.md)：`handoff` 导出，`brief` 读取 |
-| 将模型交给 Neo4j 或 ontology-graph-spec | [离线交换](references/neo4j-interop.md)：Neo4j 不是必装依赖 |
-| 试交通、农业、高校、金融场景 | [四域合成练习](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/examples/cross-domain/README.md)，不代替实际业务制度 |
+| 内网机器无法联网安装 | 在联网且操作系统、架构和 Python 版本一致的机器执行 `python -m pip download --only-binary=:all: -r requirements.txt -d wheels`。将下载的 wheels 带入目标环境，再执行 `python -m pip install --no-index --find-links ./wheels -r requirements.txt`。 |
+| 建模 CLI 返回 `argument_error` | 全局选项 `--project`、`--language zh`、`--revision`、`--progress` 放在子命令前面。`--file`、`--seed-draft`、`--out` 放在各自的子命令后面。`--progress` 在标准错误显示阶段，标准输出仍是一份 JSON 回执。 |
+| 已有项目，或源表结构更新了 | 用原目录重开。再次导入时省略 `--seed-draft` 并核对变化。定期导出的 DDL 可从首次导入起复用固定 `--source-key`，已登记来源可用 `--source-id` 更新。GBK 文件使用 `import --encoding gb18030 --file 文件`。 |
+| 写入结果未知，或遇到修订冲突 | 需支持重试的写入先指定唯一全局 `--operation-id`。中断后在同一项目运行 `receipt 操作ID` 查回执。遇到 `status: conflict` 时，用 `state --summary` 看修订号，再用 `state` 读取受影响对象，比较并合并当前输入，携带核对过的修订号重试。 |
+| 导出失败 | 选择已有目录中的新文件名。若返回 `details.code: NOT_PUBLISHABLE`，按所列问题核对相应定义与依赖。接手方需要草稿时使用 `--draft`。 |
+| 收到的包查不到词或 ID | 无匹配时，从 `fallback.candidates` 查看当前范围内的用词。遇到 `error.code: UNKNOWN_ID` 时，重新搜索本次快照，使用匹配项返回的实际 ID。 |
 
-它提供本体建模与交付工具，不承担多人协作管理、企业权限、生产查询或业务执行。核心解析和离线读取在本机；可选数据库连接使用明确授权的端点。文件解析有范围限制，语义包可能包含业务定义与引用片段。[架构](references/architecture.md) · [正式版 0.3.6 验证记录](https://github.com/franklinxkk/ai-data-delivery/blob/v0.3.6/references/v0.3.6-release-validation.md)
+## 其他入口
 
-0.3.6 支持打开图谱后同步查看 Agent 的修改；数千项资产的单次取证默认只返回相关内容。CLI 修改已有对象时须传入实际读取时的修订号，避免旧稿覆盖他人的编辑。已有模型不会自动迁移或覆盖；升级前保留备份。欢迎提交具体操作中卡住的步骤和脱敏材料：[反馈](https://github.com/franklinxkk/ai-data-delivery/issues)。
+| 目标 | 使用入口 |
+| --- | --- |
+| 源表很少声明外键，想找可能的连接 | `knowledge.py --project DIR relation-hints` 列出字段组合和元数据线索，保存关系前核对业务依据。 |
+| 读取指定 SQLite、PostgreSQL、MySQL 表的结构 | [只读目录接入](references/readonly-metadata.md) |
+| 交接某个问题或核对变更影响 | [问题交付与影响检查](references/question-delivery.md) |
+| 与 Neo4j 或 ontology-graph-spec 交换模型 | [离线交换](references/neo4j-interop.md) |
 
-[MIT](LICENSE) · [Skill 指令](SKILL.zh-CN.md) · [改动历史](CHANGELOG.md)
+宿主 Agent 解读材料，本工具在本机保存模型与依据。生产查询、企业权限和多人管理需由相应系统承担。已有项目升级前请保留备份。分发包内可打开 `LICENSE.md` 阅读 MIT 许可证。[架构](references/architecture.md) · [源码许可证](https://github.com/franklinxkk/ai-data-delivery/blob/main/LICENSE) · [Skill 指令](SKILL.zh-CN.md) · [改动历史](CHANGELOG.md)
